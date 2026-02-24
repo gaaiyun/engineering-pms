@@ -1,9 +1,29 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import * as ReactDOMAll from 'react-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
 import { ConfigProvider } from 'antd-mobile'
+
+// React 19 兼容性 shim：antd-mobile v5 依赖已移除的 unmountComponentAtNode / render
+const _rootCache = new WeakMap<Element, ReturnType<typeof ReactDOM.createRoot>>()
+
+if (!(ReactDOMAll as any).unmountComponentAtNode) {
+  (ReactDOMAll as any).unmountComponentAtNode = (container: Element) => {
+    const cached = _rootCache.get(container)
+    if (cached) { cached.unmount(); _rootCache.delete(container) }
+    return true
+  }
+}
+
+if (!(ReactDOMAll as any).render) {
+  (ReactDOMAll as any).render = (element: React.ReactNode, container: Element) => {
+    let root = _rootCache.get(container)
+    if (!root) { root = ReactDOM.createRoot(container); _rootCache.set(container, root) }
+    root.render(element)
+  }
+}
 import zhCN from 'antd-mobile/es/locales/zh-CN'
 import { queryClient } from './lib/queryClient'
 import { subscribeToChanges, unsubscribeAll, pb } from './lib/pocketbase'

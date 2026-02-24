@@ -447,7 +447,11 @@ async function setupCollections() {
         { name: 'members', type: 'relation', options: { collectionId: '_pb_users_auth_' } },
     ], managerOnlyRules);
     
-    // Tasks 集合 - 关键！统一状态
+    // Tasks 集合 - 员工可更新自己被分配的任务，经理/管理员可更新所有
+    const taskRules = {
+        updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager" || assignees.id ?= @request.auth.id',
+        deleteRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
+    };
     await ensureCollection('tasks', [
         { name: 'project', type: 'relation', required: true, options: { collectionId: projectsId, maxSelect: 1 } },
         { name: 'stage_name', type: 'text', required: true },
@@ -469,7 +473,7 @@ async function setupCollections() {
         { name: 'blocker', type: 'json' },
         { name: 'predecessor_tasks', type: 'relation', options: { collectionId: 'tasks' } },
         { name: 'next_assignees', type: 'relation', options: { collectionId: '_pb_users_auth_' } },
-    ], managerOnlyRules);
+    ], taskRules);
     
     // Handoffs 集合
     await ensureCollection('handoffs', [
