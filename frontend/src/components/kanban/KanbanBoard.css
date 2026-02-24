@@ -1,0 +1,154 @@
+/* 看板主容器样式 */
+.kanban-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+}
+
+.kanban-navbar {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.kanban-board {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+.kanban-board::-webkit-scrollbar {
+    height: 6px;
+}
+
+.kanban-board::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.kanban-board::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+}
+
+.kanban-loading {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--adm-color-text-secondary);
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(102, 126, 234, 0.2);
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 桌面端适配 */
+@media (min-width: 768px) {
+    .kanban-board {
+        padding: 24px 32px;
+        gap: 24px;
+    }
+
+    .kanban-board::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    /* PC端列宽优化 */
+    .kanban-column {
+        min-width: 280px;
+        max-width: 320px;
+        flex: 1;
+    }
+
+    /* PC端卡片悬浮效果 */
+    .task-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: grab;
+    }
+
+    .task-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .task-card:active {
+        cursor: grabbing;
+    }
+}
+
+/* 大屏幕适配 (> 1200px) */
+@media (min-width: 1200px) {
+    .kanban-board {
+        padding: 32px 48px;
+        gap: 28px;
+        justify-content: center;
+    }
+
+    .kanban-column {
+        min-width: 300px;
+        max-width: 360px;
+    }
+}
+
+/* 移动端横向滚动优化 */
+@media (max-width: 768px) {
+    .kanban-board {
+        scroll-snap-type: x mandatory;
+        scroll-padding: 16px;
+    }
+
+    .kanban-board::after {
+        content: '';
+        flex: 0 0 16px;
+    }
+
+    .kanban-column {
+        scroll-snap-align: start;
+        min-width: 280px;
+        flex-shrink: 0;
+    }
+
+    /* 移动端卡片触摸反馈 */
+    .task-card:active {
+        transform: scale(0.98);
+        transition: transform 0.1s;
+    }
+}
+
+/* 无障碍：键盘焦点样式 */
+.task-card:focus-visible {
+    outline: 2px solid #2563EB;
+    outline-offset: 2px;
+}
+
+/* 拖拽时的样式 */
+.task-card[data-dragging="true"] {
+    opacity: 0.5;
+}
+
+/* 拖拽占位符 */
+.kanban-placeholder {
+    background: rgba(37, 99, 235, 0.1);
+    border: 2px dashed #2563EB;
+    border-radius: 12px;
+    min-height: 80px;
+}

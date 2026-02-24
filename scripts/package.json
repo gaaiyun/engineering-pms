@@ -1,0 +1,13 @@
+{
+  "name": "pocketbase-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "数据库管理脚本",
+  "scripts": {
+    "rebuild": "node database_rebuild.mjs",
+    "diagnose": "node database_rebuild.mjs --diagnose-only"
+  },
+  "dependencies": {
+    "pocketbase": "^0.26.3"
+  }
+}

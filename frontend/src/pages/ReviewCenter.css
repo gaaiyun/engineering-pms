@@ -1,0 +1,155 @@
+/* 变更审计中心样式 */
+.review-center {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.review-content {
+  padding: 12px 16px 80px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px;
+  color: #94a3b8;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 审计卡片 */
+.audit-card {
+  background: white;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  border-left: 4px solid #e2e8f0;
+  transition: all 0.2s;
+}
+.audit-card.unread {
+  border-left-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.08);
+}
+.audit-card.read {
+  border-left-color: #f59e0b;
+}
+.audit-card.approved {
+  border-left-color: #10b981;
+  opacity: 0.85;
+}
+
+.audit-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 0;
+}
+
+.audit-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.audit-time {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.audit-card-body {
+  padding: 8px 14px;
+}
+
+.audit-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.audit-meta-label {
+  color: #94a3b8;
+  font-size: 12px;
+  min-width: 42px;
+}
+
+.audit-meta-value {
+  color: #1e293b;
+  font-weight: 500;
+  font-size: 13px;
+  flex: 1;
+}
+
+.audit-change-detail {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.audit-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 14px 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* 操作按钮 */
+.audit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.audit-btn.read {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.audit-btn.read:active {
+  background: #dbeafe;
+}
+.audit-btn.approve {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+.audit-btn.approve:active {
+  background: #dcfce7;
+}
+.audit-btn.reject {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.audit-btn.reject:active {
+  background: #fee2e2;
+}
+
+.audit-status-done {
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 600;
+}

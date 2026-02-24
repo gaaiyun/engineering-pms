@@ -1,0 +1,260 @@
+/* 任务详情抽屉样式 */
+.task-drawer {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--adm-color-background);
+}
+
+.drawer-navbar {
+    background: #fff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.drawer-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 24px;
+}
+
+.task-header {
+    padding: 20px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+
+.task-name {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    line-height: 1.4;
+}
+
+.task-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* 标签页切换 */
+.tab-bar {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.tab-item {
+    flex: 1;
+    padding: 12px;
+    font-size: 14px;
+    color: var(--adm-color-text-secondary);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-item.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+    font-weight: 600;
+}
+
+.tab-content {
+    padding: 16px;
+}
+
+/* 信息区块 */
+.section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--adm-color-text);
+    margin: 0 0 8px;
+}
+
+.section-content {
+    font-size: 14px;
+    color: var(--adm-color-text-secondary);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.blocker-section {
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+}
+
+.blocker-info p {
+    margin: 4px 0;
+    font-size: 13px;
+}
+
+/* 操作按钮 */
+.action-buttons {
+    padding: 16px 0;
+}
+
+/* 评论标签页 */
+.comments-tab {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 280px);
+}
+
+.comments-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.empty-comments,
+.empty-history {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--adm-color-text-secondary);
+}
+
+.empty-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.comment-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.comment-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.comment-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.comment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.comment-author {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--adm-color-text);
+}
+
+.comment-time {
+    font-size: 11px;
+    color: var(--adm-color-text-secondary);
+}
+
+.comment-content {
+    font-size: 14px;
+    color: var(--adm-color-text);
+    line-height: 1.5;
+    margin: 0;
+    word-break: break-word;
+}
+
+.comment-input {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.comment-input .adm-text-area {
+    flex: 1;
+}
+
+/* 历史标签页 */
+.history-list {
+    position: relative;
+    padding-left: 20px;
+}
+
+.history-list::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.history-item {
+    position: relative;
+    padding: 12px 0;
+}
+
+.history-dot {
+    position: absolute;
+    left: -20px;
+    top: 16px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #667eea;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.history-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.history-action {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--adm-color-text);
+}
+
+.history-operator {
+    font-size: 12px;
+    color: #667eea;
+}
+
+.history-time {
+    font-size: 11px;
+    color: var(--adm-color-text-secondary);
+}
+
+.history-note {
+    width: 100%;
+    font-size: 12px;
+    color: var(--adm-color-text-secondary);
+    margin: 4px 0 0;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+}
