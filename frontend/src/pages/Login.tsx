@@ -15,12 +15,13 @@ export default function Login() {
   const [form] = Form.useForm()
 
   useEffect(() => {
-    const saved = localStorage.getItem('savedCredentials')
-    if (saved) {
-      const creds = JSON.parse(saved)
-      setSavedCredentials(creds)
+    // 迁移：清除旧版明文密码存储
+    localStorage.removeItem('savedCredentials')
+    const savedUser = localStorage.getItem('savedUsername')
+    if (savedUser) {
+      setSavedCredentials({ username: savedUser, password: '' })
       setRememberMe(true)
-      form.setFieldsValue(creds)
+      form.setFieldsValue({ username: savedUser })
     }
     checkServer()
   }, [])
@@ -49,12 +50,10 @@ export default function Login() {
       )
 
       if (rememberMe) {
-        localStorage.setItem('savedCredentials', JSON.stringify({
-          username: values.username.trim(),
-          password: values.password
-        }))
+        // 仅保存用户名，不存储密码（安全）
+        localStorage.setItem('savedUsername', values.username.trim())
       } else {
-        localStorage.removeItem('savedCredentials')
+        localStorage.removeItem('savedUsername')
       }
 
       Toast.show({ icon: 'success', content: '登录成功' })

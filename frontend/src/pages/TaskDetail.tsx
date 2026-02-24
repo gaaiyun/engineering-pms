@@ -141,7 +141,10 @@ const TaskDetail = () => {
         action_type: 'mark_blocked',
         operator: currentUser?.id,
         after_data: blockerForm
-      })
+      }).catch(() => {})
+      // 通知项目全员
+      const userName = currentUser?.name || currentUser?.username
+      notifyProjectMembers(task.project, '卡点上报', `${userName} 上报了「${task.stage_name}」的卡点：${blockerForm.reason_detail}`, 'blocker', currentUser?.id, id).catch(() => {})
       Toast.show({ content: '卡点已上报', icon: 'success' })
       setShowBlockerDialog(false)
       loadData()

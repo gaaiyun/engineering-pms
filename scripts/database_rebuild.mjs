@@ -523,7 +523,7 @@ async function setupCollections() {
     // Notifications 集合
     await ensureCollection('notifications', [
         { name: 'user', type: 'relation', required: true, options: { collectionId: '_pb_users_auth_', maxSelect: 1 } },
-        { name: 'type', type: 'select', options: { maxSelect: 1, values: ['task_assigned', 'blocker_reported', 'handoff_pending', 'deadline_warning', 'system'] } },
+        { name: 'type', type: 'text' },
         { name: 'title', type: 'text', required: true },
         { name: 'content', type: 'text' },
         { name: 'link_type', type: 'text' },

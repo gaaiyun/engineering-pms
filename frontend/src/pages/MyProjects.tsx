@@ -183,7 +183,7 @@ export default function MyProjects() {
               <div key={u.id} onClick={() => {
                 const newMembers = checked ? memberPopup.members.filter(id => id !== u.id) : [...memberPopup.members, u.id]
                 setMemberPopup(p => ({ ...p, members: newMembers }))
-                updateMembers.mutate({ projectId: memberPopup.projectId, memberIds: checked ? memberPopup.members.filter(id => id !== u.id) : [...memberPopup.members, u.id] })
+                updateMembers.mutate({ projectId: memberPopup.projectId, members: checked ? memberPopup.members.filter(id => id !== u.id) : [...memberPopup.members, u.id] })
               }} style={{
                 display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px',
                 borderBottom: '1px solid #f1f5f9', cursor: 'pointer'

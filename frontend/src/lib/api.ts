@@ -143,6 +143,8 @@ export const isManagerRole = () => {
     const role = pb.authStore.model?.role
     return role === 'admin' || role === 'manager'
 }
+// 别名：兼容页面中 import { isManager } 的写法
+export const isManager = isManagerRole
 
 // ========== 项目 Hooks ==========
 export function useProjects() {
@@ -324,11 +326,30 @@ export function useCreateTask() {
 
     return useMutation({
         mutationFn: async (data: Partial<Task>) => {
-            return await pb.collection('tasks').create<Task>(data)
+            const result = await pb.collection('tasks').create<Task>(data)
+            // 审计日志
+            await pb.collection('audit_logs').create({
+                project: data.project,
+                task: result.id,
+                action_type: 'create_task',
+                operator: pb.authStore.model?.id,
+                after_data: { stage_name: data.stage_name, assignees: data.assignees },
+            }).catch(() => {})
+            // 通知项目全员
+            if (data.project) {
+                const userName = pb.authStore.model?.name || pb.authStore.model?.username
+                notifyProjectMembers(
+                    data.project, '新任务创建',
+                    `${userName} 创建了任务「${data.stage_name}」`,
+                    'task_update', pb.authStore.model?.id, result.id,
+                ).catch(() => {})
+            }
+            return result
         },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
             if (data.project) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(data.project) })
                 queryClient.invalidateQueries({ queryKey: queryKeys.project(data.project) })
@@ -1018,20 +1039,21 @@ export function useUpdateProjectMembers() {
     })
 }
 
-// ========== 归档项目 ==========
+// ========== 归档/取消归档项目 ==========
 export function useArchiveProject() {
     const queryClient = useQueryClient()
     const currentUser = pb.authStore.model
 
     return useMutation({
-        mutationFn: async (projectId: string) => {
-            const result = await pb.collection('projects').update(projectId, { status: 'archived' })
+        mutationFn: async ({ projectId, archived = true }: { projectId: string; archived?: boolean }) => {
+            const newStatus = archived ? 'archived' : 'active'
+            const result = await pb.collection('projects').update(projectId, { status: newStatus })
             await pb.collection('audit_logs').create({
                 project: projectId,
-                action_type: 'archive_project',
+                action_type: archived ? 'archive_project' : 'unarchive_project',
                 operator: currentUser?.id,
-                after_data: { status: 'archived' },
-            })
+                after_data: { status: newStatus },
+            }).catch(() => {})
             return result
         },
         onSuccess: () => {

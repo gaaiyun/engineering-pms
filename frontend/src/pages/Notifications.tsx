@@ -47,7 +47,8 @@ export default function Notifications() {
     }
     
     return () => {
-      pb.collection('notifications').unsubscribe('*')
+      // 仅取消本页面的订阅 key，不破坏全局 realtime
+      try { pb.collection('notifications').unsubscribe('*') } catch {}
     }
   }, [])
 
