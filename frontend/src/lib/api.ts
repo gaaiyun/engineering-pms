@@ -296,7 +296,7 @@ export function useUpdateTask() {
             queryClient.invalidateQueries({ queryKey: queryKeys.task(data.id) })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
             if (data.project) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(data.project) })
                 queryClient.invalidateQueries({ queryKey: queryKeys.project(data.project) })
@@ -349,7 +349,7 @@ export function useCreateTask() {
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
             if (data.project) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(data.project) })
                 queryClient.invalidateQueries({ queryKey: queryKeys.project(data.project) })
@@ -903,7 +903,7 @@ export function useUnblockTask() {
             queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -1002,7 +1002,7 @@ export function useBatchSaveTasks() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -1034,7 +1034,7 @@ export function useUpdateProjectMembers() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }

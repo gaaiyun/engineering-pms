@@ -15,7 +15,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import {
-  IoCheckmarkCircle, IoEyeOutline, IoSearchOutline,
+  IoCheckmarkCircle, IoEyeOutline,
   IoFunnelOutline, IoTimeOutline, IoPersonOutline,
   IoDocumentTextOutline, IoFolderOutline, IoCloseCircle
 } from 'react-icons/io5'

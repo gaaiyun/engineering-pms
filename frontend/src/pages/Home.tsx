@@ -2,6 +2,7 @@ import { TabBar, Badge } from 'antd-mobile'
 import {
   UnorderedListOutline,
   UserOutline,
+  SetOutline,
 } from 'antd-mobile-icons'
 import { useState, useEffect } from 'react'
 import { IoNotificationsOutline } from 'react-icons/io5'
@@ -59,24 +60,34 @@ export default function Home() {
     }
   }
 
+  const role = pb.authStore.model?.role?.toLowerCase()
+  const isManager = role === 'manager' || role === 'admin'
+
   const tabs = [
     {
       key: 'tasks',
       title: '工作进展',
       icon: <UnorderedListOutline />,
     },
-    // 排行榜功能暂时隐藏，待领导确认需求
-    // {
-    //   key: 'rankings',
-    //   title: '排行榜',
-    //   icon: <AppOutline />,
-    // },
+    ...(isManager ? [{
+      key: 'manager',
+      title: '管理',
+      icon: <SetOutline />,
+    }] : []),
     {
       key: 'me',
       title: '我的',
       icon: <UserOutline />,
     },
   ]
+
+  const handleTabChange = (key: string) => {
+    if (key === 'manager') {
+      navigate('/manager')
+    } else {
+      setActiveKey(key)
+    }
+  }
 
   // Responsive Check
   const [isPC, setIsPC] = useState(window.innerWidth > 768)
@@ -112,7 +123,7 @@ export default function Home() {
             {tabs.map(item => (
               <div
                 key={item.key}
-                onClick={() => setActiveKey(item.key)}
+                onClick={() => handleTabChange(item.key)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -241,7 +252,7 @@ export default function Home() {
       {!isPC && (
         <TabBar
           activeKey={activeKey}
-          onChange={setActiveKey}
+          onChange={handleTabChange}
           style={{
             borderTop: '1px solid rgba(0,0,0,0.05)',
             background: '#fff',

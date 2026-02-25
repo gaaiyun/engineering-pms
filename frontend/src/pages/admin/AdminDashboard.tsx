@@ -279,6 +279,7 @@ const AdminDashboard = () => {
         code: values.code || '',
         status: 'active',
         progress: 0,
+        members: values.members || [],
       })
       Toast.show({ icon: 'success', content: '项目创建成功' })
       setShowAddProjectModal(false)
@@ -1360,6 +1361,9 @@ const AdminDashboard = () => {
           <Form form={addProjectForm} layout='horizontal' onFinish={handleAddProject} footer={null}>
             <Form.Item name='name' label='项目名称' rules={[{ required: true, message: '请输入项目名称' }]}><Input placeholder="如：凤凰山跨海大桥工程" /></Form.Item>
             <Form.Item name='code' label='项目编号'><Input placeholder="如：FHS-2026-001 (可选)" /></Form.Item>
+            <Form.Item name='members' label='项目成员'>
+              <Selector multiple options={users.map(u => ({ label: u.name || u.username, value: u.id }))} />
+            </Form.Item>
           </Form>
         }
         actions={[

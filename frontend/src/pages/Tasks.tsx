@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo } from 'react'
-import { ProgressBar, Tag, Dialog, Form, Input, Toast, Popup, NoticeBar, Badge } from 'antd-mobile'
+import { ProgressBar, Tag, Dialog, Form, Input, Toast, Popup, Badge } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { IoTimeOutline, IoCheckmarkCircleOutline, IoBriefcaseOutline, IoAddCircle, IoCloseCircle, IoNotificationsOutline, IoChevronForward } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonCard } from '../components/Skeleton'
 import { motion } from 'framer-motion'
-import { useTasks, useProjects, isManager, type Task, type User } from '../lib/api'
+import { useTasks, isManager, type Task, type User } from '../lib/api'
 
 interface Project {
   id: string

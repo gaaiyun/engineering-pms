@@ -245,6 +245,15 @@ export default function ProjectTimeline() {
     }
   }
 
+  // --- Render ---
+  // 横屏模式：使用 CSS transform 旋转实现真正横屏
+  const isFullscreen = !isPC && isLandscape
+
+  // 横屏时锁定缩放为更适合的比例
+  useEffect(() => {
+    if (isFullscreen) setScale(s => Math.max(s, 0.8))
+  }, [isFullscreen])
+
   if (loading) return (
     <div style={{ paddingTop: 60, paddingLeft: 20 }}>
       <SkeletonTimeline />
@@ -278,15 +287,6 @@ export default function ProjectTimeline() {
       Toast.show('该用户暂无活跃任务');
     }
   }
-
-  // --- Render ---
-  // 横屏模式：使用 CSS transform 旋转实现真正横屏
-  const isFullscreen = !isPC && isLandscape
-
-  // 横屏时锁定缩放为更适合的比例
-  useEffect(() => {
-    if (isFullscreen) setScale(s => Math.max(s, 0.8))
-  }, [isFullscreen])
 
   const landscapeStyle: React.CSSProperties = isFullscreen ? {
     position: 'fixed',
