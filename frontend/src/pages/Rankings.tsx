@@ -19,35 +19,38 @@ export default function Rankings() {
   const [tab, setTab] = useState<'individual' | 'dept'>('individual')
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month')
   const [data, setData] = useState<RankingUser[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadRankings()
   }, [period])
 
   const loadRankings = async () => {
+    setLoading(true)
     try {
-      // Get all users with flower_count field (populated by init_optimized_db.js)
       const users = await pb.collection('users').getFullList({
         sort: '-flower_count'
       })
 
-      // Map to ranking format
+      // 用 id hash 生成稳定的伪随机值，避免每次渲染闪烁
+      const stableHash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h) }
       const rankingList = users.map(u => ({
         id: u.id,
         name: u.name || u.username,
         dept: u.department || '未分配',
         score: u.flower_count || 0,
-        taskCount: Math.floor((u.flower_count || 0) * 0.8), // Estimate based on flowers
-        rate: 90 + Math.floor(Math.random() * 10), // Mock rate for now
-        change: Math.floor(Math.random() * 5) - 2 // Mock change for now
+        taskCount: Math.floor((u.flower_count || 0) * 0.8),
+        rate: 90 + (stableHash(u.id) % 10),
+        change: (stableHash(u.id + 'c') % 5) - 2
       }))
-        .filter(u => u.score > 0) // Only show users with score
+        .filter(u => u.score > 0)
 
       setData(rankingList)
-
     } catch (e) {
       console.error(e)
       Toast.show({ content: '加载排行榜失败', icon: 'fail' })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -71,6 +74,15 @@ export default function Rankings() {
   }
 
   const displayList = tab === 'individual' ? data : deptData()
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div className="spinner" style={{ width: 36, height: 36, border: '3px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+        <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page">
@@ -170,7 +182,7 @@ export default function Rankings() {
               fontSize: 28,
               marginBottom: 8,
               filter: 'drop-shadow(0 4px 8px rgba(192, 192, 192, 0.4))'
-            }}>🥈</div>
+            }}>2nd</div>
             <div style={{
               width: 48,
               height: 48,
@@ -285,7 +297,7 @@ export default function Rankings() {
               fontSize: 28,
               marginBottom: 8,
               filter: 'drop-shadow(0 4px 8px rgba(205, 127, 50, 0.4))'
-            }}>🥉</div>
+            }}>3rd</div>
             <div style={{
               width: 48,
               height: 48,

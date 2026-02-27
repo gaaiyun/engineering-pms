@@ -85,7 +85,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 // Preset Empty States
 export const EmptyTasks: React.FC<{ onAction?: () => void }> = ({ onAction }) => (
     <EmptyState
-        icon="📋"
+        icon="--"
         title="还没有任务"
         description="创建第一个任务，开始高效的项目管理之旅"
         actionText="创建任务"
@@ -105,7 +105,7 @@ export const EmptyProjects: React.FC<{ onAction?: () => void }> = ({ onAction })
 
 export const EmptyRankings: React.FC = () => (
     <EmptyState
-        icon="🏆"
+        icon=""
         title="暂无排名数据"
         description="完成任务后，这里将显示排行榜信息"
     />
@@ -113,7 +113,7 @@ export const EmptyRankings: React.FC = () => (
 
 export const EmptyNotifications: React.FC = () => (
     <EmptyState
-        icon="🔔"
+        icon="--"
         title="暂无通知"
         description="您的所有通知将显示在这里"
     />

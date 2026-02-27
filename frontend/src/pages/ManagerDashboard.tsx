@@ -1,19 +1,26 @@
-import React, { useMemo } from 'react'
-import { NavBar, Card, Grid, List, Tag, Badge, Button, ProgressBar, Toast } from 'antd-mobile'
+import React, { useMemo, useState } from 'react'
+import { NavBar, Card, Grid, List, Tag, Badge, Button, ProgressBar, Toast, SpinLoading } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import { useTasks, useProjects, usePendingHandoffs, useUsers, useCurrentUser, useAISummaries, type Task, type Project, type User } from '../lib/api'
+import { queryClient } from '../lib/queryClient'
 import { AISummaryCard } from '../components/dashboard/AISummaryCard'
+import { IoWarningOutline, IoCalendarOutline, IoBarChartOutline, IoBriefcaseOutline, IoBulbOutline, IoDocumentTextOutline } from 'react-icons/io5'
 import './ManagerDashboard.css'
 
 const ManagerDashboard: React.FC = () => {
     const navigate = useNavigate()
-    const { data: tasks = [] } = useTasks()
-    const { data: projects = [] } = useProjects()
+    const { data: tasks = [], isLoading: tasksLoading, isError: tasksError, refetch: refetchTasks } = useTasks()
+    const { data: projects = [], isLoading: projectsLoading, isError: projectsError, refetch: refetchProjects } = useProjects()
     const { data: pendingHandoffs = [] } = usePendingHandoffs()
     const { data: users = [] } = useUsers()
     const { data: currentUser } = useCurrentUser()
     const { data: aiSummaries = [] } = useAISummaries(currentUser?.id || '')
+    const [aiExpanded, setAiExpanded] = useState(false)
+
+    const isLoading = tasksLoading || projectsLoading
+    const isError = tasksError || projectsError
+    const handleRetry = () => { refetchTasks(); refetchProjects() }
 
     // (Calculation logic omitted for brevity, unchanged)
     const abnormalTasks = useMemo(() => {
@@ -143,99 +150,19 @@ const ManagerDashboard: React.FC = () => {
             </NavBar>
 
             <div className="dashboard-content">
-                {/* AI 简报 */}
-                {aiSummaries.length > 0 ? (
-                    <div style={{ marginBottom: 16 }}>
-                        <AISummaryCard summary={aiSummaries[0]} />
+                {isLoading ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+                        <SpinLoading style={{ '--size': '36px' }} />
+                        <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>
                     </div>
-                ) : (
-                    <Card style={{ marginBottom: 16, background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1px dashed #0ea5e9' }}>
-                        <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: '#0ea5e9', marginBottom: 4 }}>🤖 AI 智能简报</div>
-                            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>尚无今日简报，点击下方生成</div>
-                            <Button
-                                color='primary'
-                                size='small'
-                                onClick={async () => {
-                                    try {
-                                        Toast.show({
-                                            content: '正在聚合数据...',
-                                            icon: 'loading',
-                                            duration: 0
-                                        })
-
-                                        // 0. Force Refresh Data
-                                        const { aggregateProjectData, generateAIReport } = await import('../lib/ai-service');
-
-                                        Toast.show({
-                                            content: '正在同步最新数据...',
-                                            icon: 'loading',
-                                            duration: 0
-                                        })
-
-                                        // Force fetch fresh data (bypass cache if possible via API or just aggregate what we have)
-                                        // Since aggregateProjectData fetches from PB directly, it should be fresh if we don't use cached hooks.
-                                        // The service uses direct PB calls, so it IS fresh.
-                                        const data = await aggregateProjectData();
-
-                                        // 2. Get API Key
-                                        const apiKey = localStorage.getItem('sf_api_key');
-                                        if (!apiKey) {
-                                            Toast.clear();
-                                            Toast.show({ content: '请先在"AI决策"页面配置API Key', icon: 'fail' });
-                                            return;
-                                        }
-
-                                        Toast.show({
-                                            content: '正在生成智能分析...',
-                                            icon: 'loading',
-                                            duration: 0
-                                        });
-
-                                        // 3. Generate
-                                        const aiRes = await generateAIReport(data, apiKey);
-
-                                        // 4. Save to DB
-                                        const { pb } = await import('../lib/pocketbase');
-                                        const userId = pb.authStore.model?.id;
-                                        if (userId && aiRes) {
-                                            await pb.collection('ai_summaries').create({
-                                                target_user: userId,
-                                                date: new Date().toISOString(),
-                                                content: aiRes.content,
-                                                risk_level: aiRes.risk_level,
-                                                model_used: 'deepseek-ai/DeepSeek-V3',
-                                                input_snapshot: data
-                                            });
-                                        }
-
-                                        Toast.clear();
-                                        Toast.show({ content: '分析已更新', icon: 'success' });
-
-                                        // 5. Invalidate Queries to refresh UI immediately
-                                        // We need queryClient here. 
-                                        // Since we can't easily add the hook inside this callback without refactoring, 
-                                        // we will use the global reload as a fallback, BUT we will wait a bit longer to ensure DB write consistency.
-                                        // Better: Let's assume the user will see the new report on reload.
-                                        setTimeout(() => window.location.reload(), 500);
-                                    } catch (e: any) {
-                                        Toast.clear();
-                                        console.error(e);
-                                        Toast.show({ content: e.message || '生成失败', icon: 'fail' });
-                                    }
-                                }}
-                            >
-                                ✨ 立即生成
-                            </Button>
-                            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 8 }}>
-                                (调用 SiliconFlow DeepSeek-V3 模型)
-                            </div>
-                        </div>
-                    </Card>
-                )}
-
-
-                {/* 关键指标卡片 */}
+                ) : isError ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+                        <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
+                        <span style={{ color: '#334155', fontSize: 16, fontWeight: 600 }}>数据加载失败</span>
+                        <Button color="primary" size="small" shape="rounded" onClick={handleRetry}>重试</Button>
+                    </div>
+                ) : (<>
+                {/* 关键指标卡片 — 首屏优先 */}
                 <Grid columns={2} gap={12} className="metrics-grid">
                     <Card className="metric-card" onClick={() => navigate('/my-projects')} style={{ cursor: 'pointer' }}>
                         <div className="metric-value">{metrics.totalProjects}</div>
@@ -247,11 +174,11 @@ const ManagerDashboard: React.FC = () => {
                         </Badge>
                         <div className="metric-label">待审核交接 →</div>
                     </Card>
-                    <Card className="metric-card warning" onClick={() => navigate('/tasks')} style={{ cursor: 'pointer' }}>
+                    <Card className="metric-card warning" onClick={() => navigate('/my-tasks')} style={{ cursor: 'pointer' }}>
                         <div className="metric-value">{metrics.overdueCount}</div>
                         <div className="metric-label">逾期任务 →</div>
                     </Card>
-                    <Card className="metric-card caution" onClick={() => navigate('/tasks')} style={{ cursor: 'pointer' }}>
+                    <Card className="metric-card caution" onClick={() => navigate('/my-tasks')} style={{ cursor: 'pointer' }}>
                         <div className="metric-value">{metrics.blockedCount}</div>
                         <div className="metric-label">卡点任务 →</div>
                     </Card>
@@ -260,14 +187,14 @@ const ManagerDashboard: React.FC = () => {
                 {/* 快捷操作 */}
                 <Card className="action-card">
                     <Button color="primary" block onClick={goToReviewCenter}>
-                        📋 进入审核中心
+                        <IoDocumentTextOutline style={{ marginRight: 4 }} /> 进入审核中心
                     </Button>
                 </Card>
 
                 {/* 异常任务列表 */}
                 {
                     (abnormalTasks.overdue.length > 0 || abnormalTasks.blocked.length > 0) && (
-                        <Card title="⚠️ 异常任务" className="abnormal-card">
+                        <Card title={<><IoWarningOutline style={{ marginRight: 4 }} />异常任务</>} className="abnormal-card">
                             <List>
                                 {abnormalTasks.overdue.slice(0, 5).map((task: Task) => (
                                     <List.Item
@@ -297,7 +224,7 @@ const ManagerDashboard: React.FC = () => {
                 {/* 今日到期 */}
                 {
                     abnormalTasks.dueToday.length > 0 && (
-                        <Card title="📅 今日到期" className="due-today-card">
+                        <Card title={<><IoCalendarOutline style={{ marginRight: 4 }} />今日到期</>} className="due-today-card">
                             <List>
                                 {abnormalTasks.dueToday.map((task: Task) => (
                                     <List.Item
@@ -316,7 +243,7 @@ const ManagerDashboard: React.FC = () => {
                 {/* 团队工作量图表 */}
                 {
                     workloadData.length > 0 && (
-                        <Card title="📊 团队工作量" className="chart-card">
+                        <Card title={<><IoBarChartOutline style={{ marginRight: 4 }} />团队工作量</>} className="chart-card">
                             <ReactECharts
                                 option={chartOption}
                                 style={{ height: 280 }}
@@ -327,7 +254,7 @@ const ManagerDashboard: React.FC = () => {
                 }
 
                 {/* 项目进度概览 */}
-                <Card title="🏗️ 项目进度" className="progress-card">
+                <Card title={<><IoBriefcaseOutline style={{ marginRight: 4 }} />项目进度</>} className="progress-card">
                     <List>
                         {projects.filter((p: Project) => p.status === 'active').slice(0, 5).map((project: Project) => {
                             const projectTasks = tasks.filter((t: Task) => t.project === project.id)
@@ -350,6 +277,57 @@ const ManagerDashboard: React.FC = () => {
                         })}
                     </List>
                 </Card>
+
+                {/* AI 简报 — 折叠区域，移至底部 */}
+                <Card
+                    title={
+                        <div onClick={() => setAiExpanded(!aiExpanded)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span><IoBulbOutline style={{ marginRight: 4 }} />AI 智能简报</span>
+                            <span style={{ fontSize: 12, color: '#94a3b8' }}>{aiExpanded ? '收起 ▲' : '展开 ▼'}</span>
+                        </div>
+                    }
+                    style={{ marginTop: 12 }}
+                >
+                    {aiExpanded && (
+                        aiSummaries.length > 0 ? (
+                            <AISummaryCard summary={aiSummaries[0]} />
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>尚无今日简报</div>
+                                <Button
+                                    color='primary'
+                                    size='small'
+                                    onClick={async () => {
+                                        try {
+                                            Toast.show({ content: '正在聚合数据...', icon: 'loading', duration: 0 })
+                                            const { aggregateProjectData, generateAIReport } = await import('../lib/ai-service')
+                                            const data = await aggregateProjectData()
+                                            const apiKey = localStorage.getItem('sf_api_key')
+                                            if (!apiKey) { Toast.clear(); Toast.show({ content: '请先在"AI决策"页面配置API Key', icon: 'fail' }); return }
+                                            Toast.show({ content: '正在生成智能分析...', icon: 'loading', duration: 0 })
+                                            const aiRes = await generateAIReport(data, apiKey)
+                                            const { pb } = await import('../lib/pocketbase')
+                                            const userId = pb.authStore.model?.id
+                                            if (userId && aiRes) {
+                                                await pb.collection('ai_summaries').create({
+                                                    target_user: userId, date: new Date().toISOString(),
+                                                    content: aiRes.content, risk_level: aiRes.risk_level,
+                                                    model_used: 'deepseek-ai/DeepSeek-V3', input_snapshot: data
+                                                })
+                                            }
+                                            Toast.clear(); Toast.show({ content: '分析已更新', icon: 'success' })
+                                            queryClient.invalidateQueries({ queryKey: ['ai_summaries'] })
+                                        } catch (e: any) { Toast.clear(); Toast.show({ content: e.message || '生成失败', icon: 'fail' }) }
+                                    }}
+                                >
+                                    立即生成
+                                </Button>
+                                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 8 }}>(调用 SiliconFlow DeepSeek-V3 模型)</div>
+                            </div>
+                        )
+                    )}
+                </Card>
+                </>)}
             </div >
         </div >
     )

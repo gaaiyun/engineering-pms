@@ -1,0 +1,62 @@
+---
+description: 前端 TypeScript/React 与 api 层约定
+globs: frontend/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript & React 规范
+
+## 数据请求
+
+- 所有数据请求统一通过 `lib/api.ts` 的 useQuery/useMutation hooks。
+- **禁止**在页面组件中直接调用 `pb.collection().getFullList()` / `getList()` / `getOne()`，除非有充分理由（如 AdminDashboard 需要全量数据且无对应 hook）。
+- 如果页面确实需要直接调用 pb，必须：
+  1. 做完善的错误处理（try/catch + 内联错误提示 + 重试）
+  2. 在注释中说明为什么不用现有 hook
+- 页面级数据加载必须有 loading 状态（SpinLoading 或骨架屏）和 error 状态（含重试按钮）。
+- catch 块中区分权限错误（401/403）与网络错误，给出不同提示；禁止统一显示"操作失败"。
+- `queryClient.invalidateQueries` 只在 mutation 成功后调用，**不要**在读取数据后调用。
+
+## 状态管理
+
+- 服务端数据：TanStack Query（useQuery / useMutation）
+- 客户端 UI 状态：Zustand（`lib/store.ts`）
+- Query Keys 统一在 `lib/queryClient.ts` 的 `queryKeys` 对象中管理
+- mutation 成功后必须 `invalidateQueries` 对应的 queryKey
+- mutation 的 `retry` 必须为 0（非幂等操作重试会导致重复数据）
+
+## 表单与组件
+
+- antd-mobile `Selector` 返回数组，提交前必须解包：`Array.isArray(v) ? v[0] : v`
+- `Dialog.confirm` 返回时 DOM 已卸载，禁止用 `document.getElementById` 读取弹窗内输入值，必须用 React state / onChange 收集
+- 审计日志和通知创建必须加 `.catch(console.error)`，防止辅助操作失败阻断主流程
+- 需要权限的页面必须在 useEffect 中校验角色，非授权用户 `navigate('/app', { replace: true })`
+- 邮箱字段必须加正则校验，密码字段必须加 `min: 8`
+
+## SSE 订阅
+
+- `unsubscribe('*')` 会取消该 collection 上所有订阅，cleanup 中仅在确实订阅过时才调用
+- 禁止将临时值挂在 `window` 上，使用 `useRef` 代替
+
+## 组件结构
+
+- 页面组件放 `src/pages/`，可复用组件放 `src/components/`
+- 管理后台页面放 `src/pages/admin/`
+- 看板组件套件放 `src/components/kanban/`
+- 类型定义统一在 `lib/api.ts` 中导出（Project, Task, User, Handoff 等）
+
+## 路由与权限
+
+- `PrivateRoute`：需登录
+- `AdminRoute`：需 admin 或 manager 角色
+- `ManagerRoute`：需 admin 或 manager 角色
+- 权限判断：`pb.authStore.model?.role?.toLowerCase()`
+- api.ts 中的 `isManager()` 函数用于业务逻辑中的权限判断
+
+## 导入顺序
+
+1. React / React 生态（react, react-router-dom, @tanstack/react-query）
+2. UI 库（antd-mobile, react-icons）
+3. 本地 lib（lib/api, lib/pocketbase, lib/queryClient, lib/store）
+4. 本地组件
+5. 样式文件

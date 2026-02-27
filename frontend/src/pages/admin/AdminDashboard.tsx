@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag } from 'antd-mobile'
+import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading } from 'antd-mobile'
 import { pb } from '../../lib/pocketbase'
 import {
   BarChart,
@@ -13,7 +13,8 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+// react-query not needed — AdminDashboard uses local state
 import { motion } from 'framer-motion'
 import { 
   IoSparkles, IoGridOutline, IoPeopleOutline, IoBriefcaseOutline, 
@@ -58,9 +59,19 @@ interface Task {
   }
 }
 
+const VALID_TABS = ['dashboard', 'users', 'projects', 'approvals', 'ai', 'timeline', 'profile'] as const
+type TabKey = typeof VALID_TABS[number]
+
 const AdminDashboard = () => {
-  const [activeKey, setActiveKey] = useState<'dashboard' | 'users' | 'projects' | 'approvals' | 'ai' | 'timeline' | 'profile'>('dashboard')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabFromUrl = searchParams.get('tab') as TabKey | null
+  const activeKey: TabKey = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'dashboard'
+  const setActiveKey = (key: TabKey) => {
+    setSearchParams({ tab: key }, { replace: true })
+  }
   const authUser = pb.authStore.model
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const tabs = [
     { key: 'dashboard', title: '概览', icon: <IoGridOutline /> },
@@ -98,6 +109,8 @@ const AdminDashboard = () => {
   }, [])
 
   const loadData = async () => {
+    setLoading(true)
+    setLoadError(null)
     try {
       const [usersRes, projectsRes, tasksRes] = await Promise.all([
         pb.collection('users').getFullList<User>(),
@@ -107,9 +120,14 @@ const AdminDashboard = () => {
       setUsers(usersRes)
       setProjects(projectsRes)
       setTasks(tasksRes)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load admin data:', error)
-      Toast.show({ icon: 'fail', content: '加载管理员数据失败' })
+      const msg = error?.status === 403 || error?.status === 401
+        ? '权限不足，请确认账号角色'
+        : '网络异常，数据加载失败'
+      setLoadError(msg)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -228,7 +246,11 @@ const AdminDashboard = () => {
   const handleUserUpdate = async (values: any) => {
     if (!currentUser) return
     try {
-      await pb.collection('users').update(currentUser.id, values)
+      await pb.collection('users').update(currentUser.id, {
+        ...values,
+        role: Array.isArray(values.role) ? values.role[0] : values.role,
+        department: Array.isArray(values.department) ? values.department[0] : values.department,
+      })
       Toast.show({ icon: 'success', content: '用户已更新' })
       setShowUserModal(false)
       loadData()
@@ -246,8 +268,8 @@ const AdminDashboard = () => {
         password: values.password,
         passwordConfirm: values.password,
         name: values.name,
-        role: values.role,
-        department: values.department,
+        role: Array.isArray(values.role) ? values.role[0] : values.role,
+        department: Array.isArray(values.department) ? values.department[0] : values.department,
       })
       Toast.show({ icon: 'success', content: '新用户已创建' })
       setShowAddUserModal(false)
@@ -279,6 +301,7 @@ const AdminDashboard = () => {
         code: values.code || '',
         status: 'active',
         progress: 0,
+        manager: pb.authStore.model?.id,
         members: values.members || [],
       })
       Toast.show({ icon: 'success', content: '项目创建成功' })
@@ -370,6 +393,18 @@ const AdminDashboard = () => {
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
       <div style={{ flex: 1, overflow: 'auto' }}>
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+            <SpinLoading style={{ '--size': '36px' }} />
+            <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>
+          </div>
+        ) : loadError ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16, padding: 20 }}>
+            <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
+            <span style={{ color: '#334155', fontSize: 16, fontWeight: 600 }}>{loadError}</span>
+            <Button color="primary" size="small" shape="rounded" onClick={loadData}>重试</Button>
+          </div>
+        ) : (<>
         {activeKey === 'dashboard' && (
           <div className="page" style={{ padding: '24px 20px' }}>
             {/* Modern Header */}
@@ -485,7 +520,7 @@ const AdminDashboard = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 11, color: '#475569', fontWeight: 500 }}>{p.name}</span>
                         <span style={{ fontSize: 11, color: p.blocked > 0 ? '#EF4444' : '#10B981', fontWeight: 600 }}>
-                          {p.blocked > 0 ? `🚫${p.blocked}卡点` : `${p.progress}%`}
+                          {p.blocked > 0 ? `${p.blocked}卡点` : `${p.progress}%`}
                         </span>
                       </div>
                       <div style={{ height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}>
@@ -963,12 +998,12 @@ const AdminDashboard = () => {
                                 <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b' }}>{task.stage_name}</div>
                                 <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                                   {task.status === 'completed'
-                                    ? '✅ 已完成'
+                                    ? '已完成'
                                     : (task.status === 'in_progress' || task.status === 'processing')
-                                      ? '🔄 进行中'
+                                      ? '进行中'
                                       : task.status === 'overdue'
-                                        ? '⚠️ 逾期'
-                                        : '⏳ 待处理'}
+                                        ? '逾期'
+                                        : '待处理'}
                                   {task.expand?.assignees?.[0] && ` · ${(task.expand.assignees as any)[0].name || (task.expand.assignees as any)[0].username}`}
                                 </div>
                               </div>
@@ -1001,7 +1036,7 @@ const AdminDashboard = () => {
 
             {pendingApprovals.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>--</div>
                 <div>太棒了！没有待审核的任务</div>
               </div>
             ) : (
@@ -1295,6 +1330,7 @@ const AdminDashboard = () => {
             </motion.div>
           </div>
         )}
+        </>)}
       </div>
 
       <TabBar
@@ -1317,7 +1353,7 @@ const AdminDashboard = () => {
         content={
           <Form form={userForm} layout='horizontal' onFinish={handleUserUpdate} footer={null}>
             <Form.Item name='name' label='姓名' rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name='email' label='邮箱' rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name='email' label='邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input /></Form.Item>
             <Form.Item name='department' label='部门'>
               <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '管理层', value: '管理层' }]} />
             </Form.Item>
@@ -1338,8 +1374,8 @@ const AdminDashboard = () => {
         content={
           <Form form={addUserForm} layout='horizontal' onFinish={handleAddUser} footer={null}>
             <Form.Item name='name' label='姓名' rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name='email' label='邮箱' rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name='password' label='密码' rules={[{ required: true }]}><Input type='password' /></Form.Item>
+            <Form.Item name='email' label='邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input /></Form.Item>
+            <Form.Item name='password' label='密码' rules={[{ required: true, min: 8, message: '密码至少8位' }]}><Input type='password' /></Form.Item>
             <Form.Item name='department' label='部门' initialValue='工程部'>
               <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '管理层', value: '管理层' }]} />
             </Form.Item>

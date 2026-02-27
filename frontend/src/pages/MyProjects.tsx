@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react'
 import { IoArrowBackOutline, IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoTrashOutline, IoPeopleOutline, IoReturnUpBackOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, isManager } from '../lib/api'
-import { Dialog, Popup, SearchBar } from 'antd-mobile'
+import { Dialog, Popup, SearchBar, SpinLoading } from 'antd-mobile'
 import dayjs from 'dayjs'
 
 type FilterTab = 'all' | 'active' | 'blocked' | 'archived'
 
 export default function MyProjects() {
   const navigate = useNavigate()
-  const { data: projects = [] } = useProjects()
+  const { data: projects = [], isLoading } = useProjects()
   const { data: allTasks = [] } = useTasks()
   const { data: allUsers = [] } = useUsers()
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
@@ -20,7 +20,7 @@ export default function MyProjects() {
   const managerUser = isManager()
 
   // 成员管理弹窗
-  const [memberPopup, setMemberPopup] = useState<{ visible: boolean; projectId: string; members: string[] }>({ visible: false, projectId: '', members: [] })
+  const [memberPopup, setMemberPopup] = useState<{ visible: boolean; projectId: string; members: string[]; originalMembers: string[] }>({ visible: false, projectId: '', members: [], originalMembers: [] })
   const [memberSearch, setMemberSearch] = useState('')
 
   // 计算每个项目是否有长期卡点（blocked 超过 7 天）
@@ -61,6 +61,12 @@ export default function MyProjects() {
     if (p.status === 'completed') return { label: '已完成', bg: '#dcfce7', color: '#16a34a', icon: null }
     return { label: '进行中', bg: '#dbeafe', color: '#2563eb', icon: null }
   }
+
+  if (isLoading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <SpinLoading style={{ '--size': '36px' }} />
+    </div>
+  )
 
   return (
     <div className="page">
@@ -137,7 +143,7 @@ export default function MyProjects() {
               {/* 经理操作按钮 */}
               {managerUser && (
                 <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                  <button title="成员管理" onClick={() => setMemberPopup({ visible: true, projectId: p.id, members: p.members || [] })} style={{
+                  <button title="成员管理" onClick={() => setMemberPopup({ visible: true, projectId: p.id, members: p.members || [], originalMembers: [...(p.members || [])] })} style={{
                     background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 6
                   }}><IoPeopleOutline size={18} /></button>
                   {p.status === 'archived' ? (
@@ -172,7 +178,16 @@ export default function MyProjects() {
       )}
 
       {/* 成员管理弹窗 */}
-      <Popup visible={memberPopup.visible} onMaskClick={() => setMemberPopup(p => ({ ...p, visible: false }))}
+      <Popup visible={memberPopup.visible} onMaskClick={() => {
+        if (memberPopup.visible && memberPopup.projectId) {
+          // 只在成员实际变化时才提交
+          const changed = JSON.stringify([...memberPopup.members].sort()) !== JSON.stringify([...memberPopup.originalMembers].sort())
+          if (changed) {
+            updateMembers.mutate({ projectId: memberPopup.projectId, members: memberPopup.members })
+          }
+        }
+        setMemberPopup(p => ({ ...p, visible: false }))
+      }}
         bodyStyle={{ height: '60vh', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 }}>
         <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>项目成员管理</h3>
         <SearchBar placeholder="搜索用户" value={memberSearch} onChange={setMemberSearch} style={{ marginBottom: 12 }} />
@@ -183,7 +198,6 @@ export default function MyProjects() {
               <div key={u.id} onClick={() => {
                 const newMembers = checked ? memberPopup.members.filter(id => id !== u.id) : [...memberPopup.members, u.id]
                 setMemberPopup(p => ({ ...p, members: newMembers }))
-                updateMembers.mutate({ projectId: memberPopup.projectId, members: checked ? memberPopup.members.filter(id => id !== u.id) : [...memberPopup.members, u.id] })
               }} style={{
                 display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px',
                 borderBottom: '1px solid #f1f5f9', cursor: 'pointer'

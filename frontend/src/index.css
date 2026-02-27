@@ -103,9 +103,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--neutral-900);
-  /* Safe area for edge gesture navigation */
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
 }
 
 /* Mobile Container Constraint */
@@ -139,7 +136,7 @@ body {
 /* Layout */
 .page {
   padding: 24px 20px;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }

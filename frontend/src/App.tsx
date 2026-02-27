@@ -48,13 +48,14 @@ import { App as CapacitorApp } from '@capacitor/app'
 function App() {
   // Handle Hardware Back Button (Android)
   React.useEffect(() => {
-    CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+    const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
       if (canGoBack) {
         window.history.back()
       } else {
         CapacitorApp.exitApp()
       }
     })
+    return () => { listener.then(l => l.remove()) }
   }, [])
 
   return (
@@ -173,6 +174,7 @@ function App() {
 
         {/* 默认跳转 */}
         <Route path="/" element={<Navigate to="/app" />} />
+        <Route path="*" element={<Navigate to="/app" />} />
       </Routes>
     </Router>
   )

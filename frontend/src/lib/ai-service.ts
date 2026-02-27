@@ -245,7 +245,7 @@ ${JSON.stringify(data, null, 2)}
 
 export const chatWithAI = async (message: string, context: any, history: any[], apiKey: string, model: string = "deepseek-ai/DeepSeek-V3") => {
     const messages = [
-        { role: "system", content: `You are a Project Management Assistant. Here is the real-time project data: ${JSON.stringify(context)}. Answer the user's question based on this data. If asked about performance, cite specific numbers from 'personnel_performance'.` },
+        { role: "system", content: `你是一位专业的项目管理助手。以下是实时项目数据：${JSON.stringify(context)}。请基于这些数据回答用户的问题，用中文回答。如果被问到绩效相关问题，请引用 personnel_performance 中的具体数字和人名。` },
         ...history,
         { role: "user", content: message }
     ];
@@ -264,5 +264,5 @@ export const chatWithAI = async (message: string, context: any, history: any[], 
 
     if (!response.ok) throw new Error(await response.text());
     const json = await response.json();
-    return json.choices[0].message.content;
+    return json.choices?.[0]?.message?.content || '无响应';
 };

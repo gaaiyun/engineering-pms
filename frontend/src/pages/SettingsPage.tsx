@@ -63,27 +63,28 @@ export default function SettingsPage() {
   }
 
   const handleChangePassword = async () => {
+    const pwdValues = { old: '', new_: '', confirm: '' }
     const result = await Dialog.confirm({
       title: '修改密码',
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
           <Input
-            id="old-password"
             type="password"
             placeholder="当前密码"
             style={{ '--font-size': '14px' }}
+            onChange={v => pwdValues.old = v}
           />
           <Input
-            id="new-password"
             type="password"
             placeholder="新密码"
             style={{ '--font-size': '14px' }}
+            onChange={v => pwdValues.new_ = v}
           />
           <Input
-            id="confirm-password"
             type="password"
             placeholder="确认新密码"
             style={{ '--font-size': '14px' }}
+            onChange={v => pwdValues.confirm = v}
           />
         </div>
       ),
@@ -92,21 +93,17 @@ export default function SettingsPage() {
     })
 
     if (result) {
-      const oldPwd = (document.getElementById('old-password') as HTMLInputElement)?.value
-      const newPwd = (document.getElementById('new-password') as HTMLInputElement)?.value
-      const confirmPwd = (document.getElementById('confirm-password') as HTMLInputElement)?.value
-
-      if (!oldPwd || !newPwd || !confirmPwd) {
+      if (!pwdValues.old || !pwdValues.new_ || !pwdValues.confirm) {
         Toast.show({ content: '请填写完整', icon: 'fail' })
         return
       }
 
-      if (newPwd !== confirmPwd) {
+      if (pwdValues.new_ !== pwdValues.confirm) {
         Toast.show({ content: '两次密码不一致', icon: 'fail' })
         return
       }
 
-      if (newPwd.length < 8) {
+      if (pwdValues.new_.length < 8) {
         Toast.show({ content: '密码至少8位', icon: 'fail' })
         return
       }
@@ -117,9 +114,9 @@ export default function SettingsPage() {
           return
         }
         await pb.collection('users').update(user.id, {
-          oldPassword: oldPwd,
-          password: newPwd,
-          passwordConfirm: confirmPwd,
+          oldPassword: pwdValues.old,
+          password: pwdValues.new_,
+          passwordConfirm: pwdValues.confirm,
         })
         Toast.show({ content: '密码修改成功', icon: 'success' })
       } catch (error: any) {
@@ -199,7 +196,7 @@ export default function SettingsPage() {
       title: '关于版本',
       content: (
         <div style={{ fontSize: 14, lineHeight: 1.8, color: '#64748b', textAlign: 'center' }}>
-          <p style={{ fontSize: 24, marginBottom: 8 }}>🏗️</p>
+          <p style={{ fontSize: 24, marginBottom: 8 }}>PM</p>
           <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>工程结算管理系统</p>
           <p>版本 v2.1.0</p>
           <br />

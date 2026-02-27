@@ -12,7 +12,7 @@ export const queryClient = new QueryClient({
             refetchOnWindowFocus: true, // 切回窗口时自动刷新
         },
         mutations: {
-            retry: 1,
+            retry: 0,
         },
     },
 })

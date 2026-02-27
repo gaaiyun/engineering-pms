@@ -32,11 +32,11 @@ interface KanbanBoardProps {
 
 // 状态列配置 - 与数据库统一
 const COLUMNS = [
-    { id: 'pending', title: '待开始', icon: '📋', color: '#8c8c8c' },
-    { id: 'in_progress', title: '进行中', icon: '🚀', color: '#1890ff' },
-    { id: 'blocked', title: '卡点', icon: '🚧', color: '#faad14' },
-    { id: 'overdue', title: '已逾期', icon: '⚠️', color: '#ff4d4f' },
-    { id: 'completed', title: '已完成', icon: '✅', color: '#52c41a' },
+    { id: 'pending', title: '待开始', color: '#8c8c8c' },
+    { id: 'in_progress', title: '进行中', color: '#1890ff' },
+    { id: 'blocked', title: '卡点', color: '#faad14' },
+    { id: 'overdue', title: '已逾期', color: '#ff4d4f' },
+    { id: 'completed', title: '已完成', color: '#52c41a' },
 ]
 
 // 状态映射：兼容旧数据
@@ -209,7 +209,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
                             key={column.id}
                             id={column.id}
                             title={column.title}
-                            icon={column.icon}
                             color={column.color}
                             tasks={tasksByStatus[column.id] || []}
                             onTaskClick={handleTaskClick}

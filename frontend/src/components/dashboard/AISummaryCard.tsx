@@ -121,7 +121,7 @@ export function AISummaryCard({ summary }: Props) {
                                 display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer'
                             }}
                         >
-                            🔄 更新数据
+                            更新数据
                         </button>
                         <button
                             onClick={() => alert('AI 问答功能开发中... (Connect to DeepSeek API)')}
@@ -131,7 +131,7 @@ export function AISummaryCard({ summary }: Props) {
                                 display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer'
                             }}
                         >
-                            💬 向 AI 提问
+                            向 AI 提问
                         </button>
                     </div>
                     <span style={{ fontSize: 10, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>

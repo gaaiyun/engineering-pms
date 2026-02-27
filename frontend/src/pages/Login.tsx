@@ -1,9 +1,23 @@
 import { Button, Form, Input, Toast, Checkbox } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { IoLockClosedOutline, IoPersonOutline, IoEyeOutline, IoEyeOffOutline, IoCheckmarkCircle, IoCloseCircle, IoRefreshOutline } from 'react-icons/io5'
+import {
+  IoLockClosedOutline,
+  IoPersonOutline,
+  IoEyeOutline,
+  IoEyeOffOutline,
+  IoCheckmarkCircle,
+  IoCloseCircle,
+  IoRefreshOutline,
+  IoShieldCheckmarkOutline,
+} from 'react-icons/io5'
+
+const LOCKOUT_KEY = 'login_lockout'
+const ATTEMPT_KEY = 'login_attempts'
+const MAX_ATTEMPTS = 5
+const LOCKOUT_DURATION = 5 * 60 * 1000
 
 export default function Login() {
   const navigate = useNavigate()
@@ -13,9 +27,57 @@ export default function Login() {
   const [savedCredentials, setSavedCredentials] = useState({ username: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [form] = Form.useForm()
+  const [errorMsg, setErrorMsg] = useState('')
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null)
+  const [showCaptcha, setShowCaptcha] = useState(false)
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
+  const [captchaQuestion, setCaptchaQuestion] = useState({ a: 0, b: 0, answer: 0 })
+  const lockoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const generateCaptcha = useCallback(() => {
+    const a = Math.floor(Math.random() * 10) + 1
+    const b = Math.floor(Math.random() * 10) + 1
+    setCaptchaQuestion({ a, b, answer: a + b })
+    setCaptchaAnswer('')
+  }, [])
 
   useEffect(() => {
-    // 迁移：清除旧版明文密码存储
+    const stored = localStorage.getItem(LOCKOUT_KEY)
+    if (stored) {
+      const until = parseInt(stored, 10)
+      if (until > Date.now()) {
+        setLockoutUntil(until)
+      } else {
+        localStorage.removeItem(LOCKOUT_KEY)
+        localStorage.removeItem(ATTEMPT_KEY)
+      }
+    }
+    const attempts = parseInt(localStorage.getItem(ATTEMPT_KEY) || '0', 10)
+    setFailedAttempts(attempts)
+    if (attempts >= 3) {
+      setShowCaptcha(true)
+      generateCaptcha()
+    }
+  }, [generateCaptcha])
+
+  useEffect(() => {
+    if (lockoutUntil && lockoutUntil > Date.now()) {
+      lockoutTimerRef.current = setInterval(() => {
+        if (Date.now() >= lockoutUntil) {
+          setLockoutUntil(null)
+          localStorage.removeItem(LOCKOUT_KEY)
+          localStorage.removeItem(ATTEMPT_KEY)
+          setFailedAttempts(0)
+          setShowCaptcha(false)
+          if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current)
+        }
+      }, 1000)
+    }
+    return () => { if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current) }
+  }, [lockoutUntil])
+
+  useEffect(() => {
     localStorage.removeItem('savedCredentials')
     const savedUser = localStorage.getItem('savedUsername')
     if (savedUser) {
@@ -24,7 +86,7 @@ export default function Login() {
       form.setFieldsValue({ username: savedUser })
     }
     checkServer()
-  }, [])
+  }, [form])
 
   const checkServer = async () => {
     setServerStatus('checking')
@@ -37,11 +99,33 @@ export default function Login() {
     }
   }
 
+  const getRemainingLockoutTime = () => {
+    if (!lockoutUntil) return ''
+    const remaining = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000))
+    const mins = Math.floor(remaining / 60)
+    const secs = remaining % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   const onFinish = async (values: any) => {
-    if (serverStatus !== 'online') {
-      Toast.show({ icon: 'fail', content: '服务器连接中...' })
+    setErrorMsg('')
+
+    if (lockoutUntil && lockoutUntil > Date.now()) {
+      setErrorMsg(`账号已锁定，请 ${getRemainingLockoutTime()} 后重试`)
       return
     }
+
+    if (showCaptcha && parseInt(captchaAnswer, 10) !== captchaQuestion.answer) {
+      setErrorMsg('验证码错误，请重新计算')
+      generateCaptcha()
+      return
+    }
+
+    if (serverStatus !== 'online') {
+      setErrorMsg('服务器连接中，请稍候...')
+      return
+    }
+
     setLoading(true)
     try {
       const authData = await pb.collection('users').authWithPassword(
@@ -49,8 +133,12 @@ export default function Login() {
         values.password
       )
 
+      localStorage.removeItem(ATTEMPT_KEY)
+      localStorage.removeItem(LOCKOUT_KEY)
+      setFailedAttempts(0)
+      setShowCaptcha(false)
+
       if (rememberMe) {
-        // 仅保存用户名，不存储密码（安全）
         localStorage.setItem('savedUsername', values.username.trim())
       } else {
         localStorage.removeItem('savedUsername')
@@ -65,13 +153,28 @@ export default function Login() {
         navigate('/app')
       }
     } catch (error: any) {
-      let errorMsg = '登录失败'
-      if (error?.response?.code === 400) {
-        errorMsg = '用户名或密码错误'
-      } else if (error?.message?.includes('Failed to fetch')) {
-        errorMsg = '网络连接失败'
+      const newAttempts = failedAttempts + 1
+      setFailedAttempts(newAttempts)
+      localStorage.setItem(ATTEMPT_KEY, newAttempts.toString())
+
+      if (newAttempts >= MAX_ATTEMPTS) {
+        const until = Date.now() + LOCKOUT_DURATION
+        setLockoutUntil(until)
+        localStorage.setItem(LOCKOUT_KEY, until.toString())
+        setErrorMsg(`登录失败次数过多，账号已锁定 5 分钟`)
+      } else {
+        if (newAttempts >= 3 && !showCaptcha) {
+          setShowCaptcha(true)
+          generateCaptcha()
+        }
+        let msg = '登录失败'
+        if (error?.response?.code === 400) {
+          msg = `用户名或密码错误（剩余 ${MAX_ATTEMPTS - newAttempts} 次尝试）`
+        } else if (error?.message?.includes('Failed to fetch')) {
+          msg = '网络连接失败，请检查网络'
+        }
+        setErrorMsg(msg)
       }
-      Toast.show({ icon: 'fail', content: errorMsg })
     } finally {
       setLoading(false)
     }
@@ -151,7 +254,7 @@ export default function Login() {
             margin: '0 auto 20px',
             boxShadow: '0 10px 30px rgba(15, 23, 42, 0.3)'
           }}>
-            <span style={{ fontSize: 28 }}>🏗️</span>
+            <span style={{ fontSize: 28 }}>PM</span>
           </div>
           <h1 style={{
             fontSize: 28,
@@ -173,7 +276,7 @@ export default function Login() {
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
-          marginBottom: 32,
+          marginBottom: 16,
           padding: '10px 16px',
           background: serverStatus === 'online' ? '#ECFDF5' : serverStatus === 'offline' ? '#FEF2F2' : '#FEF3C7',
           borderRadius: 12,
@@ -200,6 +303,27 @@ export default function Login() {
             </>
           )}
         </motion.div>
+
+        {/* 内联错误提示 */}
+        {errorMsg && (
+          <motion.div variants={itemVariants} style={{ marginBottom: 20 }}>
+            <div
+              style={{
+                background: '#FEF2F2',
+                borderRadius: 12,
+                padding: '10px 14px',
+                color: '#B91C1C',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <IoCloseCircle size={18} color="#DC2626" />
+              <span>{errorMsg}</span>
+            </div>
+          </motion.div>
+        )}
 
         <Form
           form={form}
@@ -272,6 +396,40 @@ export default function Login() {
             </Form.Item>
           </motion.div>
 
+          {/* 简单行为验证：加法验证码 */}
+          {showCaptcha && (
+            <motion.div variants={itemVariants} style={{ marginBottom: 20 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#EFF6FF',
+                  borderRadius: 14,
+                  padding: '8px 16px',
+                  gap: 8,
+                }}
+              >
+                <IoShieldCheckmarkOutline size={20} color="#2563EB" />
+                <span style={{ fontSize: 13, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
+                  验证：{captchaQuestion.a} + {captchaQuestion.b} =
+                </span>
+                <Input
+                  value={captchaAnswer}
+                  onChange={val => setCaptchaAnswer(val)}
+                  type="number"
+                  placeholder="结果"
+                  style={{
+                    '--font-size': '14px',
+                    '--placeholder-color': '#9CA3AF',
+                    border: 'none',
+                    background: 'transparent',
+                    padding: '8px',
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+
           <motion.div variants={itemVariants} style={{ marginBottom: 28 }}>
             <Checkbox
               checked={rememberMe}
@@ -320,7 +478,7 @@ export default function Login() {
             lineHeight: 1.8
           }}>
             <div style={{ fontWeight: 600, color: '#64748B', marginBottom: 4 }}>测试账号</div>
-            <div>管理员: wang_manager / 12345678</div>
+            <div>管理员: zhang_manager / 12345678</div>
             <div>员工: li_audit / 12345678</div>
           </div>
           <span

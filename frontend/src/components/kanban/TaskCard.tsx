@@ -91,14 +91,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging })
                 <div className="task-meta">
                     {task.deadline && (
                         <span className={`deadline ${isOverdue ? 'overdue' : ''}`}>
-                            📅 {formatDate(task.deadline)}
+                            {formatDate(task.deadline)}
                         </span>
                     )}
                     {isBlocked && (
-                        <span className="blocker-badge">🚧 卡点</span>
+                        <span className="blocker-badge">卡点</span>
                     )}
                     {isMilestone && (
-                        <span className="milestone-badge">🎯 里程碑</span>
+                        <span className="milestone-badge">里程碑</span>
                     )}
                 </div>
 

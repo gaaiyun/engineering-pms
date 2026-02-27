@@ -12,6 +12,7 @@ import {
 } from 'antd-mobile'
 import dayjs from 'dayjs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { pb } from '../lib/pocketbase'
 import {
   IoArrowBackOutline,
@@ -61,14 +62,24 @@ const STAGE_TEMPLATES = [
 
 // 任务状态
 const STATUS_OPTIONS = [
-  { value: 'pending', label: '待开始', color: '#94A3B8', icon: '⏳' },
-  { value: 'in_progress', label: '进行中', color: '#3B82F6', icon: '🔄' },
-  { value: 'blocked', label: '遇到卡点', color: '#EF4444', icon: '🚫' },
-  { value: 'completed', label: '已完成', color: '#10B981', icon: '✅' },
+  { value: 'pending', label: '待开始', color: '#94A3B8', icon: '' },
+  { value: 'in_progress', label: '进行中', color: '#3B82F6' },
+  { value: 'blocked', label: '遇到卡点', color: '#EF4444' },
+  { value: 'completed', label: '已完成', color: '#10B981' },
 ]
 
 export default function TaskCreate() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  // 权限校验：仅经理/管理员可创建任务
+  useEffect(() => {
+    const role = pb.authStore.model?.role?.toLowerCase()
+    if (role !== 'admin' && role !== 'manager') {
+      navigate('/app', { replace: true })
+    }
+  }, [])
+
   const [searchParams] = useSearchParams()
   const preSelectedProjectId = searchParams.get('projectId')
 
@@ -172,17 +183,19 @@ export default function TaskCreate() {
     setLoading(true)
     try {
       // 1. 创建当前任务
-      const taskData = {
+      const taskData: Record<string, any> = {
         project: selectedProject,
         stage_name: stageName,
         status: taskStatus,
-        progress_note: progressNote,
-        blocker_reason: taskStatus === 'blocked' ? blockerReason : '',
+        next_steps: progressNote || undefined,
         start_date: new Date().toISOString(),
         deadline: deadline ? dayjs(deadline).format('YYYY-MM-DD HH:mm:ss') : null,
         assignees: selectedAssignees.length > 0 ? selectedAssignees : [currentUser?.id],
-        creator: currentUser?.id,
+        created_by: currentUser?.id,
         sequence: Date.now(),
+      }
+      if (taskStatus === 'blocked' && blockerReason) {
+        taskData.blocker = { reason_type: 'other', reason_detail: blockerReason, need_help_from: [], expected_resolve: '' }
       }
 
       const createdTask = await pb.collection('tasks').create(taskData)
@@ -193,10 +206,10 @@ export default function TaskCreate() {
           project: selectedProject,
           stage_name: nextStepName,
           status: 'pending',
-          previous_task: createdTask.id,
+          predecessor_tasks: [createdTask.id],
           start_date: new Date().toISOString(),
           assignees: nextStepAssignees,
-          creator: currentUser?.id,
+          created_by: currentUser?.id,
           sequence: Date.now() + 1,
         }
 
@@ -210,9 +223,9 @@ export default function TaskCreate() {
               type: 'task_assigned',
               title: '您有新任务',
               content: `${currentUser?.name || currentUser?.username} 将「${nextStepName}」任务分配给了您`,
-              related_task: createdTask.id,
-              related_project: selectedProject,
-              read: false,
+              link_type: 'task',
+              link_id: createdTask.id,
+              is_read: false,
             })
           } catch (e) {
             console.warn('通知创建失败', e)
@@ -232,9 +245,9 @@ export default function TaskCreate() {
                 type: 'progress_update',
                 title: '进度更新',
                 content: `${currentUser?.name || currentUser?.username} 更新了「${stageName}」的进度: ${STATUS_OPTIONS.find(s => s.value === taskStatus)?.label}`,
-                related_task: createdTask.id,
-                related_project: selectedProject,
-                read: false,
+                link_type: 'task',
+                link_id: createdTask.id,
+                is_read: false,
               })
             }
           }
@@ -244,6 +257,8 @@ export default function TaskCreate() {
       }
 
       Toast.show({ icon: 'success', content: '提交成功！' })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate(-1)
     } catch (e: any) {
       console.error('提交失败', e)
@@ -364,7 +379,7 @@ export default function TaskCreate() {
               border: '1px solid #86EFAC'
             }}>
               <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginBottom: 4 }}>
-                📋 该项目最近任务
+                该项目最近任务
               </div>
               <div style={{ fontSize: 13, color: '#166534', fontWeight: 600 }}>
                 {recentTask.stage_name}
@@ -762,7 +777,7 @@ export default function TaskCreate() {
       >
         <div style={{ padding: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 20, textAlign: 'center' }}>
-            📋 确认提交
+            确认提交
           </div>
 
           {/* 预览卡片 */}
@@ -795,7 +810,7 @@ export default function TaskCreate() {
               </span>
               {deadline && (
                 <span style={{ background: 'rgba(239,68,68,0.3)', padding: '4px 10px', borderRadius: 6, fontSize: 12 }}>
-                  ⏰ {dayjs(deadline).format('MM-DD')}
+                  {dayjs(deadline).format('MM-DD')}
                 </span>
               )}
             </div>
@@ -809,7 +824,7 @@ export default function TaskCreate() {
 
             {taskStatus === 'blocked' && blockerReason && (
               <div style={{ marginTop: 12, padding: 12, background: 'rgba(239,68,68,0.2)', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: '#FCA5A5', marginBottom: 4 }}>🚫 卡点原因</div>
+                <div style={{ fontSize: 11, color: '#FCA5A5', marginBottom: 4 }}>卡点原因</div>
                 <div style={{ fontSize: 13 }}>{blockerReason}</div>
               </div>
             )}
@@ -836,13 +851,13 @@ export default function TaskCreate() {
                   const user = users.find(u => u.id === id)
                   return user ? (
                     <Tag key={id} style={{ background: '#14B8A6', color: 'white', borderRadius: 6, fontSize: 12 }}>
-                      👤 {user.name || user.username}
+                      {user.name || user.username}
                     </Tag>
                   ) : null
                 })}
               </div>
               <div style={{ fontSize: 11, color: '#0D9488', marginTop: 8 }}>
-                ✉️ 提交后将自动通知以上负责人
+                提交后将自动通知以上负责人
               </div>
             </div>
           )}

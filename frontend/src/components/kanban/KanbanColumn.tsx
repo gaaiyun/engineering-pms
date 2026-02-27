@@ -11,7 +11,7 @@ import './KanbanColumn.css'
 interface KanbanColumnProps {
     id: string
     title: string
-    icon: string
+    icon?: string
     color: string
     tasks: Task[]
     onTaskClick?: (task: Task) => void
@@ -34,7 +34,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             style={{ '--column-color': color } as React.CSSProperties}
         >
             <div className="column-header">
-                <span className="column-icon">{icon}</span>
+                <span className="column-icon" style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: color }} />
                 <span className="column-title">{title}</span>
                 <span className="column-count">{tasks.length}</span>
             </div>
@@ -43,7 +43,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
                 <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     {tasks.length === 0 ? (
                         <div className="column-empty">
-                            <span className="empty-icon">{icon}</span>
                             <span className="empty-text">暂无任务</span>
                         </div>
                     ) : (

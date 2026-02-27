@@ -37,7 +37,7 @@ const Register = () => {
     setLoading(true)
     try {
       await pb.collection('users').create({
-        username: values.email.split('@')[0] + '_' + Math.random().toString(36).substr(2, 5),
+        username: values.email.split('@')[0] + '_' + Math.random().toString(36).substring(2, 7),
         email: values.email,
         password: values.password,
         passwordConfirm: values.confirmPassword,

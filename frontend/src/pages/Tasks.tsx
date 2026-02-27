@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react'
-import { ProgressBar, Tag, Dialog, Form, Input, Toast, Popup, Badge } from 'antd-mobile'
+import { ProgressBar, Tag, Dialog, Form, Input, Toast, Popup, Badge, DatePicker, Checkbox } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { IoTimeOutline, IoCheckmarkCircleOutline, IoBriefcaseOutline, IoAddCircle, IoCloseCircle, IoNotificationsOutline, IoChevronForward } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonCard } from '../components/Skeleton'
 import { motion } from 'framer-motion'
-import { useTasks, isManager, type Task, type User } from '../lib/api'
+import { useTasks, useProjects, useNotifications, useUsers, isManager, notifyProjectMembers, type Task, type User } from '../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../lib/queryClient'
 
 interface Project {
   id: string
@@ -14,7 +16,7 @@ interface Project {
   status: 'active' | 'completed' | 'archived'
   progress?: number
   updated?: string
-  end_date?: string
+  deadline?: string
 }
 
 // 项目卡片组件
@@ -141,18 +143,35 @@ const ProjectCard = ({
 
 export default function Tasks() {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [showAddProject, setShowAddProject] = useState(false)
   const [form] = Form.useForm()
   const [isPC, setIsPC] = useState(window.innerWidth > 768)
   const [showNotifications, setShowNotifications] = useState(false)
   const [selectedProjectNotif, setSelectedProjectNotif] = useState<Project | null>(null)
-  const [unreadNotifs, setUnreadNotifs] = useState<any[]>([])
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([])
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showStartPicker, setShowStartPicker] = useState(false)
+  const [showEndPicker, setShowEndPicker] = useState(false)
+
+  // react-query hooks — SSE 自动刷新
+  const { data: projectsRaw = [], isLoading: loading } = useProjects()
+  const userId = pb.authStore.model?.id
+  const { data: allNotifs = [] } = useNotifications(userId || '')
+  const unreadNotifs = useMemo(() => allNotifs.filter((n: any) => !n.is_read).slice(0, 5), [allNotifs])
+
+  const projects = useMemo(() => projectsRaw
+    .filter((p: any) => p.status !== 'archived')
+    .map((p: any) => ({
+      ...p,
+      progress: p.progress !== undefined ? p.progress : 0
+    })), [projectsRaw])
 
   // 获取员工的任务
   const { data: myTasks = [] } = useTasks()
   const isManagerUser = isManager()
+  const { data: allUsers = [] } = useUsers()
 
   // 员工待办任务（未完成的）
   const activeTasks = useMemo(() => {
@@ -170,44 +189,10 @@ export default function Tasks() {
   }, [myTasks])
 
   useEffect(() => {
-    loadProjects()
-    loadUnreadNotifs()
     const handleResize = () => setIsPC(window.innerWidth > 768)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
-
-  const loadUnreadNotifs = async () => {
-    try {
-      const userId = pb.authStore.model?.id
-      if (!userId) return
-      const res = await pb.collection('notifications').getList(1, 5, {
-        filter: `user = "${userId}" && is_read = false`,
-        sort: '-created',
-      })
-      setUnreadNotifs(res.items)
-    } catch { /* silent */ }
-  }
-
-  const loadProjects = async () => {
-    try {
-      // 获取项目列表，按更新时间倒序
-      const records = await pb.collection('projects').getList<Project>(1, 50, {
-        sort: '-updated',
-      })
-
-      // 模拟数据填充：如果数据库没有 progress 字段，随机生成以展示效果
-      const projectsWithMock = records.items.map(p => ({
-        ...p,
-        progress: p.progress !== undefined ? p.progress : Math.floor(Math.random() * 40 + 20)
-      }))
-      setProjects(projectsWithMock)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const getStatusConfig = (status: string, progress: number) => {
     if (status === 'archived') return { color: 'default', text: '已归档', icon: <IoBriefcaseOutline /> }
@@ -216,25 +201,27 @@ export default function Tasks() {
     return { color: 'primary', text: '进行中', icon: <IoTimeOutline /> }
   }
 
-  // 真实通知计数（按项目）
-  const [projectNotifCounts, setProjectNotifCounts] = useState<Record<string, number>>({})
-  useEffect(() => {
-    const loadCounts = async () => {
-      const userId = pb.authStore.model?.id
-      if (!userId) return
-      const counts: Record<string, number> = {}
-      for (const p of projects) {
-        try {
-          const res = await pb.collection('notifications').getList(1, 1, {
-            filter: `user = "${userId}" && is_read = false && related_project = "${p.id}"`,
-          })
-          if (res.totalItems > 0) counts[p.id] = res.totalItems
-        } catch { /* silent */ }
+  // 通知计数（按项目，从 react-query 数据派生）
+  const projectNotifCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    // 通过已加载的任务数据建立 taskId → projectId 映射
+    const taskProjectMap: Record<string, string> = {}
+    myTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+
+    for (const n of allNotifs) {
+      if (n.is_read) continue
+      let projectId: string | undefined
+      if (n.link_type === 'project') {
+        projectId = n.link_id
+      } else if (n.link_type === 'task' && n.link_id) {
+        projectId = taskProjectMap[n.link_id]
       }
-      setProjectNotifCounts(counts)
+      if (projectId) {
+        counts[projectId] = (counts[projectId] || 0) + 1
+      }
     }
-    if (projects.length > 0) loadCounts()
-  }, [projects])
+    return counts
+  }, [allNotifs, myTasks])
 
   const getNotificationCount = (pid: string) => projectNotifCounts[pid] || 0
 
@@ -247,16 +234,35 @@ export default function Tasks() {
 
   const handleAddProject = async (values: any) => {
     try {
-      await pb.collection('projects').create({
+      const userId = pb.authStore.model?.id
+      const members = [...new Set([userId, ...selectedMembers].filter(Boolean))]
+      const project = await pb.collection('projects').create({
         name: values.name,
         code: values.code || '',
         status: 'active',
         progress: 0,
+        manager: userId,
+        members,
+        start_date: startDate || undefined,
+        deadline: endDate || undefined,
       })
+      // 审计日志
+      await pb.collection('audit_logs').create({
+        project: project.id, action_type: 'create_project',
+        operator: userId,
+        after_data: { name: values.name, members },
+      }).catch(() => {})
+      // 通知项目成员
+      const userName = pb.authStore.model?.name || pb.authStore.model?.username
+      await notifyProjectMembers(project.id, '新项目创建', `${userName} 创建了项目「${values.name}」`, 'project_update', userId).catch(() => {})
       Toast.show({ icon: 'success', content: '项目创建成功' })
       setShowAddProject(false)
       form.resetFields()
-      loadProjects()
+      setSelectedMembers([])
+      setStartDate('')
+      setEndDate('')
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     } catch (error: any) {
       Toast.show({ icon: 'fail', content: error.message || '创建失败' })
     }
@@ -297,7 +303,7 @@ export default function Tasks() {
       {/* 员工：我的待办任务 */}
       {!isManagerUser && activeTasks.length > 0 && (
         <div style={{ padding: '0 20px', marginBottom: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 10 }}>📋 我的待办任务</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 10 }}>我的待办任务</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {activeTasks.map((task: Task) => (
               <motion.div key={task.id}
@@ -320,6 +326,14 @@ export default function Tasks() {
                 {getTaskStatusTag(task.status)}
               </motion.div>
             ))}
+            {myTasks.filter((t: Task) => t.status !== 'completed' && (t.assignees?.includes(pb.authStore.model?.id || '') || t.expand?.assignees?.some((u: User) => u.id === pb.authStore.model?.id))).length > 8 && (
+              <div
+                onClick={() => navigate('/my-tasks')}
+                style={{ textAlign: 'center', padding: '10px 0', fontSize: 13, color: '#3b82f6', cursor: 'pointer', fontWeight: 500 }}
+              >
+                查看全部待办 →
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -402,12 +416,31 @@ export default function Tasks() {
             <IoCloseCircle size={24} color="#94A3B8" onClick={() => setShowNotifications(false)} style={{ cursor: 'pointer' }} />
           </div>
           
-          {unreadNotifs.filter((n: any) => !selectedProjectNotif || n.related_project === selectedProjectNotif.id).length === 0 ? (
+          {unreadNotifs.filter((n: any) => {
+            if (!selectedProjectNotif) return true
+            // 通过 taskProjectMap 反查通知所属项目
+            if (n.link_type === 'project') return n.link_id === selectedProjectNotif.id
+            if (n.link_type === 'task' && n.link_id) {
+              const taskProjectMap: Record<string, string> = {}
+              myTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+              return taskProjectMap[n.link_id] === selectedProjectNotif.id
+            }
+            return false
+          }).length === 0 ? (
             <div style={{ textAlign: 'center', color: '#94a3b8', padding: 32 }}>暂无未读通知</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {unreadNotifs
-                .filter((n: any) => !selectedProjectNotif || n.related_project === selectedProjectNotif.id)
+                .filter((n: any) => {
+                  if (!selectedProjectNotif) return true
+                  if (n.link_type === 'project') return n.link_id === selectedProjectNotif.id
+                  if (n.link_type === 'task' && n.link_id) {
+                    const taskProjectMap: Record<string, string> = {}
+                    myTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+                    return taskProjectMap[n.link_id] === selectedProjectNotif.id
+                  }
+                  return false
+                })
                 .slice(0, 5)
                 .map((n: any) => (
                   <div key={n.id} style={{ padding: 16, background: '#f8fafc', borderRadius: 12, borderLeft: '4px solid #3b82f6' }}>
@@ -457,19 +490,53 @@ export default function Tasks() {
         visible={showAddProject}
         title="新增项目"
         content={
-          <Form form={form} layout='horizontal' onFinish={handleAddProject} footer={null}>
-            <Form.Item name='name' label='项目名称' rules={[{ required: true, message: '请输入项目名称' }]}>
-              <Input placeholder="如：凤凰山跨海大桥工程" />
-            </Form.Item>
-            <Form.Item name='code' label='项目编号'>
-              <Input placeholder="如：FHS-2026-001 (可选)" />
-            </Form.Item>
-          </Form>
+          <div>
+            <Form form={form} layout='horizontal' onFinish={handleAddProject} footer={null}>
+              <Form.Item name='name' label='项目名称' rules={[{ required: true, message: '请输入项目名称' }]}>
+                <Input placeholder="如：凤凰山跨海大桥工程" />
+              </Form.Item>
+              <Form.Item name='code' label='项目编号'>
+                <Input placeholder="如：FHS-2026-001 (可选)" />
+              </Form.Item>
+            </Form>
+            <div style={{ padding: '0 12px' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, margin: '8px 0 6px', color: '#1e293b' }}>起止日期</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <div onClick={() => setShowStartPicker(true)} style={{ flex: 1, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: startDate ? '#1e293b' : '#94a3b8', cursor: 'pointer' }}>
+                  {startDate || '开始日期'}
+                </div>
+                <div onClick={() => setShowEndPicker(true)} style={{ flex: 1, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: endDate ? '#1e293b' : '#94a3b8', cursor: 'pointer' }}>
+                  {endDate || '截止日期'}
+                </div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, margin: '4px 0 6px', color: '#1e293b' }}>项目成员</div>
+              <div style={{ maxHeight: 180, overflow: 'auto' }}>
+                {allUsers.filter((u: any) => u.id !== pb.authStore.model?.id).map((u: any) => (
+                  <div key={u.id} onClick={() => setSelectedMembers(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
+                    <Checkbox checked={selectedMembers.includes(u.id)} style={{ '--icon-size': '18px' }} />
+                    <span style={{ fontSize: 13, color: '#334155' }}>{u.name || u.username}</span>
+                    {u.role === 'manager' && <Tag color="primary" style={{ fontSize: 10 }}>经理</Tag>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         }
         actions={[
-          { key: 'cancel', text: '取消', onClick: () => setShowAddProject(false) },
+          { key: 'cancel', text: '取消', onClick: () => { setShowAddProject(false); setSelectedMembers([]); setStartDate(''); setEndDate('') } },
           { key: 'confirm', text: '创建项目', bold: true, onClick: () => form.submit() },
         ]}
+      />
+      <DatePicker
+        visible={showStartPicker}
+        onClose={() => setShowStartPicker(false)}
+        onConfirm={val => { setStartDate(val.toISOString().split('T')[0]); setShowStartPicker(false) }}
+      />
+      <DatePicker
+        visible={showEndPicker}
+        onClose={() => setShowEndPicker(false)}
+        onConfirm={val => { setEndDate(val.toISOString().split('T')[0]); setShowEndPicker(false) }}
       />
     </div>
   )

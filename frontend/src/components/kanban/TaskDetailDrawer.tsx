@@ -37,13 +37,13 @@ interface TaskDetailDrawerProps {
     onUpdate?: () => void
 }
 
-const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
-    pending: { label: '待开始', color: '#8c8c8c', icon: '📋' },
-    in_progress: { label: '进行中', color: '#1890ff', icon: '🚀' },
-    processing: { label: '进行中', color: '#1890ff', icon: '🚀' }, // 兼容旧状态
-    completed: { label: '已完成', color: '#52c41a', icon: '✅' },
-    overdue: { label: '已逾期', color: '#ff4d4f', icon: '⚠️' },
-    blocked: { label: '卡点中', color: '#faad14', icon: '🚧' },
+const statusConfig: Record<string, { label: string; color: string }> = {
+    pending: { label: '待开始', color: '#8c8c8c' },
+    in_progress: { label: '进行中', color: '#1890ff' },
+    processing: { label: '进行中', color: '#1890ff' }, // 兼容旧状态
+    completed: { label: '已完成', color: '#52c41a' },
+    overdue: { label: '已逾期', color: '#ff4d4f' },
+    blocked: { label: '卡点中', color: '#faad14' },
 }
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
@@ -204,7 +204,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     <h2 className="task-name">{currentTask.stage_name}</h2>
                     <div className="task-badges">
                         <Tag color={status.color} fill="solid">
-                            {status.icon} {status.label}
+                            {status.label}
                         </Tag>
                         {priority && (
                             <Tag color={priority.color} fill="outline">
@@ -213,7 +213,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                         )}
                         {currentTask.is_milestone && (
                             <Tag color="#722ed1" fill="solid">
-                                🎯 里程碑
+                                里程碑
                             </Tag>
                         )}
                     </div>
@@ -246,30 +246,30 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     <div className="tab-content">
                         <List>
                             <List.Item extra={formatDate(currentTask.deadline)}>
-                                📅 截止日期
+                                截止日期
                             </List.Item>
                             <List.Item extra={formatDate(currentTask.start_date)}>
-                                🗓️ 开始日期
+                                开始日期
                             </List.Item>
                             <List.Item
                                 extra={
                                     currentTask.expand?.assignees?.map(u => u.name).join(', ') || '未分配'
                                 }
                             >
-                                👤 负责人
+                                负责人
                             </List.Item>
                         </List>
 
                         {currentTask.next_steps && (
                             <div className="section">
-                                <h4 className="section-title">📝 任务描述</h4>
+                                <h4 className="section-title">任务描述</h4>
                                 <p className="section-content">{currentTask.next_steps}</p>
                             </div>
                         )}
 
                         {currentTask.blocker && (
                             <div className="section blocker-section">
-                                <h4 className="section-title">🚧 卡点信息</h4>
+                                <h4 className="section-title">卡点信息</h4>
                                 <div className="blocker-info">
                                     <p><strong>类型：</strong>{
                                         blockerTypes.find(t => t.value === currentTask.blocker?.reason_type)?.label
@@ -291,7 +291,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                                     onClick={handleStartTask}
                                     loading={updateTask.isPending}
                                 >
-                                    🚀 开始任务
+                                    开始任务
                                 </Button>
                             )}
 
@@ -302,7 +302,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                                         block
                                         onClick={handleCompleteWithHandoff}
                                     >
-                                        ✅ 完成并交接下一步
+                                        完成并交接下一步
                                     </Button>
                                     <Button
                                         color="warning"
@@ -310,7 +310,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                                         onClick={handleReportBlocker}
                                         style={{ marginTop: 8 }}
                                     >
-                                        🚧 上报卡点
+                                        上报卡点
                                     </Button>
                                 </>
                             )}
@@ -321,7 +321,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                                     block
                                     onClick={handleStartTask}
                                 >
-                                    ▶️ 恢复进行
+                                    恢复进行
                                 </Button>
                             )}
                         </div>
@@ -334,7 +334,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                         <div className="comments-list">
                             {comments.length === 0 ? (
                                 <div className="empty-comments">
-                                    <span className="empty-icon">💬</span>
+                                    <span className="empty-icon">--</span>
                                     <span>暂无评论</span>
                                 </div>
                             ) : (
@@ -384,7 +384,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     <div className="tab-content history-tab">
                         {auditLogs.length === 0 ? (
                             <div className="empty-history">
-                                <span className="empty-icon">📜</span>
+                                <span className="empty-icon">--</span>
                                 <span>暂无操作记录</span>
                             </div>
                         ) : (

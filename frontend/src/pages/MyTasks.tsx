@@ -43,7 +43,7 @@ export default function MyTasks() {
 
   // Group Tasks
   const todoTasks = tasks.filter(t => t.status === 'pending')
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'processing')
+  const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'processing' || t.status === 'blocked')
   const overdueTasks = tasks.filter(t => t.status === 'overdue')
   const doneTasks = tasks.filter(t => t.status === 'completed')
 

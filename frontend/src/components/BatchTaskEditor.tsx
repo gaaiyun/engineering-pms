@@ -102,7 +102,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
       {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>📋 批量编辑任务</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>批量编辑任务</div>
           <div style={{ fontSize: 12, color: '#94a3b8' }}>填写任务名、负责人和截止时间</div>
         </div>
         <Button size="small" onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8 }}>关闭</Button>

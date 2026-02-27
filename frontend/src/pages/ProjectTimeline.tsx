@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
+import { isManager, useUsers } from '../lib/api'
 import dayjs from 'dayjs'
 import isBetween from 'dayjs/plugin/isBetween'
-import { IoArrowBack, IoAddCircle, IoScan, IoExpand, IoContract } from 'react-icons/io5'
+import { IoArrowBack, IoAddCircle, IoScan, IoExpand, IoContract, IoCreateOutline } from 'react-icons/io5'
 import { Button, Toast, Avatar } from 'antd-mobile'
+import BatchTaskEditor from '../components/BatchTaskEditor'
 import { motion } from 'framer-motion'
 import clsx from 'clsx'
 import { SkeletonTimeline } from '../components/Skeleton'
@@ -32,6 +34,7 @@ interface Project {
   id: string
   name: string
   status: string
+  members?: string[]
 }
 
 interface TimelineGroup {
@@ -51,9 +54,12 @@ const MOBILE_MIN_CELL_WIDTH = 44 // 手机端最小宽度，防止过于拥挤
 const HEADER_HEIGHT = 48
 const SIDEBAR_WIDTH = 90
 const TASK_HEIGHT = 56
-const TASK_GAP = 12
-const ROW_PADDING_TOP = 16
-const ROW_PADDING_BOTTOM = 16
+const TASK_GAP_PC = 12
+const TASK_GAP_MOBILE = 20
+const ROW_PADDING_TOP_PC = 16
+const ROW_PADDING_TOP_MOBILE = 24
+const ROW_PADDING_BOTTOM_PC = 16
+const ROW_PADDING_BOTTOM_MOBILE = 24
 
 // --- Helper: Avatar URL ---
 const getAvatarUrl = (user: any) => {
@@ -81,6 +87,14 @@ export default function ProjectTimeline() {
   const [scale, setScale] = useState(1.0) // 0.5 - 2.0
   const [isLandscape, setIsLandscape] = useState(false)
   const [isPC, setIsPC] = useState(window.innerWidth > 1024)
+  const [showBatchEditor, setShowBatchEditor] = useState(false)
+
+  const { data: allUsers = [] } = useUsers()
+
+  // 移动端动态间距
+  const TASK_GAP = isPC ? TASK_GAP_PC : TASK_GAP_MOBILE
+  const ROW_PADDING_TOP = isPC ? ROW_PADDING_TOP_PC : ROW_PADDING_TOP_MOBILE
+  const ROW_PADDING_BOTTOM = isPC ? ROW_PADDING_BOTTOM_PC : ROW_PADDING_BOTTOM_MOBILE
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null)
@@ -106,6 +120,11 @@ export default function ProjectTimeline() {
 
   useEffect(() => {
     if (id) loadData()
+    // SSE 实时刷新：任务变更时自动重新加载
+    pb.collection('tasks').subscribe('*', (e) => {
+      if (e.record.project === id) loadData()
+    })
+    return () => { pb.collection('tasks').unsubscribe('*') }
   }, [id])
 
   const loadData = async () => {
@@ -281,7 +300,7 @@ export default function ProjectTimeline() {
       const diff = dayjs(pendingTask.start_date).diff(timelineStart, 'day');
       if (containerRef.current) {
         containerRef.current.scrollTo({ left: Math.max(0, diff * CELL_WIDTH - 100), behavior: 'smooth' }); // -100 for padding
-        Toast.show(`📍 定位到 ${group.user?.name || '未知'} 的任务`);
+        Toast.show(`定位到 ${group.user?.name || '未知'} 的任务`);
       }
     } else {
       Toast.show('该用户暂无活跃任务');
@@ -540,9 +559,9 @@ export default function ProjectTimeline() {
                         </div>
                         {scale > 0.6 && (
                           <div style={{ fontSize: 9, color: '#64748b', display: 'flex', gap: 6, marginTop: 2 }}>
-                            {isBlocked && <span style={{ color: '#e11d48', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⛔ {blockerReason.slice(0, 6)}...</span>}
-                            {isOverdue && !isBlocked && <span style={{ color: '#c2410c', whiteSpace: 'nowrap' }}>⚠️ 逾期</span>}
-                            {!isBlocked && !isOverdue && <span style={{ whiteSpace: 'nowrap' }}>📅 {dayjs(task.deadline).format('MM/DD')}</span>}
+                            {isBlocked && <span style={{ color: '#e11d48', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockerReason.slice(0, 6)}...</span>}
+                            {isOverdue && !isBlocked && <span style={{ color: '#c2410c', whiteSpace: 'nowrap' }}>逾期</span>}
+                            {!isBlocked && !isOverdue && <span style={{ whiteSpace: 'nowrap' }}>{dayjs(task.deadline).format('MM/DD')}</span>}
                           </div>
                         )}
                       </motion.div>
@@ -555,20 +574,45 @@ export default function ProjectTimeline() {
         </div>
       </div>
 
-      {/* Floating Action for Creating Task */}
-      <div
-        style={{ position: 'fixed', bottom: 32, right: 32, zIndex: 100 }}
-        onClick={() => navigate(`/task/create?projectId=${id}`)}
-      >
-        <div style={{
-          width: 56, height: 56, borderRadius: '50%',
-          background: '#2563eb', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 16px rgba(37, 99, 235, 0.3)'
-        }}>
-          <IoAddCircle size={32} />
+      {/* Floating Actions - manager only */}
+      {isManager() && (
+        <div style={{ position: 'fixed', bottom: 32, right: 32, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+          <div
+            onClick={() => setShowBatchEditor(true)}
+            style={{
+              width: 48, height: 48, borderRadius: '50%',
+              background: '#7c3aed', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 6px 14px rgba(124, 58, 237, 0.3)', cursor: 'pointer'
+            }}
+          >
+            <IoCreateOutline size={24} />
+          </div>
+          <div
+            onClick={() => navigate(`/task/create?projectId=${id}`)}
+            style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#2563eb', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 8px 16px rgba(37, 99, 235, 0.3)', cursor: 'pointer'
+            }}
+          >
+            <IoAddCircle size={32} />
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* 批量任务编辑器 */}
+      {project && isManager() && (
+        <BatchTaskEditor
+          projectId={id!}
+          visible={showBatchEditor}
+          onClose={() => { setShowBatchEditor(false); loadData() }}
+          projectMembers={project.members || []}
+          allUsers={allUsers}
+          existingTasks={groups.flatMap(g => g.tasks).map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.expand?.assignees?.map(u => u.id) || [], deadline: t.deadline || '' }))}
+        />
+      )}
       {/* 3. Project Summary Area (Requested Extra Component) */}
       <div style={{ background: '#fff', borderTop: '1px solid #e2e8f0', padding: 24, zIndex: 50 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: '#334155' }}>项目概览 & 关键节点</h3>

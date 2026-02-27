@@ -3,7 +3,7 @@
  * Tab: 全部 / 待复核 / 已阅读 / 已通过 / 交接审核
  * 卡片式布局，支持搜索、筛选、已阅/通过操作
  */
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,6 +11,7 @@ import {
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
   type Handoff, type User
 } from '../lib/api'
+import { pb } from '../lib/pocketbase'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
@@ -24,17 +25,22 @@ import './ReviewCenter.css'
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
 
-const ACTION_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  update_task: { label: '任务修改', color: '#3b82f6', icon: '✏️' },
-  create_task: { label: '创建任务', color: '#10b981', icon: '➕' },
-  mark_complete: { label: '任务完成', color: '#22c55e', icon: '✅' },
-  mark_blocked: { label: '卡点上报', color: '#ef4444', icon: '🚫' },
-  unblock_task: { label: '卡点解除', color: '#06b6d4', icon: '🔓' },
-  batch_edit_tasks: { label: '批量编辑', color: '#8b5cf6', icon: '📋' },
-  update_members: { label: '成员变更', color: '#f59e0b', icon: '👥' },
-  archive_project: { label: '项目归档', color: '#64748b', icon: '📦' },
-  delete_task: { label: '删除任务', color: '#dc2626', icon: '🗑️' },
-  delete_project: { label: '删除项目', color: '#dc2626', icon: '🗑️' },
+const ACTION_LABELS: Record<string, { label: string; color: string }> = {
+  update_task: { label: '任务修改', color: '#3b82f6' },
+  create_task: { label: '创建任务', color: '#10b981' },
+  mark_complete: { label: '任务完成', color: '#22c55e' },
+  mark_blocked: { label: '卡点上报', color: '#ef4444' },
+  unblock_task: { label: '卡点解除', color: '#06b6d4' },
+  batch_edit_tasks: { label: '批量编辑', color: '#8b5cf6' },
+  update_members: { label: '成员变更', color: '#f59e0b' },
+  archive_project: { label: '项目归档', color: '#64748b' },
+  delete_task: { label: '删除任务', color: '#dc2626' },
+  delete_project: { label: '删除项目', color: '#dc2626' },
+  create_project: { label: '创建项目', color: '#059669' },
+  update_project: { label: '项目修改', color: '#0ea5e9' },
+  unarchive_project: { label: '取消归档', color: '#64748b' },
+  approve_handoff: { label: '交接通过', color: '#22c55e' },
+  reject_handoff: { label: '交接驳回', color: '#ef4444' },
 }
 
 const ReviewCenter: React.FC = () => {
@@ -60,6 +66,14 @@ const ReviewCenter: React.FC = () => {
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectNote, setRejectNote] = useState('')
 
+  // SSE 实时订阅审计日志和交接记录
+  useEffect(() => {
+    const unsubs: (() => void)[] = []
+    pb.collection('audit_logs').subscribe('*', () => { refetchLogs() }).then(u => unsubs.push(() => pb.collection('audit_logs').unsubscribe('*')))
+    pb.collection('handoffs').subscribe('*', () => { refetchHandoffs() }).then(u => unsubs.push(() => pb.collection('handoffs').unsubscribe('*')))
+    return () => { unsubs.forEach(fn => fn()) }
+  }, [refetchLogs, refetchHandoffs])
+
   const displayLogs = useMemo(() => {
     if (activeTab === 'handoff') return []
     return logs
@@ -69,14 +83,14 @@ const ReviewCenter: React.FC = () => {
     try {
       await updateStatus.mutateAsync({ id, review_status: 'read' })
       Toast.show({ content: '已标记阅读', icon: 'success' })
-    } catch { Toast.show({ content: '操作失败', icon: 'fail' }) }
+    } catch (e: any) { Toast.show({ content: e?.message || '标记阅读失败', icon: 'fail' }) }
   }
 
   const handleMarkApproved = async (id: string) => {
     try {
       await updateStatus.mutateAsync({ id, review_status: 'approved' })
       Toast.show({ content: '已通过', icon: 'success' })
-    } catch { Toast.show({ content: '操作失败', icon: 'fail' }) }
+    } catch (e: any) { Toast.show({ content: e?.message || '审批失败', icon: 'fail' }) }
   }
 
   const handleApproveHandoff = (handoff: Handoff) => {
@@ -87,7 +101,7 @@ const ReviewCenter: React.FC = () => {
         try {
           await approveHandoff.mutateAsync({ id: handoff.id })
           Toast.show({ content: '审核通过', icon: 'success' })
-        } catch { Toast.show({ content: '操作失败', icon: 'fail' }) }
+        } catch (e: any) { Toast.show({ content: e?.message || '审核失败', icon: 'fail' }) }
       },
     })
   }
@@ -100,7 +114,7 @@ const ReviewCenter: React.FC = () => {
       await rejectHandoff.mutateAsync({ id: rejectingId, reviewNote: rejectNote })
       Toast.show({ content: '已驳回', icon: 'success' })
       setRejectingId(null)
-    } catch { Toast.show({ content: '操作失败', icon: 'fail' }) }
+    } catch (e: any) { Toast.show({ content: e?.message || '驳回失败', icon: 'fail' }) }
   }
 
   const formatChange = (log: any) => {
@@ -143,10 +157,10 @@ const ReviewCenter: React.FC = () => {
             style={{ background: !filterAction ? '#2563eb' : '#e2e8f0', color: !filterAction ? 'white' : '#475569', borderRadius: 8, padding: '4px 10px', fontSize: 11, border: 'none', cursor: 'pointer' }}>
             全部类型
           </Tag>
-          {Object.entries(ACTION_LABELS).map(([key, { label, icon }]) => (
+          {Object.entries(ACTION_LABELS).map(([key, { label }]) => (
             <Tag key={key} onClick={() => setFilterAction(filterAction === key ? '' : key)}
               style={{ background: filterAction === key ? '#2563eb' : '#e2e8f0', color: filterAction === key ? 'white' : '#475569', borderRadius: 8, padding: '4px 10px', fontSize: 11, border: 'none', cursor: 'pointer' }}>
-              {icon} {label}
+              {label}
             </Tag>
           ))}
         </div>
@@ -161,7 +175,7 @@ const ReviewCenter: React.FC = () => {
         <Tabs.Tab title={`交接审核${handoffs.length > 0 ? `(${handoffs.length})` : ''}`} key="handoff" />
       </Tabs>
 
-      <PullToRefresh onRefresh={async () => { await refetchLogs(); await refetchHandoffs() }}>
+      <PullToRefresh onRefresh={async () => { await Promise.all([refetchLogs(), refetchHandoffs()]) }}>
         <div className="review-content">
           {/* 审计日志列表 */}
           {activeTab !== 'handoff' && (
@@ -172,13 +186,13 @@ const ReviewCenter: React.FC = () => {
             ) : (
               <div className="audit-list">
                 {displayLogs.map((log: any) => {
-                  const actionInfo = ACTION_LABELS[log.action_type] || { label: log.action_type, color: '#94a3b8', icon: '📝' }
+                  const actionInfo = ACTION_LABELS[log.action_type] || { label: log.action_type, color: '#94a3b8' }
                   const status = log.review_status || 'unread'
                   return (
                     <div key={log.id} className={`audit-card ${status}`}>
                       <div className="audit-card-header">
                         <div className="audit-type-badge" style={{ background: `${actionInfo.color}15`, color: actionInfo.color }}>
-                          {actionInfo.icon} {actionInfo.label}
+                          {actionInfo.label}
                         </div>
                         <span className="audit-time">
                           <IoTimeOutline size={12} /> {dayjs(log.created).fromNow()}
@@ -225,7 +239,7 @@ const ReviewCenter: React.FC = () => {
                           </button>
                         )}
                         {status === 'approved' && (
-                          <span className="audit-status-done">✅ 已通过</span>
+                          <span className="audit-status-done">已通过</span>
                         )}
                       </div>
                     </div>
@@ -247,7 +261,7 @@ const ReviewCenter: React.FC = () => {
                   <div key={h.id} className="audit-card unread">
                     <div className="audit-card-header">
                       <div className="audit-type-badge" style={{ background: '#fef3c715', color: '#f59e0b' }}>
-                        🔄 交接审核
+                        交接审核
                       </div>
                       <Tag color="warning" style={{ fontSize: 11 }}>待审核</Tag>
                     </div>
@@ -276,7 +290,7 @@ const ReviewCenter: React.FC = () => {
                       </div>
                     </div>
                     <div className="audit-card-footer">
-                      <button className="audit-btn reject" onClick={() => { setRejectingId(h.id); setRejectNote('') }}>
+                      <button className="audit-btn reject" onClick={() => { setRejectingId(h.id); setRejectNote('') }} disabled={rejectHandoff.isPending}>
                         <IoCloseCircle size={15} /> 驳回
                       </button>
                       <button className="audit-btn approve" onClick={() => handleApproveHandoff(h)} disabled={approveHandoff.isPending}>

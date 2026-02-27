@@ -42,7 +42,7 @@ export default function Profile() {
     })
     
     return {
-      projectCount: myProjects.size || projects.length,
+      projectCount: myProjects.size,
       taskCount: myTasks,
       completionRate: myTasks > 0 ? Math.round((completedTasks / myTasks) * 100) : 0
     }

@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Toast, Dialog, Avatar, TextArea, Input } from 'antd-mobile'
+import { Button, Toast, Dialog, Avatar, TextArea, Input, SpinLoading } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { notifyProjectMembers } from '../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { IoArrowBack, IoCheckmarkDone, IoCalendarOutline, IoCreateOutline, IoSaveOutline, IoCloseOutline, IoWarningOutline } from 'react-icons/io5'
+import { IoArrowBack, IoCheckmarkDone, IoCalendarOutline, IoCreateOutline, IoSaveOutline, IoCloseOutline, IoWarningOutline, IoTrashOutline } from 'react-icons/io5'
 import { motion } from 'framer-motion'
 
 const TaskDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [task, setTask] = useState<any>(null)
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -33,6 +35,11 @@ const TaskDetail = () => {
 
   useEffect(() => {
     loadData()
+    // SSE 实时刷新：当前任务变更时自动重新加载
+    if (id) {
+      pb.collection('tasks').subscribe(id, () => loadData())
+    }
+    return () => { if (id) pb.collection('tasks').unsubscribe(id) }
   }, [id])
 
   const loadData = async () => {
@@ -55,6 +62,7 @@ const TaskDetail = () => {
   }
 
   const handleSaveEdit = async () => {
+    if (!isManager) return
     try {
       setCompleting(true)
       const before = { stage_name: task.stage_name, completed_steps: task.completed_steps, next_steps: task.next_steps }
@@ -79,6 +87,10 @@ const TaskDetail = () => {
       Toast.show({ content: '修改已保存', icon: 'success' })
       setIsEditing(false)
       loadData()
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
     } catch (e) {
       Toast.show({ content: '保存失败', icon: 'fail' })
     } finally {
@@ -87,6 +99,7 @@ const TaskDetail = () => {
   }
 
   const handleComplete = () => {
+    if (!isManager) return
     Dialog.confirm({
       title: '确认完成',
       content: '确认当前节点任务已全部完成？',
@@ -95,7 +108,7 @@ const TaskDetail = () => {
       onConfirm: async () => {
         setCompleting(true)
         try {
-          await pb.collection('tasks').update(id!, { status: 'completed' })
+          await pb.collection('tasks').update(id!, { status: 'completed', completed_at: new Date().toISOString() })
           // 审计日志
           await pb.collection('audit_logs').create({
             project: task.project, task: id, action_type: 'mark_complete',
@@ -108,6 +121,10 @@ const TaskDetail = () => {
           notifyProjectMembers(task.project, '任务完成', `${userName} 完成了任务「${task.stage_name}」`, 'task_update', currentUser?.id, id).catch(() => {})
           Toast.show({ content: '提交成功', icon: 'success' })
           loadData()
+          queryClient.invalidateQueries({ queryKey: ['tasks'] })
+          queryClient.invalidateQueries({ queryKey: ['projects'] })
+          queryClient.invalidateQueries({ queryKey: ['notifications'] })
+          queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
         } catch (e) {
           console.error(e)
           Toast.show({ content: '提交失败: ' + (e as any).message, icon: 'fail' })
@@ -148,6 +165,10 @@ const TaskDetail = () => {
       Toast.show({ content: '卡点已上报', icon: 'success' })
       setShowBlockerDialog(false)
       loadData()
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
     } catch (e) {
       console.error(e)
       Toast.show({ content: '上报失败: ' + (e as any).message, icon: 'fail' })
@@ -156,7 +177,18 @@ const TaskDetail = () => {
     }
   }
 
-  if (loading || !task) return null
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <SpinLoading style={{ '--size': '36px' }} />
+    </div>
+  )
+  if (!task) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+      <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
+      <span style={{ color: '#334155', fontSize: 16 }}>任务加载失败</span>
+      <Button size="small" onClick={() => navigate(-1)}>返回</Button>
+    </div>
+  )
 
   const completedSteps = task.completed_steps ? task.completed_steps.split('\n') : []
   const nextSteps = task.next_steps ? task.next_steps.split('\n') : []
@@ -193,12 +225,40 @@ const TaskDetail = () => {
         </button>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--neutral-600)', letterSpacing: 0.5 }}>任务详情</div>
 
-        {/* Manager Edit Action */}
-        <div style={{ width: 40 }}>
+        {/* Manager Edit / Delete Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {isManager && !isEditing && (
-            <button onClick={() => setIsEditing(true)} style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer' }}>
-              <IoCreateOutline size={24} />
-            </button>
+            <>
+              <button onClick={() => setIsEditing(true)} style={{ background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer' }}>
+                <IoCreateOutline size={24} />
+              </button>
+              <button onClick={() => Dialog.confirm({
+                title: '删除任务',
+                content: `确认删除「${task?.stage_name}」？此操作不可恢复！`,
+                onConfirm: async () => {
+                  try {
+                    // 审计日志
+                    await pb.collection('audit_logs').create({
+                      project: task.project, task: id, action_type: 'delete_task',
+                      operator: currentUser?.id,
+                      before_data: { stage_name: task.stage_name, status: task.status },
+                    }).catch(() => {})
+                    // 通知项目全员
+                    const userName = currentUser?.name || currentUser?.username
+                    notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', currentUser?.id).catch(() => {})
+                    await pb.collection('tasks').delete(id!)
+                    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+                    queryClient.invalidateQueries({ queryKey: ['projects'] })
+                    Toast.show({ content: '已删除', icon: 'success' })
+                    navigate(-1)
+                  } catch (e: any) {
+                    Toast.show({ content: '删除失败: ' + e.message, icon: 'fail' })
+                  }
+                }
+              })} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+                <IoTrashOutline size={22} />
+              </button>
+            </>
           )}
           {isEditing && (
             <button onClick={() => setIsEditing(false)} style={{ background: 'none', border: 'none', color: 'var(--neutral-400)', cursor: 'pointer' }}>
@@ -318,7 +378,7 @@ const TaskDetail = () => {
                     }}></div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 15, color: i === 0 ? 'var(--neutral-800)' : 'var(--neutral-400)', fontWeight: i === 0 ? 600 : 400, lineHeight: 1.4 }}>{step}</div>
-                      {i === 0 && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, fontWeight: 600 }}>⚡ 进行中</div>}
+                      {i === 0 && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, fontWeight: 600 }}>进行中</div>}
                     </div>
                   </div>
                 ))}
@@ -331,7 +391,7 @@ const TaskDetail = () => {
               <div>
                 <div style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 700 }}>截止日期</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: 'var(--neutral-700)', fontSize: 13, fontWeight: 600 }}>
-                  <IoCalendarOutline /> {dayjs(task.deadline).format('MMM DD, YYYY')}
+                  <IoCalendarOutline /> {task.deadline ? dayjs(task.deadline).format('MMM DD, YYYY') : '未设置'}
                 </div>
               </div>
               <div>
@@ -353,7 +413,7 @@ const TaskDetail = () => {
       {/* Blocker Report Dialog - 简化：去掉类型选择，只填原因 */}
       <Dialog
         visible={showBlockerDialog}
-        title="🚧 上报卡点"
+        title="上报卡点"
         content={
           <div style={{ padding: '8px 0' }}>
             <div style={{ marginBottom: 12 }}>
@@ -446,27 +506,32 @@ const TaskDetail = () => {
                   flex: 1
                 }}
                 onClick={() => {
-                  Dialog.confirm({
-                    title: '取消卡点',
-                    content: '取消卡点后任务状态将变为？',
-                    confirmText: '标记完成',
-                    cancelText: '恢复进行中',
-                    onConfirm: async () => {
-                      await pb.collection('tasks').update(id!, { status: 'completed', blocker: null })
-                      await pb.collection('audit_logs').create({ project: task.project, task: id, action_type: 'unblock_task', operator: currentUser?.id, after_data: { status: 'completed' } })
-                      const userName = currentUser?.name || currentUser?.username
-                      notifyProjectMembers(task.project, '卡点解除', `${userName} 解除了「${task.stage_name}」的卡点，状态变为已完成`, 'task_update', currentUser?.id, id).catch(() => {})
-                      Toast.show({ content: '已标记完成', icon: 'success' })
-                      loadData()
-                    },
-                    onCancel: async () => {
-                      await pb.collection('tasks').update(id!, { status: 'in_progress', blocker: null })
-                      await pb.collection('audit_logs').create({ project: task.project, task: id, action_type: 'unblock_task', operator: currentUser?.id, after_data: { status: 'in_progress' } })
-                      const userName = currentUser?.name || currentUser?.username
-                      notifyProjectMembers(task.project, '卡点解除', `${userName} 解除了「${task.stage_name}」的卡点，状态变为进行中`, 'task_update', currentUser?.id, id).catch(() => {})
-                      Toast.show({ content: '已恢复进行中', icon: 'success' })
-                      loadData()
-                    }
+                  const handleUnblock = async (newStatus: 'completed' | 'in_progress') => {
+                    await pb.collection('tasks').update(id!, { status: newStatus, blocker: null })
+                    await pb.collection('audit_logs').create({ project: task.project, task: id, action_type: 'unblock_task', operator: currentUser?.id, after_data: { status: newStatus } })
+                    const userName = currentUser?.name || currentUser?.username
+                    const label = newStatus === 'completed' ? '已完成' : '进行中'
+                    notifyProjectMembers(task.project, '卡点解除', `${userName} 解除了「${task.stage_name}」的卡点，状态变为${label}`, 'task_update', currentUser?.id, id).catch(() => {})
+                    Toast.show({ content: newStatus === 'completed' ? '已标记完成' : '已恢复进行中', icon: 'success' })
+                    loadData()
+                    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+                    queryClient.invalidateQueries({ queryKey: ['projects'] })
+                    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+                    queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
+                  }
+                  const d = Dialog.show({
+                    title: '取消卡点 — 选择新状态',
+                    content: (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+                        <Button block color='success' shape='rounded' onClick={() => { d.close(); handleUnblock('completed') }}>
+                          标记为已完成
+                        </Button>
+                        <Button block color='primary' shape='rounded' fill='outline' onClick={() => { d.close(); handleUnblock('in_progress') }}>
+                          恢复为进行中
+                        </Button>
+                      </div>
+                    ),
+                    actions: []
                   })
                 }}
               >
@@ -505,7 +570,7 @@ const TaskDetail = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 15, fontWeight: 600, color: task.status === 'completed' ? 'white' : '#64748b'
               }}>
-                {task.status === 'completed' ? '✅ 已完成' : task.status === 'in_progress' ? '⚡ 进行中' : '📋 待开始'}
+                {task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待开始'}
               </div>
             )}
             {!isManager && task.status === 'blocked' && (
@@ -515,7 +580,7 @@ const TaskDetail = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 15, fontWeight: 600, color: '#dc2626'
               }}>
-                ⛔ 已阻塞 — 等待经理处理
+                已阻塞 — 等待经理处理
               </div>
             )}
           </motion.div>

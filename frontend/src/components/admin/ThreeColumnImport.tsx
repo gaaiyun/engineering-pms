@@ -89,14 +89,14 @@ export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({
   return (
     <Dialog
       visible={visible}
-      title="🚀 快速创建项目"
+      title="快速创建项目"
       bodyStyle={{ maxHeight: '80vh', overflow: 'auto' }}
       content={
         <Form form={form} onFinish={handleSubmit} layout="vertical">
           {/* 项目信息 */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
-              📋 项目信息
+              项目信息
             </div>
             
             <Form.Item 
@@ -156,7 +156,7 @@ export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({
           {/* 任务列表 */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
-              📝 批量导入任务
+              批量导入任务
             </div>
             
             {/* 格式说明 */}
@@ -169,7 +169,7 @@ export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({
               lineHeight: 1.6
             }}>
               <div style={{ fontWeight: 600, marginBottom: 4, color: '#0369A1' }}>
-                📌 格式说明（每行一个任务，用 Tab 或多个空格分隔）
+                格式说明（每行一个任务，用 Tab 或多个空格分隔）
               </div>
               <div style={{ color: '#64748B' }}>
                 • <strong>第1列</strong>: 任务名称（必填）<br/>

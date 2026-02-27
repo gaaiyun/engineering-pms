@@ -54,9 +54,9 @@ export function subscribeToChanges(invalidate: (keys: string[][]) => void) {
   
   // 每个集合的变更 → invalidate 对应的 query keys
   const keyMap: Record<string, string[][]> = {
-    tasks: [['tasks'], ['projects']],
-    projects: [['projects']],
-    handoffs: [['handoffs']],
+    tasks: [['tasks'], ['projects'], ['notifications'], ['audit_logs']],
+    projects: [['projects'], ['notifications']],
+    handoffs: [['handoffs'], ['notifications']],
     notifications: [['notifications']],
     audit_logs: [['audit_logs']],
     comments: [['comments']],

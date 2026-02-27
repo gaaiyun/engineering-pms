@@ -18,7 +18,7 @@ interface Notification {
   id: string
   title: string
   content: string  // 消息内容
-  type: 'task' | 'system' | 'overdue' | 'flower' | 'handoff' | 'blocker' | 'task_assigned' | 'step_updated' | 'handoff_pending' | 'handoff_result' | 'comment_mention' | 'escalation'
+  type: string
   is_read: boolean
   created: string
   link_type?: string  // project / step / handoff
@@ -35,21 +35,16 @@ export default function Notifications() {
   useEffect(() => {
     loadNotifications()
     
-    // 实时订阅新通知
+    // 监听 PocketBase SSE 实现实时刷新
     const userId = pb.authStore.model?.id
+    let subscribed = false
     if (userId) {
+      subscribed = true
       pb.collection('notifications').subscribe('*', (e) => {
-        if (e.action === 'create' && e.record.user === userId) {
-          setNotifications(prev => [e.record as unknown as Notification, ...prev])
-          Toast.show({ content: '收到新消息', icon: 'success' })
-        }
+        if (e.record.user === userId) loadNotifications()
       })
     }
-    
-    return () => {
-      // 仅取消本页面的订阅 key，不破坏全局 realtime
-      try { pb.collection('notifications').unsubscribe('*') } catch {}
-    }
+    return () => { if (subscribed) pb.collection('notifications').unsubscribe('*') }
   }, [])
 
   const loadNotifications = async () => {
@@ -72,6 +67,10 @@ export default function Notifications() {
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications
     if (activeTab === 'unread') return notifications.filter(n => !n.is_read)
+    if (activeTab === 'task') return notifications.filter(n => n.type.startsWith('task') || n.type === 'step_updated' || n.type === 'overdue')
+    if (activeTab === 'handoff') return notifications.filter(n => n.type.startsWith('handoff'))
+    if (activeTab === 'blocker') return notifications.filter(n => n.type.startsWith('blocker') || n.type === 'escalation')
+    if (activeTab === 'project') return notifications.filter(n => n.type.startsWith('project'))
     return notifications.filter(n => n.type === activeTab)
   }, [notifications, activeTab])
 
@@ -133,7 +132,7 @@ export default function Notifications() {
       if (notif.link_type === 'handoff' || notif.type === 'handoff' || notif.type === 'handoff_pending' || notif.type === 'handoff_result') {
         navigate('/review-center')
       } else if (notif.link_type === 'project') {
-        navigate(`/project/${notif.link_id}`)
+        navigate(`/project/${notif.link_id}/timeline`)
       } else {
         navigate(`/task/${notif.link_id}`)
       }
@@ -141,37 +140,26 @@ export default function Notifications() {
   }
 
   const getIcon = (type: string) => {
-    switch (type) {
-      case 'flower': return <IoCheckmarkCircle size={24} color="#059669" />
-      case 'task': 
-      case 'task_assigned': return <IoAlertCircle size={24} color="#3B82F6" />
-      case 'step_updated': return <IoCheckmarkCircle size={24} color="#0EA5E9" />
-      case 'overdue': return <IoAlertCircle size={24} color="#B91C1C" />
-      case 'blocker': return <IoAlertCircle size={24} color="#F97316" />
-      case 'escalation': return <IoAlertCircle size={24} color="#DC2626" />
-      case 'handoff': 
-      case 'handoff_pending':
-      case 'handoff_result': return <IoInformationCircle size={24} color="#8B5CF6" />
-      case 'comment_mention': return <IoInformationCircle size={24} color="#10B981" />
-      default: return <IoInformationCircle size={24} color="#64748B" />
-    }
+    if (type.startsWith('task') || type === 'step_updated') return <IoAlertCircle size={24} color="#3B82F6" />
+    if (type.startsWith('project')) return <IoInformationCircle size={24} color="#0EA5E9" />
+    if (type.startsWith('blocker') || type === 'escalation') return <IoAlertCircle size={24} color="#F97316" />
+    if (type.startsWith('handoff')) return <IoInformationCircle size={24} color="#8B5CF6" />
+    if (type === 'overdue') return <IoAlertCircle size={24} color="#B91C1C" />
+    if (type === 'flower') return <IoCheckmarkCircle size={24} color="#059669" />
+    if (type === 'comment_mention') return <IoInformationCircle size={24} color="#10B981" />
+    return <IoInformationCircle size={24} color="#64748B" />
   }
 
   const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'flower': return '奖励'
-      case 'task': 
-      case 'task_assigned': return '任务'
-      case 'step_updated': return '进度'
-      case 'overdue': return '逾期'
-      case 'blocker': return '卡点'
-      case 'escalation': return '升级'
-      case 'handoff': 
-      case 'handoff_pending':
-      case 'handoff_result': return '交接'
-      case 'comment_mention': return '提及'
-      default: return '系统'
-    }
+    if (type.startsWith('task')) return '任务'
+    if (type.startsWith('project')) return '项目'
+    if (type.startsWith('blocker') || type === 'escalation') return '卡点'
+    if (type.startsWith('handoff')) return '交接'
+    if (type === 'step_updated') return '进度'
+    if (type === 'overdue') return '逾期'
+    if (type === 'flower') return '奖励'
+    if (type === 'comment_mention') return '提及'
+    return '系统'
   }
 
   const formatTime = (dateStr: string) => {
@@ -258,6 +246,8 @@ export default function Notifications() {
           <Tabs.Tab title={`全部 (${notifications.length})`} key="all" />
           <Tabs.Tab title={`未读 (${unreadCount})`} key="unread" />
           <Tabs.Tab title="任务" key="task" />
+          <Tabs.Tab title="项目" key="project" />
+          <Tabs.Tab title="卡点" key="blocker" />
           <Tabs.Tab title="交接" key="handoff" />
         </Tabs>
       </div>

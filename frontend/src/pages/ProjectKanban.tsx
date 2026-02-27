@@ -6,19 +6,35 @@ import { useParams } from 'react-router-dom'
 import { KanbanBoard } from '../components/kanban'
 import { useProject, useTasks, useUsers, isManager } from '../lib/api'
 import BatchTaskEditor from '../components/BatchTaskEditor'
-import { Button } from 'antd-mobile'
-import { IoListOutline } from 'react-icons/io5'
+import { Button, SpinLoading } from 'antd-mobile'
+import { IoListOutline, IoWarningOutline } from 'react-icons/io5'
 
 const ProjectKanban: React.FC = () => {
     const { id } = useParams<{ id: string }>()
-    const { data: project } = useProject(id || '')
-    const { data: tasks = [] } = useTasks(id)
+    const { data: project, isLoading: projectLoading, isError: projectError, refetch } = useProject(id || '')
+    const { data: tasks = [], isLoading: tasksLoading } = useTasks(id)
     const { data: users = [] } = useUsers()
     const [showBatch, setShowBatch] = useState(false)
+
+    const isLoading = projectLoading || tasksLoading
 
     if (!id) {
         return <div>项目 ID 无效</div>
     }
+
+    if (isLoading) return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+            <SpinLoading style={{ '--size': '36px' }} />
+        </div>
+    )
+
+    if (projectError) return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+            <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
+            <span style={{ color: '#334155', fontSize: 16 }}>看板加载失败</span>
+            <Button size="small" color="primary" shape="rounded" onClick={() => refetch()}>重试</Button>
+        </div>
+    )
 
     return (
         <>

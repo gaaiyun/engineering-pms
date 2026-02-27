@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "postinstall": "node scripts/patch-react-dom.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^5.7.8",
@@ -55,6 +59,12 @@
     "sharp": "^0.34.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.0.18",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/user-event": "^14.6.1",
+    "happy-dom": "^20.7.0"
   }
 }

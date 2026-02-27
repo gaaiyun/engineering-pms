@@ -1,0 +1,51 @@
+---
+description: 工程结算管理系统核心规范（技术栈/路径/错误处理/UI 基调）
+alwaysApply: true
+---
+
+# 项目核心规范
+
+## 技术栈
+
+| 层级 | 技术 | 版本 |
+|------|------|------|
+| 前端框架 | React | 19.x |
+| 类型系统 | TypeScript | 5.9+ |
+| 构建工具 | Vite | 6.0+ |
+| UI 组件库 | Ant Design Mobile | 5.42+ |
+| 状态管理 | TanStack Query + Zustand | 5.x |
+| 图表 | ECharts + Recharts | 5.x |
+| 拖拽 | @dnd-kit | - |
+| 后端 | PocketBase | 0.22.21 |
+| AI 服务 | SiliconFlow (DeepSeek) | - |
+| 移动打包 | Capacitor | 5.x |
+
+## 项目路径
+
+- 项目根目录：`G:\项目管理软件_v2`
+- 前端入口：`frontend/src/main.tsx`
+- API 层：`frontend/src/lib/api.ts`
+- PB 客户端：`frontend/src/lib/pocketbase.ts`
+- 缓存配置：`frontend/src/lib/queryClient.ts`
+- 文档目录：`docs/`
+
+## 错误处理规范
+
+- 关键流程（登录、数据加载）必须有**内联错误提示**作为兜底，不能仅依赖 Toast。
+- Toast 作为辅助提示，内联提示作为主要反馈。
+- 区分错误类型：网络错误、权限错误、业务错误，给出不同提示文案。
+- 数据加载失败时提供重试按钮，不要只弹一次 Toast 就没了。
+
+## React 19 + antd-mobile 兼容性
+
+- antd-mobile v5 的 Toast/Dialog 命令式 API 依赖 React 18 的 `unmountComponentAtNode` 和 `render`，React 19 已移除。
+- 通过 `frontend/scripts/patch-react-dom.cjs`（postinstall 脚本）在 CJS 层注入 polyfill。
+- **禁止**使用 `import ReactDOM from 'react-dom'`（React 19 无 default export）。
+- **禁止**对 `import * as ReactDOM from 'react-dom'` 的返回值做属性写入（ESM Namespace Object 只读）。
+- 如需引用 react-dom API，使用具名导入：`import { createRoot } from 'react-dom/client'`。
+
+## UI 规范
+
+- 不使用 emoji 作为 UI 元素，使用 `react-icons`（主要用 `react-icons/io5`）。
+- 中文界面，代码注释可中英混用。
+- 移动优先设计，所有页面需适配手机屏幕。

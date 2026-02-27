@@ -4,7 +4,7 @@ import {
   UserOutline,
   SetOutline,
 } from 'antd-mobile-icons'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { IoNotificationsOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import Tasks from './Tasks'
@@ -12,53 +12,14 @@ import Tasks from './Tasks'
 import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useUnreadNotificationCount } from '../lib/api'
 
 export default function Home() {
   const [activeKey, setActiveKey] = useState('tasks')
-  const [unreadCount, setUnreadCount] = useState(0)
+  const touchStartRef = useRef<number | null>(null)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    checkUnread()
-    // 省电/省流：前台轮询，后台暂停（避免耗电）
-    let interval: any
-    const start = () => {
-      if (interval) return
-      interval = setInterval(checkUnread, 30000) // 30s 足够，10s 太费电
-    }
-    const stop = () => {
-      if (!interval) return
-      clearInterval(interval)
-      interval = null
-    }
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') start()
-      else stop()
-    }
-
-    document.addEventListener('visibilitychange', onVisibility)
-    start()
-
-    return () => {
-      stop()
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [])
-
-  const checkUnread = async () => {
-    try {
-      if (!pb.authStore.isValid) return
-      const userId = pb.authStore.model?.id
-      if (!userId) return
-      const res = await pb.collection('notifications').getList(1, 1, {
-        filter: `user = "${userId}" && is_read = false`,
-      })
-      setUnreadCount(res.totalItems)
-    } catch (e) {
-      // silent fail
-    }
-  }
+  const userId = pb.authStore.model?.id || ''
+  const { data: unreadCount = 0 } = useUnreadNotificationCount(userId)
 
   const role = pb.authStore.model?.role?.toLowerCase()
   const isManager = role === 'manager' || role === 'admin'
@@ -168,26 +129,24 @@ export default function Home() {
       <div
         style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}
         onTouchStart={e => {
-          // Store touch start X
-          (window as any).touchStartX = e.touches[0].clientX
+          touchStartRef.current = e.touches[0].clientX
         }}
         onTouchEnd={e => {
           const touchEndX = e.changedTouches[0].clientX
-          const touchStartX = (window as any).touchStartX
-          if (!touchStartX) return
+          const startX = touchStartRef.current
+          if (startX === null) return
 
-          const diff = touchStartX - touchEndX
-          // Threshold 50px
+          const diff = startX - touchEndX
           if (Math.abs(diff) > 50) {
-            if (diff > 0) {
-              // Swiped Left -> Go Right
-              if (activeKey === 'tasks') setActiveKey('me')
-            } else {
-              // Swiped Right -> Go Left
-              if (activeKey === 'me') setActiveKey('tasks')
+            const keys = tabs.map(t => t.key)
+            const idx = keys.indexOf(activeKey)
+            if (diff > 0 && idx < keys.length - 1) {
+              setActiveKey(keys[idx + 1])
+            } else if (diff < 0 && idx > 0) {
+              setActiveKey(keys[idx - 1])
             }
           }
-          (window as any).touchStartX = null
+          touchStartRef.current = null
         }}
       >
 

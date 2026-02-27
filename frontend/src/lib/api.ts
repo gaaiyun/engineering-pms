@@ -439,7 +439,21 @@ export function useApproveHandoff() {
                 operator: pb.authStore.model?.id,
                 after_data: { handoff_id: id, new_task_id: newTask.id },
                 note: reviewNote,
-            })
+            }).catch(console.error)
+
+            // 通知提交人
+            const reviewer = pb.authStore.model
+            if (handoff.submitter && handoff.submitter !== reviewer?.id) {
+                await pb.collection('notifications').create({
+                    user: handoff.submitter,
+                    title: '交接审核通过',
+                    content: `${reviewer?.name || reviewer?.username} 批准了您的交接提报「${handoff.proposed_title}」`,
+                    type: 'task_update',
+                    link_type: 'task',
+                    link_id: newTask.id,
+                    is_read: false,
+                }).catch(() => {})
+            }
 
             return newTask
         },
@@ -448,6 +462,7 @@ export function useApproveHandoff() {
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -473,10 +488,25 @@ export function useRejectHandoff() {
                 operator: pb.authStore.model?.id,
                 note: reviewNote,
             })
+
+            // 通知提交人
+            const reviewer = pb.authStore.model
+            if (handoff.submitter && handoff.submitter !== reviewer?.id) {
+                await pb.collection('notifications').create({
+                    user: handoff.submitter,
+                    title: '交接审核驳回',
+                    content: `${reviewer?.name || reviewer?.username} 驳回了您的交接提报「${handoff.proposed_title}」，原因：${reviewNote}`,
+                    type: 'task_update',
+                    link_type: 'task',
+                    link_id: handoff.from_task,
+                    is_read: false,
+                }).catch(() => {})
+            }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -646,7 +676,7 @@ export function useMarkTaskComplete() {
                 action_type: 'mark_complete',
                 operator: pb.authStore.model?.id,
                 after_data: { handoff_id: handoff.id },
-            })
+            }).catch(console.error)
 
             // 4. 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
@@ -666,6 +696,7 @@ export function useMarkTaskComplete() {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -725,13 +756,14 @@ export function useMarkTaskBlocked() {
                     link_type: 'task',
                     link_id: taskId,
                     is_read: false,
-                })
+                }).catch(console.error)
             }
         },
         onSuccess: (_, { taskId }) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -808,6 +840,7 @@ export function useQuickCreateProject() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         }
     })
 }
@@ -818,7 +851,17 @@ export function useDeleteProject() {
 
     return useMutation({
         mutationFn: async (projectId: string) => {
-            // 先删除项目下所有任务
+            const project = await pb.collection('projects').getOne(projectId)
+            const userName = pb.authStore.model?.name || pb.authStore.model?.username
+            // 通知项目全员（删除前发送）
+            await notifyProjectMembers(projectId, '项目删除', `${userName} 删除了项目「${project.name}」`, 'project_update', pb.authStore.model?.id).catch(() => {})
+            // 审计日志
+            await pb.collection('audit_logs').create({
+                project: projectId, action_type: 'delete_project',
+                operator: pb.authStore.model?.id,
+                before_data: { name: project.name, status: project.status },
+            }).catch(() => {})
+            // 删除项目下所有任务
             const tasks = await pb.collection('tasks').getFullList({ filter: `project="${projectId}"`, fields: 'id' })
             for (const t of tasks) {
                 await pb.collection('tasks').delete(t.id)
@@ -828,6 +871,8 @@ export function useDeleteProject() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
         },
     })
 }
@@ -839,12 +884,24 @@ export function useDeleteTask() {
     return useMutation({
         mutationFn: async (taskId: string) => {
             const task = await pb.collection('tasks').getOne<Task>(taskId)
+            const userName = pb.authStore.model?.name || pb.authStore.model?.username
+            // 审计日志
+            await pb.collection('audit_logs').create({
+                project: task.project, task: taskId, action_type: 'delete_task',
+                operator: pb.authStore.model?.id,
+                before_data: { stage_name: task.stage_name, status: task.status, assignees: task.assignees },
+            }).catch(() => {})
+            // 通知项目全员
+            if (task.project) {
+                notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', pb.authStore.model?.id).catch(() => {})
+            }
             await pb.collection('tasks').delete(taskId)
             return task
         },
         onSuccess: (task) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
             if (task?.project) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(task.project) })
                 queryClient.invalidateQueries({ queryKey: queryKeys.project(task.project) })
@@ -856,14 +913,34 @@ export function useDeleteTask() {
 // ========== 更新项目（含成员管理）==========
 export function useUpdateProject() {
     const queryClient = useQueryClient()
+    const currentUser = pb.authStore.model
 
     return useMutation({
         mutationFn: async ({ id, data }: { id: string; data: Partial<Project> }) => {
-            return await pb.collection('projects').update<Project>(id, data)
+            const before = await pb.collection('projects').getOne<Project>(id)
+            const result = await pb.collection('projects').update<Project>(id, data)
+            // 审计日志
+            await pb.collection('audit_logs').create({
+                project: id, action_type: 'update_project',
+                operator: currentUser?.id,
+                before_data: { name: before.name, status: before.status, deadline: before.deadline },
+                after_data: data,
+            }).catch(() => {})
+            // 通知项目全员
+            const userName = currentUser?.name || currentUser?.username
+            const changes: string[] = []
+            if (data.name && data.name !== before.name) changes.push(`名称→${data.name}`)
+            if (data.deadline && data.deadline !== before.deadline) changes.push('截止日期变更')
+            if (data.status && data.status !== before.status) changes.push(`状态→${data.status}`)
+            if (changes.length > 0) {
+                notifyProjectMembers(id, '项目变更', `${userName} 修改了项目: ${changes.join('、')}`, 'project_update', currentUser?.id).catch(() => {})
+            }
+            return result
         },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.project(data.id) })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -886,7 +963,7 @@ export function useUnblockTask() {
                 operator: pb.authStore.model?.id,
                 before_data: { status: 'blocked' },
                 after_data: { status: newStatus },
-            })
+            }).catch(console.error)
             // 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
             const statusLabel = newStatus === 'completed' ? '已完成' : '进行中'
@@ -967,7 +1044,7 @@ export function useBatchSaveTasks() {
                     assignees: t.assignees,
                     deadline: t.deadline || null,
                     status: 'pending',
-                    creator: currentUser?.id,
+                    created_by: currentUser?.id,
                     sequence: Date.now(),
                 }
                 if (t.id) {
@@ -1054,10 +1131,15 @@ export function useArchiveProject() {
                 operator: currentUser?.id,
                 after_data: { status: newStatus },
             }).catch(() => {})
+            // 通知项目全员
+            const userName = currentUser?.name || currentUser?.username
+            const label = archived ? '归档' : '取消归档'
+            notifyProjectMembers(projectId, `项目${label}`, `${userName} ${label}了项目`, 'project_update', currentUser?.id).catch(() => {})
             return result
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
         },
     })
 }
@@ -1070,7 +1152,13 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
             const parts: string[] = []
             if (filters?.project) parts.push(`project="${filters.project}"`)
             if (filters?.action_type) parts.push(`action_type="${filters.action_type}"`)
-            if (filters?.review_status) parts.push(`review_status="${filters.review_status}"`)
+            if (filters?.review_status) {
+              if (filters.review_status === 'unread') {
+                parts.push(`(review_status="unread" || review_status="")`)
+              } else {
+                parts.push(`review_status="${filters.review_status}"`)
+              }
+            }
             if (filters?.search) parts.push(`(note ~ "${filters.search}" || action_type ~ "${filters.search}")`)
             const filter = parts.length > 0 ? parts.join(' && ') : ''
             return await pb.collection('audit_logs').getFullList({

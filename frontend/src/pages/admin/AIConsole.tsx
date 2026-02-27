@@ -137,13 +137,10 @@ const AIConsole = () => {
 
             // Generate Report
             setDebugInfo('正在调用 AI API...')
-            console.log('Calling AI with key:', currentApiKey.substring(0, 10) + '...')
             console.log('Using model:', selectedModel)
             
             const aiRes = await generateAIReport(data, currentApiKey, selectedModel)
             setDebugInfo('AI 响应成功，正在保存...')
-            console.log('AI Response:', aiRes)
-
             // 构建报告对象
             const reportData = {
                 content: aiRes.content,
@@ -326,7 +323,7 @@ const AIConsole = () => {
                             onClick={handleUpdate}
                             style={{ fontSize: 12, borderRadius: 20 }}
                         >
-                            {loading ? '分析中...' : '🔄 立即更新分析'}
+                            {loading ? '分析中...' : '立即更新分析'}
                         </Button>
                     </div>
 
@@ -367,7 +364,7 @@ const AIConsole = () => {
                     <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12, padding: 4 }}>
                         {chatHistory.length === 0 && (
                             <div style={{ textAlign: 'center', marginTop: 60, color: '#cbd5e1' }}>
-                                <div style={{ fontSize: 40 }}>💬</div>
+                                <div style={{ fontSize: 40 }}>...</div>
                                 <div>您可以询问：<br />"哪个团队效率最低？"<br />"赵工长那边有什么卡点？"</div>
                             </div>
                         )}
