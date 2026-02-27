@@ -733,7 +733,7 @@ export function useMarkTaskBlocked() {
                 action_type: 'mark_blocked',
                 operator: pb.authStore.model?.id,
                 after_data: blocker,
-            })
+            }).catch(console.error)
 
             // 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
@@ -1099,14 +1099,14 @@ export function useUpdateProjectMembers() {
                 operator: currentUser?.id,
                 before_data: { members: before.members },
                 after_data: { members },
-            })
+            }).catch(console.error)
             await notifyProjectMembers(
                 projectId,
                 '项目成员变更',
                 `${currentUser?.name || currentUser?.username} 更新了项目成员`,
                 'project_update',
                 currentUser?.id,
-            )
+            ).catch(console.error)
             return result
         },
         onSuccess: () => {
