@@ -69,8 +69,8 @@ const ReviewCenter: React.FC = () => {
   // SSE 实时订阅审计日志和交接记录
   useEffect(() => {
     const unsubs: (() => void)[] = []
-    pb.collection('audit_logs').subscribe('*', () => { refetchLogs() }).then(u => unsubs.push(() => pb.collection('audit_logs').unsubscribe('*')))
-    pb.collection('handoffs').subscribe('*', () => { refetchHandoffs() }).then(u => unsubs.push(() => pb.collection('handoffs').unsubscribe('*')))
+    pb.collection('audit_logs').subscribe('*', () => { refetchLogs() }).then(() => unsubs.push(() => pb.collection('audit_logs').unsubscribe('*')))
+    pb.collection('handoffs').subscribe('*', () => { refetchHandoffs() }).then(() => unsubs.push(() => pb.collection('handoffs').unsubscribe('*')))
     return () => { unsubs.forEach(fn => fn()) }
   }, [refetchLogs, refetchHandoffs])
 

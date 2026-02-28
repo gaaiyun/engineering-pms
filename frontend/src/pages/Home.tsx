@@ -5,14 +5,15 @@ import {
   SetOutline,
 } from 'antd-mobile-icons'
 import { useState, useEffect, useRef } from 'react'
-import { IoNotificationsOutline } from 'react-icons/io5'
+import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import Tasks from './Tasks'
 // import Rankings from './Rankings' // 暂时隐藏，待领导确认需求
 import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useUnreadNotificationCount } from '../lib/api'
+import { useUnreadNotificationCount, useTasks, useNotifications } from '../lib/api'
+import dayjs from 'dayjs'
 
 export default function Home() {
   const [activeKey, setActiveKey] = useState('tasks')
@@ -23,6 +24,16 @@ export default function Home() {
 
   const role = pb.authStore.model?.role?.toLowerCase()
   const isManager = role === 'manager' || role === 'admin'
+  const isEmployee = role === 'employee'
+
+  // 员工端数据
+  const { data: myTasks = [] } = useTasks()
+  const { data: notifications = [] } = useNotifications(userId)
+
+  // 员工的当前任务（进行中和待办）
+  const currentTasks = myTasks.filter(t => t.status === 'in_progress' || t.status === 'pending').slice(0, 5)
+  // 最近未读消息
+  const recentNotifications = notifications.filter(n => !n.read).slice(0, 5)
 
   const tabs = [
     {
@@ -50,16 +61,27 @@ export default function Home() {
     }
   }
 
-  // Responsive Check
-  const [isPC, setIsPC] = useState(window.innerWidth > 768)
+  // Responsive Check — 横屏手机宽度也可能 >768，需同时检查高度和触控能力
+  const checkIsPC = () => {
+    const w = window.innerWidth
+    const h = window.innerHeight
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    // 宽度 >1024 或 (宽度 >768 且非触屏设备) 才视为 PC
+    if (w > 1024) return true
+    if (w > 768 && !isTouch) return true
+    // 横屏手机：宽 >768 但高 <500，不算 PC
+    if (w > 768 && h < 500) return false
+    return false
+  }
+  const [isPC, setIsPC] = useState(checkIsPC)
   useEffect(() => {
-    const handleResize = () => setIsPC(window.innerWidth > 768)
+    const handleResize = () => setIsPC(checkIsPC())
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: isPC ? 'row' : 'column', background: 'var(--page-bg)' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: isPC ? 'row' : 'column', background: 'var(--page-bg)' }}>
 
       {/* PC Sidebar Navigation */}
       {isPC && (
@@ -200,7 +222,96 @@ export default function Home() {
               transition={{ duration: 0.2 }}
               style={{ height: '100%' }}
             >
-              {activeKey === 'tasks' && <Tasks />}
+              {activeKey === 'tasks' && (
+                isEmployee ? (
+                  // 员工专属首页
+                  <div style={{ paddingTop: 20 }}>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: '#0f172a' }}>我的工作台</h2>
+                    
+                    {/* 我的任务 */}
+                    <div style={{ marginBottom: 32 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <IoCheckmarkCircleOutline size={20} color="#2563eb" />
+                          我的任务
+                        </h3>
+                        <button onClick={() => navigate('/my-tasks')} style={{
+                          background: 'none', border: 'none', color: '#2563eb', fontSize: 13, cursor: 'pointer'
+                        }}>查看全部 →</button>
+                      </div>
+                      {currentTasks.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          {currentTasks.map(task => (
+                            <div key={task.id} onClick={() => navigate(`/task/${task.id}`)} style={{
+                              background: '#fff', borderRadius: 12, padding: 16, cursor: 'pointer',
+                              border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                            }}>
+                              <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>{task.stage_name}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#64748b' }}>
+                                <span style={{
+                                  padding: '2px 8px', borderRadius: 4, background: task.status === 'in_progress' ? '#dbeafe' : '#f1f5f9',
+                                  color: task.status === 'in_progress' ? '#2563eb' : '#64748b', fontWeight: 600
+                                }}>
+                                  {task.status === 'in_progress' ? '进行中' : task.status === 'pending' ? '待办' : '处理中'}
+                                </span>
+                                {task.deadline && (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <IoTimeOutline size={14} />
+                                    {dayjs(task.deadline).format('MM/DD')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>
+                          暂无进行中的任务
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 未读消息 */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <IoNotificationsOutline size={20} color="#ef4444" />
+                          未读消息
+                          {recentNotifications.length > 0 && (
+                            <Badge content={recentNotifications.length} style={{ '--color': '#ef4444' }} />
+                          )}
+                        </h3>
+                        <button onClick={() => navigate('/notifications')} style={{
+                          background: 'none', border: 'none', color: '#2563eb', fontSize: 13, cursor: 'pointer'
+                        }}>查看全部 →</button>
+                      </div>
+                      {recentNotifications.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          {recentNotifications.map(notif => (
+                            <div key={notif.id} onClick={() => navigate('/notifications')} style={{
+                              background: '#fff', borderRadius: 12, padding: 16, cursor: 'pointer',
+                              border: '1px solid #fee2e2', boxShadow: '0 1px 3px rgba(239,68,68,0.1)'
+                            }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>{notif.title}</div>
+                              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>{notif.message}</div>
+                              <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                                {dayjs(notif.created).format('MM/DD HH:mm')}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>
+                          暂无未读消息
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  // 经理/管理员显示原有的 Tasks 组件
+                  <Tasks />
+                )
+              )}
               {activeKey === 'me' && <Profile />}
             </motion.div>
           </AnimatePresence>

@@ -92,7 +92,7 @@ const Register = () => {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)',
       display: 'flex',
       alignItems: 'center',

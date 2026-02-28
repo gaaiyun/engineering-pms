@@ -79,8 +79,9 @@ export default function Login() {
 
   useEffect(() => {
     localStorage.removeItem('savedCredentials')
+    const remembered = localStorage.getItem('rememberMe') === '1'
     const savedUser = localStorage.getItem('savedUsername')
-    if (savedUser) {
+    if (remembered && savedUser) {
       setSavedCredentials({ username: savedUser, password: '' })
       setRememberMe(true)
       form.setFieldsValue({ username: savedUser })
@@ -128,6 +129,10 @@ export default function Login() {
 
     setLoading(true)
     try {
+      if (!rememberMe) {
+        localStorage.removeItem('pocketbase_auth')
+      }
+
       const authData = await pb.collection('users').authWithPassword(
         values.username.trim(),
         values.password
@@ -140,9 +145,15 @@ export default function Login() {
 
       if (rememberMe) {
         localStorage.setItem('savedUsername', values.username.trim())
+        localStorage.setItem('rememberMe', '1')
       } else {
         localStorage.removeItem('savedUsername')
+        localStorage.removeItem('rememberMe')
+        sessionStorage.setItem('pocketbase_auth', localStorage.getItem('pocketbase_auth') || '')
       }
+
+      const { queryClient } = await import('../lib/queryClient')
+      queryClient.clear()
 
       Toast.show({ icon: 'success', content: '登录成功' })
 
@@ -167,11 +178,19 @@ export default function Login() {
           setShowCaptcha(true)
           generateCaptcha()
         }
-        let msg = '登录失败'
-        if (error?.response?.code === 400) {
+        let msg = '用户名或密码错误'
+        const status = error?.status || error?.response?.code
+        if (status === 400 || status === 401 || status === 403) {
           msg = `用户名或密码错误（剩余 ${MAX_ATTEMPTS - newAttempts} 次尝试）`
-        } else if (error?.message?.includes('Failed to fetch')) {
+        } else if (
+          error?.message?.includes('Failed to fetch') ||
+          error?.message?.includes('NetworkError') ||
+          error?.isAbort ||
+          status === 0
+        ) {
           msg = '网络连接失败，请检查网络'
+        } else {
+          msg = `登录失败：${error?.message || '用户名或密码错误'}（剩余 ${MAX_ATTEMPTS - newAttempts} 次）`
         }
         setErrorMsg(msg)
       }
@@ -195,7 +214,7 @@ export default function Login() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)',
       display: 'flex',
       alignItems: 'center',
@@ -468,19 +487,21 @@ export default function Login() {
         </Form>
 
         <motion.div variants={itemVariants} style={{ textAlign: 'center', marginTop: 32 }}>
-          <div style={{
-            fontSize: 12,
-            color: '#94A3B8',
-            marginBottom: 16,
-            padding: '12px 16px',
-            background: '#F8FAFC',
-            borderRadius: 12,
-            lineHeight: 1.8
-          }}>
-            <div style={{ fontWeight: 600, color: '#64748B', marginBottom: 4 }}>测试账号</div>
-            <div>管理员: zhang_manager / 12345678</div>
-            <div>员工: li_audit / 12345678</div>
-          </div>
+          {import.meta.env.DEV && (
+            <div style={{
+              fontSize: 12,
+              color: '#94A3B8',
+              marginBottom: 16,
+              padding: '12px 16px',
+              background: '#F8FAFC',
+              borderRadius: 12,
+              lineHeight: 1.8
+            }}>
+              <div style={{ fontWeight: 600, color: '#64748B', marginBottom: 4 }}>测试账号</div>
+              <div>管理员: zhang_manager / 12345678</div>
+              <div>员工: li_audit / 12345678</div>
+            </div>
+          )}
           <span
             onClick={() => navigate('/register')}
             style={{

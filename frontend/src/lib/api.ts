@@ -150,6 +150,7 @@ export const isManager = isManagerRole
 export function useProjects() {
     return useQuery({
         queryKey: queryKeys.projects,
+        enabled: pb.authStore.isValid,
         queryFn: async () => {
             const userId = pb.authStore.model?.id
             const role = pb.authStore.model?.role
@@ -199,7 +200,7 @@ export function useProject(id: string) {
             })
             return record
         },
-        enabled: !!id,
+        enabled: !!id && pb.authStore.isValid,
     })
 }
 
@@ -207,6 +208,7 @@ export function useProject(id: string) {
 export function useTasks(projectId?: string) {
     return useQuery({
         queryKey: projectId ? queryKeys.projectTasks(projectId) : queryKeys.tasks,
+        enabled: pb.authStore.isValid,
         queryFn: async () => {
             const userId = pb.authStore.model?.id
             const role = pb.authStore.model?.role
@@ -237,7 +239,7 @@ export function useTask(id: string) {
             })
             return record
         },
-        enabled: !!id,
+        enabled: !!id && pb.authStore.isValid,
     })
 }
 
@@ -252,7 +254,7 @@ export function useMyTasks(userId: string) {
             })
             return records
         },
-        enabled: !!userId,
+        enabled: !!userId && pb.authStore.isValid,
     })
 }
 
@@ -362,6 +364,7 @@ export function useCreateTask() {
 export function useHandoffs(status?: 'pending' | 'approved' | 'rejected') {
     return useQuery({
         queryKey: status ? [...queryKeys.handoffs, status] : queryKeys.handoffs,
+        enabled: pb.authStore.isValid,
         queryFn: async () => {
             const filter = status ? `status="${status}"` : ''
             const records = await pb.collection('handoffs').getFullList<Handoff>({
@@ -377,6 +380,7 @@ export function useHandoffs(status?: 'pending' | 'approved' | 'rejected') {
 export function usePendingHandoffs() {
     return useQuery({
         queryKey: queryKeys.pendingHandoffs,
+        enabled: pb.authStore.isValid,
         queryFn: async () => {
             const records = await pb.collection('handoffs').getFullList<Handoff>({
                 filter: 'status="pending"',
@@ -523,7 +527,7 @@ export function useTaskAuditLogs(taskId: string) {
             })
             return records
         },
-        enabled: !!taskId,
+        enabled: !!taskId && pb.authStore.isValid,
     })
 }
 
@@ -539,7 +543,7 @@ export function useComments(taskId: string) {
             })
             return records
         },
-        enabled: !!taskId,
+        enabled: !!taskId && pb.authStore.isValid,
     })
 }
 
@@ -563,6 +567,7 @@ export function useCreateComment() {
 export function useUsers() {
     return useQuery({
         queryKey: queryKeys.users,
+        enabled: pb.authStore.isValid,
         queryFn: async () => {
             const records = await pb.collection('users').getFullList<User>({
                 sort: 'name',
@@ -575,6 +580,7 @@ export function useUsers() {
 export function useCurrentUser() {
     return useQuery({
         queryKey: queryKeys.currentUser,
+        enabled: pb.authStore.isValid && !!pb.authStore.model?.id,
         queryFn: async () => {
             if (!pb.authStore.isValid || !pb.authStore.model?.id) {
                 return null
@@ -596,7 +602,7 @@ export function useNotifications(userId: string) {
             })
             return records
         },
-        enabled: !!userId,
+        enabled: !!userId && pb.authStore.isValid,
     })
 }
 
@@ -609,7 +615,7 @@ export function useUnreadNotificationCount(userId: string) {
             })
             return result.totalItems
         },
-        enabled: !!userId,
+        enabled: !!userId && pb.authStore.isValid,
     })
 }
 
@@ -780,7 +786,7 @@ export function useAISummaries(userId: string) {
             })
             return records
         },
-        enabled: !!userId,
+        enabled: !!userId && pb.authStore.isValid,
     })
 }
 
@@ -842,6 +848,43 @@ export function useQuickCreateProject() {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: ['notifications'] })
         }
+    })
+}
+
+// ========== 创建项目 ==========
+export function useCreateProject() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async (data: { name: string; description?: string; manager: string; members: string[]; deadline?: string }) => {
+            const userName = pb.authStore.model?.name || pb.authStore.model?.username
+            const project = await pb.collection('projects').create({
+                name: data.name,
+                description: data.description || '',
+                manager: data.manager,
+                members: data.members,
+                deadline: data.deadline || '',
+                status: 'active',
+                progress: 0,
+                total_tasks: 0,
+                completed_tasks: 0,
+            })
+            // 审计日志
+            await pb.collection('audit_logs').create({
+                project: project.id,
+                action_type: 'create_project',
+                operator: pb.authStore.model?.id,
+                after_data: { name: data.name, manager: data.manager, members: data.members },
+            }).catch(() => {})
+            // 通知项目成员
+            await notifyProjectMembers(project.id, '项目创建', `${userName} 创建了新项目「${data.name}」`, 'project_update', pb.authStore.model?.id).catch(() => {})
+            return project
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
+        },
     })
 }
 
@@ -1148,6 +1191,7 @@ export function useArchiveProject() {
 export function useAuditLogs(filters?: { project?: string; action_type?: string; review_status?: string; search?: string }) {
     return useQuery({
         queryKey: ['audit_logs', filters],
+        enabled: pb.authStore.isValid,
         queryFn: async () => {
             const parts: string[] = []
             if (filters?.project) parts.push(`project="${filters.project}"`)

@@ -132,8 +132,12 @@ const AdminDashboard = () => {
   }
 
   // ---- KPI & 图表数据 ----
-
-  const totalProjects = projects.length
+  // 活跃项目（与工作进展、经理工作台口径一致，不含归档）
+  const activeProjects = useMemo(
+    () => projects.filter((p: Project) => p.status !== 'archived'),
+    [projects],
+  )
+  const totalProjects = activeProjects.length
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'processing').length
   const overdueTasks = tasks.filter(t => t.status === 'overdue').length
   const newUsersThisMonth = useMemo(
@@ -191,9 +195,9 @@ const AdminDashboard = () => {
       .slice(0, 6)
   }, [tasks, users])
 
-  // 项目进度数据
+  // 项目进度数据（与 totalProjects 口径一致：仅活跃项目，取前 5 条）
   const projectProgressData = useMemo(() => {
-    return projects.slice(0, 5).map(p => {
+    return activeProjects.slice(0, 5).map(p => {
       const pTasks = tasks.filter(t => t.project === p.id)
       const completed = pTasks.filter(t => t.status === 'completed').length
       const progress = pTasks.length > 0 ? Math.round((completed / pTasks.length) * 100) : 0
@@ -205,7 +209,7 @@ const AdminDashboard = () => {
         blocked: pTasks.filter(t => t.status === 'blocked').length,
       }
     })
-  }, [projects, tasks])
+  }, [activeProjects, tasks])
 
   // 卡点人员排名
   const blockedRanking = useMemo(() => {
@@ -237,8 +241,8 @@ const AdminDashboard = () => {
     userForm.setFieldsValue({
       name: user.name,
       email: user.email,
-      role: user.role,
-      department: user.department,
+      role: user.role ? [user.role] : [],
+      department: user.department ? [user.department] : [],
     })
     setShowUserModal(true)
   }
@@ -440,7 +444,7 @@ const AdminDashboard = () => {
                 }}>
                   <div style={{ fontSize: 11, opacity: 0.8, letterSpacing: 1, marginBottom: 8 }}>项目总数</div>
                   <div style={{ fontSize: 32, fontWeight: 700 }}>{totalProjects}</div>
-                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>全部项目</div>
+                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>活跃项目</div>
                 </div>
               </Grid.Item>
               <Grid.Item>
@@ -1376,10 +1380,10 @@ const AdminDashboard = () => {
             <Form.Item name='name' label='姓名' rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item name='email' label='邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input /></Form.Item>
             <Form.Item name='password' label='密码' rules={[{ required: true, min: 8, message: '密码至少8位' }]}><Input type='password' /></Form.Item>
-            <Form.Item name='department' label='部门' initialValue='工程部'>
+            <Form.Item name='department' label='部门' initialValue={['工程部']}>
               <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '管理层', value: '管理层' }]} />
             </Form.Item>
-            <Form.Item name='role' label='角色' initialValue='employee'>
+            <Form.Item name='role' label='角色' initialValue={['employee']}>
               <Selector options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
             </Form.Item>
           </Form>

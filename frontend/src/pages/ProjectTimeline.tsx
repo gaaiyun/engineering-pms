@@ -86,7 +86,19 @@ export default function ProjectTimeline() {
   const [timelineDays, setTimelineDays] = useState(45)
   const [scale, setScale] = useState(1.0) // 0.5 - 2.0
   const [isLandscape, setIsLandscape] = useState(false)
-  const [isPC, setIsPC] = useState(window.innerWidth > 1024)
+  
+  // Responsive Check — 横屏手机宽度也可能 >768，需同时检查高度和触控能力
+  const checkIsPC = () => {
+    const w = window.innerWidth
+    const h = window.innerHeight
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (w > 1024) return true
+    if (w > 768 && !isTouch) return true
+    // 横屏手机：宽 >768 但高 <500，不算 PC
+    if (w > 768 && h < 500) return false
+    return false
+  }
+  const [isPC, setIsPC] = useState(checkIsPC)
   const [showBatchEditor, setShowBatchEditor] = useState(false)
 
   const { data: allUsers = [] } = useUsers()
@@ -102,7 +114,7 @@ export default function ProjectTimeline() {
   // Detect PC/Mobile resize + screen orientation
   useEffect(() => {
     const handleResize = () => {
-      setIsPC(window.innerWidth > 1024)
+      setIsPC(checkIsPC())
     }
     const handleOrientation = () => {
       // 如果系统横屏了，自动启用横屏模式
@@ -128,9 +140,10 @@ export default function ProjectTimeline() {
   }, [id])
 
   const loadData = async () => {
+    if (!id) return
     try {
       setLoading(true)
-      const proj = await pb.collection('projects').getOne<Project>(id!)
+      const proj = await pb.collection('projects').getOne<Project>(id)
       setProject(proj)
 
       const tasks = await pb.collection('tasks').getFullList<Task>({
@@ -328,7 +341,7 @@ export default function ProjectTimeline() {
         background: '#f8fafc',
         display: 'flex',
         flexDirection: 'column',
-        height: isFullscreen ? '100vw' : '100vh',
+        height: isFullscreen ? '100vw' : '100dvh',
         width: isFullscreen ? '100vh' : '100vw',
         ...landscapeStyle,
       }}
@@ -576,7 +589,7 @@ export default function ProjectTimeline() {
 
       {/* Floating Actions - manager only */}
       {isManager() && (
-        <div style={{ position: 'fixed', bottom: 32, right: 32, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+        <div style={{ position: 'fixed', bottom: 'calc(32px + env(safe-area-inset-bottom))', right: 32, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
           <div
             onClick={() => setShowBatchEditor(true)}
             style={{
@@ -605,7 +618,7 @@ export default function ProjectTimeline() {
       {/* 批量任务编辑器 */}
       {project && isManager() && (
         <BatchTaskEditor
-          projectId={id!}
+          projectId={id || ''}
           visible={showBatchEditor}
           onClose={() => { setShowBatchEditor(false); loadData() }}
           projectMembers={project.members || []}
@@ -614,7 +627,7 @@ export default function ProjectTimeline() {
         />
       )}
       {/* 3. Project Summary Area (Requested Extra Component) */}
-      <div style={{ background: '#fff', borderTop: '1px solid #e2e8f0', padding: 24, zIndex: 50 }}>
+      <div style={{ background: '#fff', borderTop: '1px solid #e2e8f0', padding: 24, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', zIndex: 50 }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: '#334155' }}>项目概览 & 关键节点</h3>
         <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
           {project && (

@@ -43,8 +43,9 @@ const TaskDetail = () => {
   }, [id])
 
   const loadData = async () => {
+    if (!id) return
     try {
-      const taskData = await pb.collection('tasks').getOne(id!, {
+      const taskData = await pb.collection('tasks').getOne(id, {
         expand: 'project,assignees'
       })
       setTask(taskData)
@@ -62,11 +63,11 @@ const TaskDetail = () => {
   }
 
   const handleSaveEdit = async () => {
-    if (!isManager) return
+    if (!isManager || !id) return
     try {
       setCompleting(true)
       const before = { stage_name: task.stage_name, completed_steps: task.completed_steps, next_steps: task.next_steps }
-      await pb.collection('tasks').update(id!, {
+      await pb.collection('tasks').update(id, {
         stage_name: editForm.stage_name,
         completed_steps: editForm.completed_steps,
         next_steps: editForm.next_steps
@@ -108,7 +109,8 @@ const TaskDetail = () => {
       onConfirm: async () => {
         setCompleting(true)
         try {
-          await pb.collection('tasks').update(id!, { status: 'completed', completed_at: new Date().toISOString() })
+          if (!id) return
+          await pb.collection('tasks').update(id, { status: 'completed', completed_at: new Date().toISOString() })
           // 审计日志
           await pb.collection('audit_logs').create({
             project: task.project, task: id, action_type: 'mark_complete',
@@ -140,9 +142,10 @@ const TaskDetail = () => {
       Toast.show({ content: '请填写卡点原因', icon: 'fail' })
       return
     }
+    if (!id) return
     setSubmittingBlocker(true)
     try {
-      await pb.collection('tasks').update(id!, {
+      await pb.collection('tasks').update(id, {
         status: 'blocked',
         blocker: {
           reason_type: 'other',
@@ -194,7 +197,7 @@ const TaskDetail = () => {
   const nextSteps = task.next_steps ? task.next_steps.split('\n') : []
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FFFFFF', paddingBottom: 100 }}>
+    <div style={{ minHeight: '100dvh', background: '#FFFFFF', paddingBottom: 100 }}>
       {/* Immersive Glass Header */}
       <div className="glass-header" style={{
         padding: '16px 20px',
@@ -246,7 +249,8 @@ const TaskDetail = () => {
                     // 通知项目全员
                     const userName = currentUser?.name || currentUser?.username
                     notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', currentUser?.id).catch(() => {})
-                    await pb.collection('tasks').delete(id!)
+                    if (!id) return
+                    await pb.collection('tasks').delete(id)
                     queryClient.invalidateQueries({ queryKey: ['tasks'] })
                     queryClient.invalidateQueries({ queryKey: ['projects'] })
                     Toast.show({ content: '已删除', icon: 'success' })
@@ -507,7 +511,8 @@ const TaskDetail = () => {
                 }}
                 onClick={() => {
                   const handleUnblock = async (newStatus: 'completed' | 'in_progress') => {
-                    await pb.collection('tasks').update(id!, { status: newStatus, blocker: null })
+                    if (!id) return
+                    await pb.collection('tasks').update(id, { status: newStatus, blocker: null })
                     await pb.collection('audit_logs').create({ project: task.project, task: id, action_type: 'unblock_task', operator: currentUser?.id, after_data: { status: newStatus } })
                     const userName = currentUser?.name || currentUser?.username
                     const label = newStatus === 'completed' ? '已完成' : '进行中'

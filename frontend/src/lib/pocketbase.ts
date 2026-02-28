@@ -39,9 +39,23 @@ export const PB_URL = getPocketBaseUrl()
 
 export const pb = new PocketBase(PB_URL)
 
+// 未勾选"记住登录"时，关闭浏览器后清除 token
+// 原理：登录时如果没勾选记住，会把 auth 同时存到 sessionStorage；
+// 下次打开时 sessionStorage 为空 → 说明是新会话 → 清除 localStorage 中的 auth
+if (typeof window !== 'undefined') {
+  const remembered = localStorage.getItem('rememberMe') === '1'
+  if (!remembered && !sessionStorage.getItem('pocketbase_auth')) {
+    pb.authStore.clear()
+  }
+}
+
 export const isUserLoggedIn = () => pb.authStore.isValid
 
-export const logout = () => pb.authStore.clear()
+export const logout = () => {
+  pb.authStore.clear()
+  localStorage.removeItem('rememberMe')
+  sessionStorage.removeItem('pocketbase_auth')
+}
 
 // ========== 实时数据订阅 ==========
 let _subscribed = false

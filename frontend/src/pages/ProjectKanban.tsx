@@ -32,7 +32,7 @@ const ProjectKanban: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
             <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
             <span style={{ color: '#334155', fontSize: 16 }}>看板加载失败</span>
-            <Button size="small" color="primary" shape="rounded" onClick={() => refetch()}>重试</Button>
+            <Button size="small" color="primary" shape="rounded" onClick={() => { refetch() }}>重试</Button>
         </div>
     )
 

@@ -213,9 +213,8 @@ export default function TaskCreate() {
           sequence: Date.now() + 1,
         }
 
-        await pb.collection('tasks').create(nextTaskData)
+        const nextTask = await pb.collection('tasks').create(nextTaskData)
 
-        // 3. 创建通知给下一步负责人
         for (const userId of nextStepAssignees) {
           try {
             await pb.collection('notifications').create({
@@ -224,7 +223,7 @@ export default function TaskCreate() {
               title: '您有新任务',
               content: `${currentUser?.name || currentUser?.username} 将「${nextStepName}」任务分配给了您`,
               link_type: 'task',
-              link_id: createdTask.id,
+              link_id: nextTask.id,
               is_read: false,
             })
           } catch (e) {
@@ -291,7 +290,7 @@ export default function TaskCreate() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      minHeight: '100dvh',
       background: 'linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%)'
     }}>
       {/* Header */}

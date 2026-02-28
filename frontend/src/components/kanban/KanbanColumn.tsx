@@ -20,7 +20,7 @@ interface KanbanColumnProps {
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
     id,
     title,
-    icon,
+    icon: _icon,
     color,
     tasks,
     onTaskClick,
