@@ -273,7 +273,7 @@ export default function BatchProjectCreator({ visible, onClose, onSuccess }: Pro
 
       {/* 任务执行人选择弹窗 */}
       <Popup visible={pickerRow !== null} onMaskClick={() => setPickerRow(null)}
-        bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60vh' }}>
+        bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60dvh' }}>
         <div style={{ padding: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>选择执行人员</div>
           <SearchBar placeholder="搜索" value={taskSearchText} onChange={setTaskSearchText} style={{ marginBottom: 12 }} />

@@ -33,7 +33,7 @@ export default function Home() {
   // 员工的当前任务（进行中和待办）
   const currentTasks = myTasks.filter(t => t.status === 'in_progress' || t.status === 'pending').slice(0, 5)
   // 最近未读消息
-  const recentNotifications = notifications.filter(n => !n.read).slice(0, 5)
+  const recentNotifications = notifications.filter(n => !n.is_read).slice(0, 5)
 
   const tabs = [
     {
@@ -293,7 +293,7 @@ export default function Home() {
                               border: '1px solid #fee2e2', boxShadow: '0 1px 3px rgba(239,68,68,0.1)'
                             }}>
                               <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>{notif.title}</div>
-                              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>{notif.message}</div>
+                              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>{notif.content}</div>
                               <div style={{ fontSize: 11, color: '#94a3b8' }}>
                                 {dayjs(notif.created).format('MM/DD HH:mm')}
                               </div>

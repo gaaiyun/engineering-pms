@@ -52,13 +52,6 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
     low: { label: '低优先级', color: '#8c8c8c' },
 }
 
-const blockerTypes = [
-    { label: '等待材料', value: 'waiting_materials' },
-    { label: '等待审批', value: 'waiting_approval' },
-    { label: '技术问题', value: 'technical_issue' },
-    { label: '外部依赖', value: 'external_dependency' },
-    { label: '其他原因', value: 'other' },
-]
 
 export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     task,
@@ -133,7 +126,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     const handleReportBlocker = () => {
         setBlockerDraft({
             taskId: currentTask.id,
-            reasonType: 'waiting_materials',
+            reasonType: 'other',
             reasonDetail: '',
             needHelpFrom: [],
             expectedResolve: '',
@@ -146,7 +139,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             await markBlocked.mutateAsync({
                 taskId: currentTask.id,
                 blocker: {
-                    reason_type: values.reasonType,
+                    reason_type: 'other',
                     reason_detail: values.reasonDetail,
                     need_help_from: values.needHelpFrom || [],
                     expected_resolve: values.expectedResolve,
@@ -271,9 +264,6 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                             <div className="section blocker-section">
                                 <h4 className="section-title">卡点信息</h4>
                                 <div className="blocker-info">
-                                    <p><strong>类型：</strong>{
-                                        blockerTypes.find(t => t.value === currentTask.blocker?.reason_type)?.label
-                                    }</p>
                                     <p><strong>原因：</strong>{currentTask.blocker.reason_detail}</p>
                                     <p><strong>预期解决：</strong>{currentTask.blocker.expected_resolve}</p>
                                 </div>
@@ -519,16 +509,6 @@ const BlockerForm: React.FC<{
                 </Button>
             }
         >
-            <Form.Item
-                name="reasonType"
-                label="卡点类型"
-                rules={[{ required: true, message: '请选择卡点类型' }]}
-            >
-                <Selector
-                    options={blockerTypes}
-                />
-            </Form.Item>
-
             <Form.Item
                 name="reasonDetail"
                 label="卡点原因"

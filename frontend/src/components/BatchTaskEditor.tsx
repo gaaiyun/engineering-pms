@@ -164,7 +164,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
 
       {/* 人员选择弹窗 */}
       <Popup visible={pickerRow !== null} onMaskClick={() => setPickerRow(null)}
-        bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60vh' }}>
+        bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60dvh' }}>
         <div style={{ padding: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>选择执行人员</div>
           <SearchBar placeholder="搜索" value={searchText} onChange={setSearchText} style={{ marginBottom: 12 }} />

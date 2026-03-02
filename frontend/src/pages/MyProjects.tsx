@@ -201,10 +201,10 @@ export default function MyProjects() {
         }
         setMemberPopup(p => ({ ...p, visible: false }))
       }}
-        bodyStyle={{ height: '60vh', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 }}>
+        bodyStyle={{ height: '60dvh', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 }}>
         <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>项目成员管理</h3>
         <SearchBar placeholder="搜索用户" value={memberSearch} onChange={setMemberSearch} style={{ marginBottom: 12 }} />
-        <div style={{ overflowY: 'auto', maxHeight: 'calc(60vh - 120px)' }}>
+        <div style={{ overflowY: 'auto', maxHeight: 'calc(60dvh - 120px)' }}>
           {allUsers.filter(u => !memberSearch || u.name?.includes(memberSearch) || u.username?.includes(memberSearch)).map(u => {
             const checked = memberPopup.members.includes(u.id)
             return (

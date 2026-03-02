@@ -138,8 +138,16 @@ const AdminDashboard = () => {
     [projects],
   )
   const totalProjects = activeProjects.length
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'processing').length
-  const overdueTasks = tasks.filter(t => t.status === 'overdue').length
+  const archivedProjectIds = useMemo(
+    () => new Set(projects.filter((p: Project) => p.status === 'archived').map(p => p.id)),
+    [projects],
+  )
+  const activeTasks = useMemo(
+    () => tasks.filter(t => !archivedProjectIds.has(t.project)),
+    [tasks, archivedProjectIds],
+  )
+  const inProgressTasks = activeTasks.filter(t => t.status === 'in_progress' || t.status === 'processing').length
+  const overdueTasks = activeTasks.filter(t => t.status === 'overdue').length
   const newUsersThisMonth = useMemo(
     () =>
       users.filter(u => {
@@ -150,14 +158,14 @@ const AdminDashboard = () => {
       }).length,
     [users],
   )
-  const overdueRate = tasks.length ? ((overdueTasks / tasks.length) * 100).toFixed(1) : '0.0'
+  const overdueRate = activeTasks.length ? ((overdueTasks / activeTasks.length) * 100).toFixed(1) : '0.0'
 
   const taskStatusData = [
-    { name: '待处理', value: tasks.filter(t => t.status === 'pending').length, color: '#64748B' },
-    { name: '进行中', value: tasks.filter(t => t.status === 'in_progress' || t.status === 'processing').length, color: '#3B82F6' },
-    { name: '已完成', value: tasks.filter(t => t.status === 'completed').length, color: '#10B981' },
-    { name: '已逾期', value: tasks.filter(t => t.status === 'overdue').length, color: '#EF4444' },
-    { name: '卡点中', value: tasks.filter(t => t.status === 'blocked').length, color: '#F59E0B' },
+    { name: '待处理', value: activeTasks.filter(t => t.status === 'pending').length, color: '#64748B' },
+    { name: '进行中', value: activeTasks.filter(t => t.status === 'in_progress' || t.status === 'processing').length, color: '#3B82F6' },
+    { name: '已完成', value: activeTasks.filter(t => t.status === 'completed').length, color: '#10B981' },
+    { name: '已逾期', value: activeTasks.filter(t => t.status === 'overdue').length, color: '#EF4444' },
+    { name: '卡点中', value: activeTasks.filter(t => t.status === 'blocked').length, color: '#F59E0B' },
   ]
 
   // 部门分布数据（用于概览展示）
@@ -214,7 +222,7 @@ const AdminDashboard = () => {
   // 卡点人员排名
   const blockedRanking = useMemo(() => {
     const userBlocked: Record<string, { name: string, count: number, tasks: string[] }> = {}
-    tasks.filter(t => t.status === 'blocked' || t.status === 'overdue').forEach(t => {
+    activeTasks.filter(t => t.status === 'blocked' || t.status === 'overdue').forEach(t => {
       const assignees = t.assignees || []
       assignees.forEach((uid: string) => {
         const user = users.find(u => u.id === uid)
@@ -228,10 +236,11 @@ const AdminDashboard = () => {
       })
     })
     return Object.values(userBlocked).sort((a, b) => b.count - a.count).slice(0, 5)
-  }, [tasks, users])
+  }, [activeTasks, users])
 
 
 
+  const pendingApprovals = activeTasks.filter(t => t.status === 'completed' && !t.approved)
 
   // ---- 用户管理 ----
 
@@ -375,15 +384,11 @@ const AdminDashboard = () => {
     })
   }
 
-  // ---- 任务审核 ----
-  // 已移除老的审核系统，统一使用 ReviewCenter (/review-center)
-
-
   return (
     <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
       <div style={{ flex: 1, overflow: 'auto' }}>
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16 }}>
             <SpinLoading style={{ '--size': '36px' }} />
             <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>
           </div>
@@ -422,10 +427,11 @@ const AdminDashboard = () => {
             {/* KPI Grid */}
             <Grid columns={2} gap={16} style={{ marginBottom: 32 }}>
               <Grid.Item>
-                <div className="fade-in" style={{
+                <div className="fade-in" onClick={() => setActiveKey('projects')} style={{
                   background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                   borderRadius: 20, padding: 20, color: 'white',
-                  boxShadow: '0 8px 16px -4px rgba(59, 130, 246, 0.3)'
+                  boxShadow: '0 8px 16px -4px rgba(59, 130, 246, 0.3)',
+                  cursor: 'pointer'
                 }}>
                   <div style={{ fontSize: 11, opacity: 0.8, letterSpacing: 1, marginBottom: 8 }}>项目总数</div>
                   <div style={{ fontSize: 32, fontWeight: 700 }}>{totalProjects}</div>
@@ -433,10 +439,10 @@ const AdminDashboard = () => {
                 </div>
               </Grid.Item>
               <Grid.Item>
-                <div className="fade-in" style={{
+                <div className="fade-in" onClick={() => navigate('/my-tasks')} style={{
                   background: 'white', borderRadius: 20, padding: 20,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9',
-                  animationDelay: '0.1s'
+                  animationDelay: '0.1s', cursor: 'pointer'
                 }}>
                   <div style={{ fontSize: 11, color: '#64748b', letterSpacing: 1, marginBottom: 8 }}>进行中任务</div>
                   <div style={{ fontSize: 32, fontWeight: 700, color: '#0f172a' }}>{inProgressTasks}</div>
@@ -444,10 +450,10 @@ const AdminDashboard = () => {
                 </div>
               </Grid.Item>
               <Grid.Item>
-                <div className="fade-in" style={{
+                <div className="fade-in" onClick={() => setActiveKey('users')} style={{
                   background: 'white', borderRadius: 20, padding: 20,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9',
-                  animationDelay: '0.2s'
+                  animationDelay: '0.2s', cursor: 'pointer'
                 }}>
                   <div style={{ fontSize: 11, color: '#64748b', letterSpacing: 1, marginBottom: 8 }}>本月新用户</div>
                   <div style={{ fontSize: 32, fontWeight: 700, color: '#0f172a' }}>{newUsersThisMonth}</div>
@@ -455,11 +461,11 @@ const AdminDashboard = () => {
                 </div>
               </Grid.Item>
               <Grid.Item>
-                <div className="fade-in" style={{
+                <div className="fade-in" onClick={() => navigate('/my-tasks')} style={{
                   background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
                   borderRadius: 20, padding: 20, color: 'white',
                   boxShadow: '0 8px 16px -4px rgba(239, 68, 68, 0.3)',
-                  animationDelay: '0.3s'
+                  animationDelay: '0.3s', cursor: 'pointer'
                 }}>
                   <div style={{ fontSize: 11, opacity: 0.8, letterSpacing: 1, marginBottom: 8 }}>逾期率</div>
                   <div style={{ fontSize: 32, fontWeight: 700 }}>{overdueRate}%</div>
@@ -472,7 +478,7 @@ const AdminDashboard = () => {
             {/* 双列图表布局 */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 }}>
               {/* 任务状态分布 */}
-              <div className="fade-in" style={{ animationDelay: '0.4s', background: 'white', borderRadius: 20, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+              <div className="fade-in" onClick={() => navigate('/my-tasks')} style={{ animationDelay: '0.4s', background: 'white', borderRadius: 20, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.02)', cursor: 'pointer' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 3, height: 14, background: '#3b82f6', borderRadius: 2 }}></div>
                   任务状态
@@ -498,7 +504,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* 项目进度 */}
-              <div className="fade-in" style={{ animationDelay: '0.5s', background: 'white', borderRadius: 20, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+              <div className="fade-in" onClick={() => setActiveKey('projects')} style={{ animationDelay: '0.5s', background: 'white', borderRadius: 20, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.02)', cursor: 'pointer' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 3, height: 14, background: '#10b981', borderRadius: 2 }}></div>
                   项目进度
@@ -528,7 +534,7 @@ const AdminDashboard = () => {
             </div>
 
             {/* 人员工作负载 */}
-            <div className="fade-in" style={{ animationDelay: '0.6s', marginBottom: 24, background: 'white', borderRadius: 20, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+            <div className="fade-in" onClick={() => setActiveKey('users')} style={{ animationDelay: '0.6s', marginBottom: 24, background: 'white', borderRadius: 20, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.02)', cursor: 'pointer' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 3, height: 14, background: '#8B5CF6', borderRadius: 2 }}></div>
                 人员工作负载
@@ -687,11 +693,23 @@ const AdminDashboard = () => {
                       textAlign: 'center', 
                       cursor: 'pointer',
                       transition: 'transform 0.2s',
-                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                      position: 'relative'
                     }}
                   >
+                    {pendingApprovals.length > 0 && (
+                      <div style={{
+                        position: 'absolute', top: -4, right: -4,
+                        background: '#EF4444', color: 'white',
+                        borderRadius: '50%', width: 18, height: 18,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 'bold'
+                      }}>
+                        {pendingApprovals.length}
+                      </div>
+                    )}
                     <IoCheckmarkCircleOutline size={24} color="white" />
-                    <div style={{ color: 'white', fontSize: 11, marginTop: 6, fontWeight: 600 }}>审核中心</div>
+                    <div style={{ color: 'white', fontSize: 11, marginTop: 6, fontWeight: 600 }}>任务审核</div>
                   </div>
                 </Grid.Item>
                 <Grid.Item>
@@ -714,6 +732,48 @@ const AdminDashboard = () => {
               </Grid>
             </div>
 
+            {/* 待处理事项 */}
+            {pendingApprovals.length > 0 && (
+              <div className="fade-in" style={{ 
+                animationDelay: '0.7s', 
+                marginBottom: 24, 
+                background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)', 
+                borderRadius: 20, 
+                padding: 20,
+                border: '1px solid #F59E0B'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: '#F59E0B', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <IoTimeOutline size={24} color="white" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: '#92400E', fontSize: 15 }}>
+                      有 {pendingApprovals.length} 个任务待审核
+                    </div>
+                    <div style={{ fontSize: 12, color: '#A16207', marginTop: 2 }}>
+                      请及时处理，以免影响项目进度
+                    </div>
+                  </div>
+                  <Button 
+                    size='small'
+                    onClick={() => navigate('/review-center')}
+                    style={{ 
+                      background: '#F59E0B', 
+                      color: 'white', 
+                      border: 'none',
+                      borderRadius: 20,
+                      fontWeight: 600
+                    }}
+                  >
+                    去处理
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* 最近活动 */}
             <div className="fade-in" style={{ animationDelay: '0.8s', background: 'white', borderRadius: 24, padding: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
@@ -1093,7 +1153,7 @@ const AdminDashboard = () => {
                   <div style={{ fontSize: 11, color: '#94a3b8' }}>团队成员</div>
                 </div>
                 <div style={{ flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
-                  <div style={{ fontSize: 24, fontWeight: 800 }}>{tasks.filter(t => t.status === 'completed').length}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800 }}>{activeTasks.filter(t => t.status === 'completed').length}</div>
                   <div style={{ fontSize: 11, color: '#94a3b8' }}>完成任务</div>
                 </div>
               </div>
@@ -1157,7 +1217,14 @@ const AdminDashboard = () => {
                   </div>
                   <span style={{ fontWeight: 600, color: '#1e293b' }}>审核中心</span>
                 </div>
-                <IoChevronForwardOutline size={18} color="#94a3b8" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {pendingApprovals.length > 0 && (
+                    <span style={{ background: '#ef4444', color: 'white', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
+                      {pendingApprovals.length}
+                    </span>
+                  )}
+                  <IoChevronForwardOutline size={18} color="#94a3b8" />
+                </div>
               </div>
 
               <div

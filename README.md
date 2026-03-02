@@ -110,10 +110,31 @@ START.bat
 
 ### 自动备份
 
+数据库每 12 小时自动备份一次，保留 60 天（约 120 份），使用 sqlite3 `.backup` 确保 WAL 数据完整。
+
+**Linux（crontab）：**
+
 ```bash
-# 添加 crontab（每 12 小时）
-0 */12 * * * cd /path/to/project && node scripts/auto_backup.mjs
+# 方式一：Node 脚本（跨平台，支持 gzip 压缩）
+0 */12 * * * cd /path/to/project && node scripts/auto_backup.mjs >> /var/log/pb_backup.log 2>&1
+
+# 方式二：Shell 脚本（轻量）
+0 */12 * * * /path/to/backend/backup.sh >> /var/log/pb_backup.log 2>&1
 ```
+
+**Windows（计划任务）：**
+
+```powershell
+schtasks /create /tn "PB_Backup" /tr "powershell -File C:\path\to\backend\backup.ps1" /sc hourly /mo 12
+```
+
+**环境变量（可选，用于 `auto_backup.mjs`）：**
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `PB_DATA_DIR` | pb_data 目录路径 | Linux: `/www/server/pocketbase/pb_data`，其他: `../backend/pb_data` |
+| `BACKUP_DIR` | 备份存放目录 | `../backups` |
+| `KEEP_DAYS` | 保留天数 | `60` |
 
 ### Android APK 打包
 

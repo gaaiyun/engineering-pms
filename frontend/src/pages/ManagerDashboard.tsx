@@ -22,14 +22,22 @@ const ManagerDashboard: React.FC = () => {
     const isError = tasksError || projectsError
     const handleRetry = () => { refetchTasks(); refetchProjects() }
 
-    // (Calculation logic omitted for brevity, unchanged)
+    const archivedProjectIds = useMemo(
+        () => new Set(projects.filter((p: Project) => p.status === 'archived').map(p => p.id)),
+        [projects],
+    )
+    const activeTasks = useMemo(
+        () => tasks.filter(t => !archivedProjectIds.has(t.project)),
+        [tasks, archivedProjectIds],
+    )
+
     const abnormalTasks = useMemo(() => {
         const now = new Date()
         const overdue: Task[] = []
         const blocked: Task[] = []
         const dueToday: Task[] = []
 
-        tasks.forEach((task: Task) => {
+        activeTasks.forEach((task: Task) => {
             if (task.status === 'completed') return
 
             if (task.status === 'blocked') {
@@ -50,7 +58,7 @@ const ManagerDashboard: React.FC = () => {
         })
 
         return { overdue, blocked, dueToday }
-    }, [tasks])
+    }, [activeTasks])
 
     // 计算指标
     const metrics = useMemo(() => ({
@@ -58,13 +66,13 @@ const ManagerDashboard: React.FC = () => {
         overdueCount: abnormalTasks.overdue.length,
         blockedCount: abnormalTasks.blocked.length,
         pendingReview: pendingHandoffs.length,
-        completedToday: tasks.filter((t: Task) => {
+        completedToday: activeTasks.filter((t: Task) => {
             if (t.status !== 'completed') return false
             const updated = new Date(t.updated)
             const today = new Date()
             return updated.toDateString() === today.toDateString()
         }).length,
-    }), [projects, abnormalTasks, pendingHandoffs, tasks])
+    }), [projects, abnormalTasks, pendingHandoffs, activeTasks])
 
     // 团队工作量 - 修复：正确统计所有状态
     const workloadData = useMemo(() => {
@@ -81,9 +89,8 @@ const ManagerDashboard: React.FC = () => {
             }
         })
 
-        tasks.forEach((task: Task) => {
+        activeTasks.forEach((task: Task) => {
             const assigneeIds = task.assignees || []
-            // 同时检查 expand 中的 assignees
             const expandedAssigneeIds = task.expand?.assignees?.map((u: User) => u.id) || []
             const allAssigneeIds = [...new Set([...assigneeIds, ...expandedAssigneeIds])]
             
@@ -103,7 +110,7 @@ const ManagerDashboard: React.FC = () => {
         return Object.values(userTaskCount)
             .filter((u) => u.pending + u.inProgress + u.completed + u.blocked + u.overdue > 0)
             .sort((a, b) => (b.pending + b.inProgress + b.completed) - (a.pending + a.inProgress + a.completed))
-    }, [users, tasks])
+    }, [users, activeTasks])
 
     // ECharts 配置 - 增强显示
     const chartOption = useMemo(() => ({
