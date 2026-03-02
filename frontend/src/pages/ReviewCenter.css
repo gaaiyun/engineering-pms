@@ -1,6 +1,6 @@
 /* 变更审计中心样式 */
 .review-center {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #f8fafc;
 }
 

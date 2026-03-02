@@ -1,6 +1,6 @@
 /* 经理工作台样式 */
 .manager-dashboard {
-    min-height: 100vh;
+    min-height: 100dvh;
     background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
 }
 

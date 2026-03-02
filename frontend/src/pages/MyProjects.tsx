@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { IoArrowBackOutline, IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoTrashOutline, IoPeopleOutline, IoReturnUpBackOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
-import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, useCreateProject, isManager } from '../lib/api'
+import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, isManager } from '../lib/api'
 import { Dialog, Popup, SearchBar, SpinLoading } from 'antd-mobile'
 import dayjs from 'dayjs'
-import { pb } from '../lib/pocketbase'
+import BatchProjectCreator from '../components/BatchProjectCreator'
 
 type FilterTab = 'all' | 'active' | 'blocked' | 'archived'
 
@@ -18,17 +18,14 @@ export default function MyProjects() {
   const archiveProject = useArchiveProject()
   const deleteProject = useDeleteProject()
   const updateMembers = useUpdateProjectMembers()
-  const createProject = useCreateProject()
   const managerUser = isManager()
 
   // 成员管理弹窗
   const [memberPopup, setMemberPopup] = useState<{ visible: boolean; projectId: string; members: string[]; originalMembers: string[] }>({ visible: false, projectId: '', members: [], originalMembers: [] })
   const [memberSearch, setMemberSearch] = useState('')
 
-  // 创建项目弹窗
-  const [createPopup, setCreatePopup] = useState(false)
-  const [createForm, setCreateForm] = useState({ name: '', description: '', manager: '', members: [] as string[], deadline: '' })
-  const [createSearch, setCreateSearch] = useState('')
+  // 批量创建项目弹窗
+  const [showBatchCreator, setShowBatchCreator] = useState(false)
 
   // 计算每个项目是否有长期卡点（blocked 超过 7 天）
   const blockedProjectIds = useMemo(() => {
@@ -91,10 +88,7 @@ export default function MyProjects() {
         </div>
         {/* 新建项目按钮 */}
         {managerUser && (
-          <button onClick={() => {
-            setCreateForm({ name: '', description: '', manager: pb.authStore.model?.id || '', members: [], deadline: '' })
-            setCreatePopup(true)
-          }} style={{
+          <button onClick={() => setShowBatchCreator(true)} style={{
             background: 'var(--primary-color)', border: 'none', borderRadius: 8, padding: '8px 16px',
             fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: 600, marginRight: 8
           }}>
@@ -236,82 +230,14 @@ export default function MyProjects() {
         </div>
       </Popup>
 
-      {/* 创建项目弹窗 */}
-      <Popup visible={createPopup} onMaskClick={() => setCreatePopup(false)}
-        bodyStyle={{ height: '70vh', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 16 }}>新建项目</h3>
-        <div style={{ overflowY: 'auto', maxHeight: 'calc(70vh - 120px)' }}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#64748b', marginBottom: 6 }}>项目名称 *</label>
-            <input type="text" value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="输入项目名称" style={{
-                width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8,
-                fontSize: 14, outline: 'none'
-              }} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#64748b', marginBottom: 6 }}>项目描述</label>
-            <textarea value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="输入项目描述" rows={3} style={{
-                width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8,
-                fontSize: 14, outline: 'none', resize: 'none'
-              }} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#64748b', marginBottom: 6 }}>截止日期</label>
-            <input type="date" value={createForm.deadline} onChange={e => setCreateForm(f => ({ ...f, deadline: e.target.value }))}
-              style={{
-                width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8,
-                fontSize: 14, outline: 'none'
-              }} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#64748b', marginBottom: 6 }}>项目成员</label>
-            <SearchBar placeholder="搜索用户" value={createSearch} onChange={setCreateSearch} style={{ marginBottom: 8 }} />
-            <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
-              {allUsers.filter(u => !createSearch || u.name?.includes(createSearch) || u.username?.includes(createSearch)).map(u => {
-                const checked = createForm.members.includes(u.id)
-                return (
-                  <div key={u.id} onClick={() => {
-                    const newMembers = checked ? createForm.members.filter(id => id !== u.id) : [...createForm.members, u.id]
-                    setCreateForm(f => ({ ...f, members: newMembers }))
-                  }} style={{
-                    display: 'flex', alignItems: 'center', gap: 12, padding: '8px',
-                    borderBottom: '1px solid #f1f5f9', cursor: 'pointer'
-                  }}>
-                    <div style={{
-                      width: 18, height: 18, borderRadius: 4, border: '2px solid',
-                      borderColor: checked ? '#2563eb' : '#d1d5db',
-                      background: checked ? '#2563eb' : 'white',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', fontSize: 11
-                    }}>{checked ? '✓' : ''}</div>
-                    <span style={{ fontSize: 13 }}>{u.name || u.username}</span>
-                    {u.department && <span style={{ fontSize: 11, color: '#94a3b8' }}>{u.department}</span>}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-        <button onClick={() => {
-          if (!createForm.name.trim()) {
-            Dialog.alert({ content: '请输入项目名称' })
-            return
-          }
-          createProject.mutate(createForm, {
-            onSuccess: () => {
-              setCreatePopup(false)
-              setCreateForm({ name: '', description: '', manager: '', members: [], deadline: '' })
-            }
-          })
-        }} style={{
-          width: '100%', padding: '12px', background: 'var(--primary-color)', color: 'white',
-          border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16
-        }}>
-          创建项目
-        </button>
-      </Popup>
+      {/* 批量创建项目弹窗（三列式） */}
+      <BatchProjectCreator 
+        visible={showBatchCreator} 
+        onClose={() => setShowBatchCreator(false)}
+        onSuccess={() => {
+          // 创建成功后可以做额外操作
+        }}
+      />
     </div>
   )
 }
