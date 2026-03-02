@@ -181,12 +181,12 @@ const TaskDetail = () => {
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60dvh' }}>
       <SpinLoading style={{ '--size': '36px' }} />
     </div>
   )
   if (!task) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16 }}>
       <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
       <span style={{ color: '#334155', fontSize: 16 }}>任务加载失败</span>
       <Button size="small" onClick={() => navigate(-1)}>返回</Button>

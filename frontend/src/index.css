@@ -111,7 +111,6 @@ body {
   #root {
     width: 100%;
     max-width: 480px;
-    min-height: 100vh;
     min-height: 100dvh;
     background-color: var(--page-bg);
     box-shadow: 0 0 50px rgba(0, 0, 0, 0.05);
@@ -126,7 +125,7 @@ body {
     width: 100%;
     max-width: none;
     /* Allow full width */
-    min-height: 100vh;
+    min-height: 100dvh;
     background-color: var(--page-bg);
   }
 }
@@ -732,7 +731,7 @@ body {
   right: 0 !important;
   bottom: 0 !important;
   width: 100vw !important;
-  height: 100vh !important;
+  height: 100dvh !important;
   z-index: 9999 !important;
   background: var(--page-bg);
   overflow: auto !important;
@@ -749,7 +748,7 @@ body {
     right: 0;
     bottom: 0;
     width: 100vw !important;
-    height: 100vh !important;
+    height: 100dvh !important;
     z-index: 9999;
   }
 }

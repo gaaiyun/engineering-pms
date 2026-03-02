@@ -42,7 +42,7 @@ class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode },
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 24, background: '#fff', height: '100vh', overflow: 'auto' }}>
+        <div style={{ padding: 24, background: '#fff', height: '100dvh', overflow: 'auto' }}>
           <h1 style={{ color: '#ff4d4f' }}>Application Error</h1>
           <p>The application crashed during startup.</p>
           <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, fontFamily: 'monospace', color: '#333' }}>

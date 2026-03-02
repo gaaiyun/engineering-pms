@@ -76,7 +76,7 @@ export default function Rankings() {
   const displayList = tab === 'individual' ? data : deptData()
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60dvh' }}>
       <div style={{ textAlign: 'center' }}>
         <div className="spinner" style={{ width: 36, height: 36, border: '3px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
         <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>

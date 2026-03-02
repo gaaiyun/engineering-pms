@@ -324,7 +324,7 @@ export default function ProjectTimeline() {
     position: 'fixed',
     top: 0,
     left: 0,
-    width: '100vh',
+    width: '100dvh',
     height: '100vw',
     transform: 'rotate(90deg)',
     transformOrigin: 'top left',
@@ -342,7 +342,7 @@ export default function ProjectTimeline() {
         display: 'flex',
         flexDirection: 'column',
         height: isFullscreen ? '100vw' : '100dvh',
-        width: isFullscreen ? '100vh' : '100vw',
+        width: isFullscreen ? '100dvh' : '100vw',
         ...landscapeStyle,
       }}
     >

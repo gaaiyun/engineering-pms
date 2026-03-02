@@ -2,7 +2,7 @@
 .kanban-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100dvh;
     background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
 }
 

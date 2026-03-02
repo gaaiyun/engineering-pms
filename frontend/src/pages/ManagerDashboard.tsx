@@ -151,12 +151,12 @@ const ManagerDashboard: React.FC = () => {
 
             <div className="dashboard-content">
                 {isLoading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16 }}>
                         <SpinLoading style={{ '--size': '36px' }} />
                         <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>
                     </div>
                 ) : isError ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16 }}>
                         <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
                         <span style={{ color: '#334155', fontSize: 16, fontWeight: 600 }}>数据加载失败</span>
                         <Button color="primary" size="small" shape="rounded" onClick={handleRetry}>重试</Button>

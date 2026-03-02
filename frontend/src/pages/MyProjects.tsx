@@ -67,7 +67,7 @@ export default function MyProjects() {
   }
 
   if (isLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60dvh' }}>
       <SpinLoading style={{ '--size': '36px' }} />
     </div>
   )

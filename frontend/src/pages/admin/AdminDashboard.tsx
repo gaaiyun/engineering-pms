@@ -59,7 +59,7 @@ interface Task {
   }
 }
 
-const VALID_TABS = ['dashboard', 'users', 'projects', 'approvals', 'ai', 'timeline', 'profile'] as const
+const VALID_TABS = ['dashboard', 'users', 'projects', 'ai', 'timeline', 'profile'] as const
 type TabKey = typeof VALID_TABS[number]
 
 const AdminDashboard = () => {
@@ -232,7 +232,6 @@ const AdminDashboard = () => {
 
 
 
-  const pendingApprovals = tasks.filter(t => t.status === 'completed' && !t.approved)
 
   // ---- 用户管理 ----
 
@@ -377,21 +376,7 @@ const AdminDashboard = () => {
   }
 
   // ---- 任务审核 ----
-
-  const handleApproveTask = async (task: Task) => {
-    try {
-      await pb.collection('tasks').update(task.id, {
-        approved: true,
-        score: (task.score || 0) + 1,
-        approved_by: pb.authStore.model?.id,
-      })
-      Toast.show({ icon: 'success', content: '已审核并加分' })
-      loadData()
-    } catch (error: any) {
-      console.error('approve task failed', error)
-      Toast.show({ icon: 'fail', content: error.message || '审核失败' })
-    }
-  }
+  // 已移除老的审核系统，统一使用 ReviewCenter (/review-center)
 
 
   return (
@@ -403,7 +388,7 @@ const AdminDashboard = () => {
             <span style={{ color: '#94a3b8', fontSize: 14 }}>加载中...</span>
           </div>
         ) : loadError ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16, padding: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16, padding: 20 }}>
             <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
             <span style={{ color: '#334155', fontSize: 16, fontWeight: 600 }}>{loadError}</span>
             <Button color="primary" size="small" shape="rounded" onClick={loadData}>重试</Button>
@@ -694,7 +679,7 @@ const AdminDashboard = () => {
                 </Grid.Item>
                 <Grid.Item>
                   <div 
-                    onClick={() => setActiveKey('approvals')}
+                    onClick={() => navigate('/review-center')}
                     style={{ 
                       background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', 
                       borderRadius: 16, 
@@ -702,23 +687,11 @@ const AdminDashboard = () => {
                       textAlign: 'center', 
                       cursor: 'pointer',
                       transition: 'transform 0.2s',
-                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-                      position: 'relative'
+                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
                     }}
                   >
-                    {pendingApprovals.length > 0 && (
-                      <div style={{
-                        position: 'absolute', top: -4, right: -4,
-                        background: '#EF4444', color: 'white',
-                        borderRadius: '50%', width: 18, height: 18,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10, fontWeight: 'bold'
-                      }}>
-                        {pendingApprovals.length}
-                      </div>
-                    )}
                     <IoCheckmarkCircleOutline size={24} color="white" />
-                    <div style={{ color: 'white', fontSize: 11, marginTop: 6, fontWeight: 600 }}>任务审核</div>
+                    <div style={{ color: 'white', fontSize: 11, marginTop: 6, fontWeight: 600 }}>审核中心</div>
                   </div>
                 </Grid.Item>
                 <Grid.Item>
@@ -741,48 +714,6 @@ const AdminDashboard = () => {
               </Grid>
             </div>
 
-            {/* 待处理事项 */}
-            {pendingApprovals.length > 0 && (
-              <div className="fade-in" style={{ 
-                animationDelay: '0.7s', 
-                marginBottom: 24, 
-                background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)', 
-                borderRadius: 20, 
-                padding: 20,
-                border: '1px solid #F59E0B'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    background: '#F59E0B', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <IoTimeOutline size={24} color="white" />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, color: '#92400E', fontSize: 15 }}>
-                      有 {pendingApprovals.length} 个任务待审核
-                    </div>
-                    <div style={{ fontSize: 12, color: '#A16207', marginTop: 2 }}>
-                      请及时处理，以免影响项目进度
-                    </div>
-                  </div>
-                  <Button 
-                    size='small'
-                    onClick={() => setActiveKey('approvals')}
-                    style={{ 
-                      background: '#F59E0B', 
-                      color: 'white', 
-                      border: 'none',
-                      borderRadius: 20,
-                      fontWeight: 600
-                    }}
-                  >
-                    去处理
-                  </Button>
-                </div>
-              </div>
-            )}
 
             {/* 最近活动 */}
             <div className="fade-in" style={{ animationDelay: '0.8s', background: 'white', borderRadius: 24, padding: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
@@ -1031,59 +962,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {activeKey === 'approvals' && (
-          <div className="page" style={{ padding: '24px 20px' }}>
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: 1.5 }}>质量检查</div>
-              <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: '#0f172a' }}>待审核任务</h2>
-            </div>
-
-            {pendingApprovals.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>--</div>
-                <div>太棒了！没有待审核的任务</div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {pendingApprovals.map((task, i) => (
-                  <div key={task.id} className="fade-in"
-                    style={{
-                      animationDelay: `${i * 0.05}s`,
-                      background: 'white', padding: 20, borderRadius: 20,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f8fafc'
-                    }}
-                  >
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                      <div style={{
-                        width: 40, height: 40, borderRadius: '50%',
-                        background: '#fff7ed', color: '#ea580c',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <IoWarningOutline size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{task.stage_name}</div>
-                        <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>by {task.expand?.creator?.name || 'Unknown'}</div>
-                      </div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 12, fontSize: 12, color: '#475569', marginBottom: 16 }}>
-                      所属项目: <span style={{ fontWeight: 600 }}>{task.expand?.project?.name}</span>
-                    </div>
-                    <Button
-                      block color='primary' shape='rounded'
-                      onClick={() => handleApproveTask(task)}
-                      style={{ boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', border: 'none' }}
-                    >
-                      审核通过并加分
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {activeKey === 'ai' && <AIConsole />}
 
         {/* Timeline View */}
@@ -1267,7 +1145,7 @@ const AdminDashboard = () => {
               </div>
 
               <div
-                onClick={() => setActiveKey('approvals' as any)}
+                onClick={() => navigate('/review-center')}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: 16, cursor: 'pointer', borderRadius: 12
@@ -1279,14 +1157,7 @@ const AdminDashboard = () => {
                   </div>
                   <span style={{ fontWeight: 600, color: '#1e293b' }}>审核中心</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {pendingApprovals.length > 0 && (
-                    <span style={{ background: '#ef4444', color: 'white', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
-                      {pendingApprovals.length}
-                    </span>
-                  )}
-                  <IoChevronForwardOutline size={18} color="#94a3b8" />
-                </div>
+                <IoChevronForwardOutline size={18} color="#94a3b8" />
               </div>
 
               <div
