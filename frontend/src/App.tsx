@@ -45,12 +45,12 @@ const ManagerRoute = ({ children }: { children: React.ReactElement }) => {
 
 // 智能默认跳转 - 根据角色跳转到对应首页
 const DefaultRedirect = () => {
-  if (!pb.authStore.isValid) return <Navigate to="/app" />
+  if (!pb.authStore.isValid) return <Navigate to="/login" replace />
   const role = pb.authStore.model?.role?.toLowerCase()
   if (role === 'admin' || role === 'manager') {
-    return <Navigate to="/admin" />
+    return <Navigate to="/admin" replace />
   }
-  return <Navigate to="/app" />
+  return <Navigate to="/app" replace />
 }
 
 import { App as CapacitorApp } from '@capacitor/app'

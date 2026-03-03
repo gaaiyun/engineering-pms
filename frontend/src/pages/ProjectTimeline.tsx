@@ -4,11 +4,10 @@ import { pb } from '../lib/pocketbase'
 import { isManager, useUsers } from '../lib/api'
 import dayjs from 'dayjs'
 import isBetween from 'dayjs/plugin/isBetween'
-import { IoArrowBack, IoAddCircle, IoScan, IoExpand, IoContract, IoCreateOutline } from 'react-icons/io5'
+import { IoArrowBack, IoAddCircle, IoExpand, IoContract, IoCreateOutline } from 'react-icons/io5'
 import { Button, Toast, Avatar } from 'antd-mobile'
 import BatchTaskEditor from '../components/BatchTaskEditor'
 import { motion } from 'framer-motion'
-import clsx from 'clsx'
 import { SkeletonTimeline } from '../components/Skeleton'
 
 dayjs.extend(isBetween)
@@ -85,20 +84,23 @@ export default function ProjectTimeline() {
   const [timelineStart, setTimelineStart] = useState(dayjs().subtract(7, 'day'))
   const [timelineDays, setTimelineDays] = useState(45)
   const [scale, setScale] = useState(1.0) // 0.5 - 2.0
-  const [isLandscape, setIsLandscape] = useState(false)
   
-  // Responsive Check — 横屏手机宽度也可能 >768，需同时检查高度和触控能力
+  // Responsive Check
   const checkIsPC = () => {
     const w = window.innerWidth
     const h = window.innerHeight
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
     if (w > 1024) return true
     if (w > 768 && !isTouch) return true
-    // 横屏手机：宽 >768 但高 <500，不算 PC
     if (w > 768 && h < 500) return false
     return false
   }
   const [isPC, setIsPC] = useState(checkIsPC)
+  
+  // Landscape detection (natural orientation, not forced)
+  const [isNaturalLandscape, setIsNaturalLandscape] = useState(
+    window.innerWidth > window.innerHeight
+  )
   const [showBatchEditor, setShowBatchEditor] = useState(false)
 
   const { data: allUsers = [] } = useUsers()
@@ -111,23 +113,14 @@ export default function ProjectTimeline() {
   // Refs
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Detect PC/Mobile resize + screen orientation
+  // Detect PC/Mobile resize + natural orientation
   useEffect(() => {
     const handleResize = () => {
       setIsPC(checkIsPC())
-    }
-    const handleOrientation = () => {
-      // 如果系统横屏了，自动启用横屏模式
-      if (screen.orientation?.type?.includes('landscape')) {
-        setIsLandscape(true)
-      }
+      setIsNaturalLandscape(window.innerWidth > window.innerHeight)
     }
     window.addEventListener('resize', handleResize)
-    screen.orientation?.addEventListener?.('change', handleOrientation)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      screen.orientation?.removeEventListener?.('change', handleOrientation)
-    }
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   useEffect(() => {
@@ -259,7 +252,9 @@ export default function ProjectTimeline() {
   }
 
   // --- Geometry Calc ---
-  const rawCellWidth = BASE_CELL_WIDTH * scale
+  // 横屏时自动放大单元格宽度以利用更多水平空间
+  const landscapeMultiplier = isNaturalLandscape && !isPC ? 1.3 : 1.0
+  const rawCellWidth = BASE_CELL_WIDTH * scale * landscapeMultiplier
   const CELL_WIDTH = Math.round(isPC ? rawCellWidth : Math.max(rawCellWidth, MOBILE_MIN_CELL_WIDTH))
 
   const getTaskStyle = (task: Task) => {
@@ -278,13 +273,6 @@ export default function ProjectTimeline() {
   }
 
   // --- Render ---
-  // 横屏模式：使用 CSS transform 旋转实现真正横屏
-  const isFullscreen = !isPC && isLandscape
-
-  // 横屏时锁定缩放为更适合的比例
-  useEffect(() => {
-    if (isFullscreen) setScale(s => Math.max(s, 0.8))
-  }, [isFullscreen])
 
   if (loading) return (
     <div style={{ paddingTop: 60, paddingLeft: 20 }}>
@@ -320,30 +308,16 @@ export default function ProjectTimeline() {
     }
   }
 
-  const landscapeStyle: React.CSSProperties = isFullscreen ? {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100vh',
-    height: '100vw',
-    transform: 'rotate(90deg)',
-    transformOrigin: 'top left',
-    marginLeft: '100vw',
-    zIndex: 9999,
-    overflow: 'hidden',
-  } : {}
-
   return (
     <div
-      className={clsx("timeline-container", isFullscreen && "landscape-mode")}
+      className="timeline-container"
       style={{
         overflow: 'hidden',
         background: '#f8fafc',
         display: 'flex',
         flexDirection: 'column',
-        height: isFullscreen ? '100vw' : '100dvh',
-        width: isFullscreen ? '100vh' : '100vw',
-        ...landscapeStyle,
+        height: '100dvh',
+        width: '100vw',
       }}
     >
       {/* 1. Navbar */}
@@ -394,17 +368,17 @@ export default function ProjectTimeline() {
             </div>
           )}
 
-          {!isPC && (
-            <Button
-              color='primary'
-              size='small'
-              fill='solid'
-              onClick={() => setIsLandscape(!isLandscape)}
-              style={{ fontWeight: 600, fontSize: 12, padding: '4px 8px' }}
-            >
-              <IoScan style={{ marginRight: 4, fontSize: 14 }} />
-              {isLandscape ? '退出' : '横屏'}
-            </Button>
+          {!isPC && isNaturalLandscape && (
+            <div style={{ 
+              fontSize: 11, 
+              color: '#059669', 
+              fontWeight: 600,
+              background: '#ecfdf5',
+              padding: '4px 8px',
+              borderRadius: 6
+            }}>
+              横屏模式
+            </div>
           )}
         </div>
       </div>

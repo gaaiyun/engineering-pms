@@ -1,8 +1,7 @@
 // Service Worker for PWA
-const CACHE_NAME = 'engineering-pms-v2.1.0';
+const CACHE_NAME = 'engineering-pms-v2.2.0';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
   '/manifest.json',
 ];
 
@@ -45,6 +44,15 @@ self.addEventListener('fetch', (event) => {
   
   // API请求直接走网络
   if (url.pathname.includes('/api/') || url.hostname.includes('pocketbase')) {
+    return;
+  }
+  
+  // index.html 始终从网络获取，避免缓存旧版路由逻辑
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => caches.match('/index.html'))
+    );
     return;
   }
   

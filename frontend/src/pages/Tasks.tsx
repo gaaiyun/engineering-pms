@@ -1,13 +1,14 @@
 import { useEffect, useState, useMemo } from 'react'
-import { ProgressBar, Tag, Dialog, Form, Input, Toast, Popup, Badge, DatePicker, Checkbox } from 'antd-mobile'
+import { ProgressBar, Tag, Popup, Badge } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { IoTimeOutline, IoCheckmarkCircleOutline, IoBriefcaseOutline, IoAddCircle, IoCloseCircle, IoNotificationsOutline, IoChevronForward } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonCard } from '../components/Skeleton'
 import { motion } from 'framer-motion'
-import { useTasks, useProjects, useNotifications, useUsers, isManager, notifyProjectMembers, type Task, type User } from '../lib/api'
+import { useTasks, useProjects, useNotifications, useUsers, isManager, type Task, type User } from '../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../lib/queryClient'
+import BatchProjectCreator from '../components/BatchProjectCreator'
 
 interface Project {
   id: string
@@ -145,15 +146,9 @@ export default function Tasks() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showAddProject, setShowAddProject] = useState(false)
-  const [form] = Form.useForm()
   const [isPC, setIsPC] = useState(window.innerWidth > 768)
   const [showNotifications, setShowNotifications] = useState(false)
   const [selectedProjectNotif, setSelectedProjectNotif] = useState<Project | null>(null)
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([])
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [showStartPicker, setShowStartPicker] = useState(false)
-  const [showEndPicker, setShowEndPicker] = useState(false)
 
   // react-query hooks — SSE 自动刷新
   const { data: projectsRaw = [], isLoading: loading } = useProjects()
@@ -171,7 +166,7 @@ export default function Tasks() {
   // 获取员工的任务
   const { data: myTasks = [] } = useTasks()
   const isManagerUser = isManager()
-  const { data: allUsers = [] } = useUsers()
+  useUsers()
 
   // 员工待办任务（未完成的）
   const activeTasks = useMemo(() => {
@@ -232,41 +227,6 @@ export default function Tasks() {
     return <Tag style={{ fontSize: 10, borderRadius: 6 }}>{status}</Tag>
   }
 
-  const handleAddProject = async (values: any) => {
-    try {
-      const userId = pb.authStore.model?.id
-      const members = [...new Set([userId, ...selectedMembers].filter(Boolean))]
-      const project = await pb.collection('projects').create({
-        name: values.name,
-        code: values.code || '',
-        status: 'active',
-        progress: 0,
-        manager: userId,
-        members,
-        start_date: startDate || undefined,
-        deadline: endDate || undefined,
-      })
-      // 审计日志
-      await pb.collection('audit_logs').create({
-        project: project.id, action_type: 'create_project',
-        operator: userId,
-        after_data: { name: values.name, members },
-      }).catch(() => {})
-      // 通知项目成员
-      const userName = pb.authStore.model?.name || pb.authStore.model?.username
-      await notifyProjectMembers(project.id, '新项目创建', `${userName} 创建了项目「${values.name}」`, 'project_update', userId).catch(() => {})
-      Toast.show({ icon: 'success', content: '项目创建成功' })
-      setShowAddProject(false)
-      form.resetFields()
-      setSelectedMembers([])
-      setStartDate('')
-      setEndDate('')
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-    } catch (error: any) {
-      Toast.show({ icon: 'fail', content: error.message || '创建失败' })
-    }
-  }
 
   return (
     <div style={{ paddingBottom: 40 }}>
@@ -485,58 +445,14 @@ export default function Tasks() {
         </div>
       )}
 
-      {/* Add Project Dialog */}
-      <Dialog
-        visible={showAddProject}
-        title="新增项目"
-        content={
-          <div>
-            <Form form={form} layout='horizontal' onFinish={handleAddProject} footer={null}>
-              <Form.Item name='name' label='项目名称' rules={[{ required: true, message: '请输入项目名称' }]}>
-                <Input placeholder="如：凤凰山跨海大桥工程" />
-              </Form.Item>
-              <Form.Item name='code' label='项目编号'>
-                <Input placeholder="如：FHS-2026-001 (可选)" />
-              </Form.Item>
-            </Form>
-            <div style={{ padding: '0 12px' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, margin: '8px 0 6px', color: '#1e293b' }}>起止日期</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <div onClick={() => setShowStartPicker(true)} style={{ flex: 1, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: startDate ? '#1e293b' : '#94a3b8', cursor: 'pointer' }}>
-                  {startDate || '开始日期'}
-                </div>
-                <div onClick={() => setShowEndPicker(true)} style={{ flex: 1, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: endDate ? '#1e293b' : '#94a3b8', cursor: 'pointer' }}>
-                  {endDate || '截止日期'}
-                </div>
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, margin: '4px 0 6px', color: '#1e293b' }}>项目成员</div>
-              <div style={{ maxHeight: 180, overflow: 'auto' }}>
-                {allUsers.filter((u: any) => u.id !== pb.authStore.model?.id).map((u: any) => (
-                  <div key={u.id} onClick={() => setSelectedMembers(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
-                    <Checkbox checked={selectedMembers.includes(u.id)} style={{ '--icon-size': '18px' }} />
-                    <span style={{ fontSize: 13, color: '#334155' }}>{u.name || u.username}</span>
-                    {u.role === 'manager' && <Tag color="primary" style={{ fontSize: 10 }}>经理</Tag>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        }
-        actions={[
-          { key: 'cancel', text: '取消', onClick: () => { setShowAddProject(false); setSelectedMembers([]); setStartDate(''); setEndDate('') } },
-          { key: 'confirm', text: '创建项目', bold: true, onClick: () => form.submit() },
-        ]}
-      />
-      <DatePicker
-        visible={showStartPicker}
-        onClose={() => setShowStartPicker(false)}
-        onConfirm={val => { setStartDate(val.toISOString().split('T')[0]); setShowStartPicker(false) }}
-      />
-      <DatePicker
-        visible={showEndPicker}
-        onClose={() => setShowEndPicker(false)}
-        onConfirm={val => { setEndDate(val.toISOString().split('T')[0]); setShowEndPicker(false) }}
+      {/* 批量创建项目弹窗（三列式） */}
+      <BatchProjectCreator 
+        visible={showAddProject} 
+        onClose={() => setShowAddProject(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+          queryClient.invalidateQueries({ queryKey: ['notifications'] })
+        }}
       />
     </div>
   )

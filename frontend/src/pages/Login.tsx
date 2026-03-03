@@ -159,9 +159,9 @@ export default function Login() {
 
       const role = (authData.record?.role || 'employee').toLowerCase()
       if (role === 'admin' || role === 'manager') {
-        navigate('/admin')
+        navigate('/admin', { replace: true })
       } else {
-        navigate('/app')
+        navigate('/app', { replace: true })
       }
     } catch (error: any) {
       const newAttempts = failedAttempts + 1

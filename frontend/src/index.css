@@ -96,7 +96,6 @@ html {
 body {
   margin: 0;
   background-color: #F1F5F9;
-  /* Desktop Desktop background */
   display: flex;
   justify-content: center;
   font-family: var(--font-sans);
@@ -723,33 +722,20 @@ body {
   background: transparent;
 }
 
-/* --- Landscape Mode (Fullscreen) --- */
-.landscape-mode {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  width: 100vw !important;
-  height: 100dvh !important;
-  z-index: 9999 !important;
-  background: var(--page-bg);
-  overflow: auto !important;
-  max-width: none !important;
-  margin: 0 !important;
+/* === Timeline Responsive Layout === */
+.timeline-container {
+  overflow: hidden;
+  background: #f8fafc;
 }
 
-/* 简化横屏模式，不使用旋转 */
-@media (orientation: landscape) {
-  .timeline-container {
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100vw !important;
-    height: 100dvh !important;
-    z-index: 9999;
+/* Landscape optimizations via media query */
+@media (orientation: landscape) and (max-width: 1024px) {
+  .timeline-container .timeline-header {
+    padding: 12px 16px !important;
+  }
+  
+  .timeline-container .timeline-scroll-area {
+    overscroll-behavior: contain;
   }
 }
 

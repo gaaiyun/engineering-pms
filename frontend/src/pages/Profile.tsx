@@ -57,7 +57,9 @@ export default function Profile() {
 
   const handleLogout = () => {
     pb.authStore.clear()
-    navigate('/login')
+    localStorage.removeItem('rememberMe')
+    sessionStorage.removeItem('pocketbase_auth')
+    navigate('/login', { replace: true })
   }
 
   // 保存个人资料

@@ -23,6 +23,7 @@ import {
   IoLogOutOutline, IoChevronForwardOutline, IoCalendarOutline
 } from 'react-icons/io5'
 import AIConsole from './AIConsole'
+import BatchProjectCreator from '../../components/BatchProjectCreator'
 
 interface User {
   id: string
@@ -69,6 +70,13 @@ const AdminDashboard = () => {
   const setActiveKey = (key: TabKey) => {
     setSearchParams({ tab: key }, { replace: true })
   }
+  
+  // 处理无效 tab：如果 URL 中的 tab 无效，重定向到 dashboard
+  useEffect(() => {
+    if (tabFromUrl && !VALID_TABS.includes(tabFromUrl)) {
+      setSearchParams({ tab: 'dashboard' }, { replace: true })
+    }
+  }, [tabFromUrl, setSearchParams])
   const authUser = pb.authStore.model
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -93,7 +101,6 @@ const AdminDashboard = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [userForm] = Form.useForm()
   const [addUserForm] = Form.useForm()
-  const [addProjectForm] = Form.useForm()
   const [addTaskForm] = Form.useForm()
 
   const navigate = useNavigate()
@@ -306,25 +313,6 @@ const AdminDashboard = () => {
     }
   }
 
-  const handleAddProject = async (values: any) => {
-    try {
-      await pb.collection('projects').create({
-        name: values.name,
-        code: values.code || '',
-        status: 'active',
-        progress: 0,
-        manager: pb.authStore.model?.id,
-        members: values.members || [],
-      })
-      Toast.show({ icon: 'success', content: '项目创建成功' })
-      setShowAddProjectModal(false)
-      addProjectForm.resetFields()
-      loadData()
-    } catch (error: any) {
-      console.error('add project failed', error)
-      Toast.show({ icon: 'fail', content: error.message || '创建失败' })
-    }
-  }
 
   // ---- 项目任务管理 ----
 
@@ -416,7 +404,9 @@ const AdminDashboard = () => {
                 style={{ borderColor: '#cbd5e1', color: '#64748b', fontSize: 12 }}
                 onClick={() => {
                   pb.authStore.clear()
-                  navigate('/login')
+                  localStorage.removeItem('rememberMe')
+                  sessionStorage.removeItem('pocketbase_auth')
+                  navigate('/login', { replace: true })
                 }}
               >
                 退出登录
@@ -1254,7 +1244,9 @@ const AdminDashboard = () => {
                 block
                 onClick={() => {
                   pb.authStore.clear()
-                  navigate('/login')
+                  localStorage.removeItem('rememberMe')
+                  sessionStorage.removeItem('pocketbase_auth')
+                  navigate('/login', { replace: true })
                 }}
                 style={{
                   background: '#fef2f2',
@@ -1332,22 +1324,10 @@ const AdminDashboard = () => {
         ]}
       />
 
-      <Dialog
-        visible={showAddProjectModal}
-        title="新增项目"
-        content={
-          <Form form={addProjectForm} layout='horizontal' onFinish={handleAddProject} footer={null}>
-            <Form.Item name='name' label='项目名称' rules={[{ required: true, message: '请输入项目名称' }]}><Input placeholder="如：凤凰山跨海大桥工程" /></Form.Item>
-            <Form.Item name='code' label='项目编号'><Input placeholder="如：FHS-2026-001 (可选)" /></Form.Item>
-            <Form.Item name='members' label='项目成员'>
-              <Selector multiple options={users.map(u => ({ label: u.name || u.username, value: u.id }))} />
-            </Form.Item>
-          </Form>
-        }
-        actions={[
-          { key: 'cancel', text: '取消', onClick: () => setShowAddProjectModal(false) },
-          { key: 'confirm', text: '创建项目', bold: true, onClick: () => addProjectForm.submit() },
-        ]}
+      <BatchProjectCreator 
+        visible={showAddProjectModal} 
+        onClose={() => setShowAddProjectModal(false)}
+        onSuccess={() => loadData()}
       />
 
       {/* Add Task Modal */}

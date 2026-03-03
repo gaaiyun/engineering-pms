@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { IoArrowBackOutline, IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoTrashOutline, IoPeopleOutline, IoReturnUpBackOutline } from 'react-icons/io5'
+import { IoArrowBackOutline, IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoTrashOutline, IoPeopleOutline, IoReturnUpBackOutline, IoDocumentTextOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, isManager } from '../lib/api'
 import { Dialog, Popup, SearchBar, SpinLoading } from 'antd-mobile'
 import dayjs from 'dayjs'
 import BatchProjectCreator from '../components/BatchProjectCreator'
+import { ThreeColumnImport } from '../components/admin/ThreeColumnImport'
 
 type FilterTab = 'all' | 'active' | 'blocked' | 'archived'
 
@@ -26,6 +27,7 @@ export default function MyProjects() {
 
   // 批量创建项目弹窗
   const [showBatchCreator, setShowBatchCreator] = useState(false)
+  const [showExcelImport, setShowExcelImport] = useState(false)
 
   // 计算每个项目是否有长期卡点（blocked 超过 7 天）
   const blockedProjectIds = useMemo(() => {
@@ -88,12 +90,21 @@ export default function MyProjects() {
         </div>
         {/* 新建项目按钮 */}
         {managerUser && (
-          <button onClick={() => setShowBatchCreator(true)} style={{
-            background: 'var(--primary-color)', border: 'none', borderRadius: 8, padding: '8px 16px',
-            fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: 600, marginRight: 8
-          }}>
-            + 新建项目
-          </button>
+          <>
+            <button onClick={() => setShowBatchCreator(true)} style={{
+              background: 'var(--primary-color)', border: 'none', borderRadius: 8, padding: '8px 16px',
+              fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: 600, marginRight: 8
+            }}>
+              + 新建项目
+            </button>
+            <button onClick={() => setShowExcelImport(true)} style={{
+              background: '#16a34a', border: 'none', borderRadius: 8, padding: '8px 16px',
+              fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: 600, marginRight: 8,
+              display: 'flex', alignItems: 'center', gap: 4
+            }}>
+              <IoDocumentTextOutline size={14} /> Excel 导入
+            </button>
+          </>
         )}
         {/* 排序切换 */}
         <button onClick={() => setSortBy(s => s === 'newest' ? 'deadline' : 'newest')} style={{
@@ -236,6 +247,16 @@ export default function MyProjects() {
         onClose={() => setShowBatchCreator(false)}
         onSuccess={() => {
           // 创建成功后可以做额外操作
+        }}
+      />
+
+      {/* Excel 导入弹窗 */}
+      <ThreeColumnImport
+        visible={showExcelImport}
+        onClose={() => setShowExcelImport(false)}
+        onSubmit={async () => {
+          // ThreeColumnImport 内部已处理创建逻辑
+          // 这里只需要关闭弹窗
         }}
       />
     </div>
