@@ -247,7 +247,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                             </List.Item>
                             <List.Item
                                 extra={
-                                    currentTask.expand?.assignees?.map(u => u.name).join(', ') || '未分配'
+                                    currentTask.expand?.assignees?.map(u => u.name || u.username || '未知').join(', ') || '未分配'
                                 }
                             >
                                 负责人
@@ -265,8 +265,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                             <div className="section blocker-section">
                                 <h4 className="section-title">卡点信息</h4>
                                 <div className="blocker-info">
-                                    <p><strong>原因：</strong>{currentTask.blocker.reason_detail}</p>
-                                    <p><strong>预期解决：</strong>{currentTask.blocker.expected_resolve}</p>
+                                    <p><strong>原因：</strong>{currentTask.blocker.reason_detail || '无'}</p>
+                                    <p><strong>预期解决：</strong>{currentTask.blocker.expected_resolve || '未设置'}</p>
                                 </div>
                             </div>
                         )}
@@ -469,7 +469,7 @@ const HandoffForm: React.FC<{
             <Form.Item name="assignees" label="建议负责人">
                 <Selector
                     multiple
-                    options={users.map(u => ({ label: u.name, value: u.id }))}
+                    options={users.map(u => ({ label: u.name || u.username || '未知', value: u.id }))}
                 />
             </Form.Item>
 
@@ -523,7 +523,7 @@ const BlockerForm: React.FC<{
             <Form.Item name="needHelpFrom" label="需要谁协助">
                 <Selector
                     multiple
-                    options={users.map(u => ({ label: u.name, value: u.id }))}
+                    options={users.map(u => ({ label: u.name || u.username || '未知', value: u.id }))}
                 />
             </Form.Item>
 

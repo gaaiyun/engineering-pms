@@ -63,7 +63,7 @@ const TaskDetail = () => {
   }, [id, loadData])
 
   const handleSaveEdit = async () => {
-    if (!isManager || !id) return
+    if (!isManager || !id || !task) return
     try {
       setCompleting(true)
       const before = { stage_name: task.stage_name, completed_steps: task.completed_steps, next_steps: task.next_steps }
@@ -100,7 +100,7 @@ const TaskDetail = () => {
   }
 
   const handleComplete = () => {
-    if (!isManager) return
+    if (!isManager || !task) return
     Dialog.confirm({
       title: '确认完成',
       content: '确认当前节点任务已全部完成？',
@@ -142,7 +142,7 @@ const TaskDetail = () => {
       Toast.show({ content: '请填写卡点原因', icon: 'fail' })
       return
     }
-    if (!id) return
+    if (!id || !task) return
     setSubmittingBlocker(true)
     try {
       await pb.collection('tasks').update(id, {

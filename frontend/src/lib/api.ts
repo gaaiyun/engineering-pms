@@ -496,7 +496,7 @@ export function useRejectHandoff() {
                 action_type: 'reject_handoff',
                 operator: pb.authStore.model?.id,
                 note: reviewNote,
-            })
+            }).catch(() => {})
 
             // 通知提交人
             const reviewer = pb.authStore.model
@@ -909,11 +909,9 @@ export function useDeleteProject() {
                 operator: pb.authStore.model?.id,
                 before_data: { name: project.name, status: project.status },
             }).catch(() => {})
-            // 删除项目下所有任务
+            // 删除项目下所有任务（使用 allSettled 避免部分失败阻断后续删除）
             const tasks = await pb.collection('tasks').getFullList({ filter: `project="${projectId}"`, fields: 'id' })
-            for (const t of tasks) {
-                await pb.collection('tasks').delete(t.id)
-            }
+            await Promise.allSettled(tasks.map(t => pb.collection('tasks').delete(t.id)))
             await pb.collection('projects').delete(projectId)
         },
         onSuccess: () => {
@@ -1113,7 +1111,7 @@ export function useBatchSaveTasks() {
                 action_type: 'batch_edit_tasks',
                 operator: currentUser?.id,
                 after_data: { count: results.length },
-            })
+            }).catch(() => {})
             // 通知项目全员
             await notifyProjectMembers(
                 projectId,
@@ -1121,7 +1119,7 @@ export function useBatchSaveTasks() {
                 `${currentUser?.name || currentUser?.username} 批量编辑了 ${results.length} 个任务`,
                 'task_update',
                 currentUser?.id,
-            )
+            ).catch(() => {})
             return results
         },
         onSuccess: () => {

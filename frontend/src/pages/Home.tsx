@@ -23,7 +23,7 @@ export default function Home() {
 
   const role = pb.authStore.model?.role?.toLowerCase()
   const isManager = role === 'manager' || role === 'admin'
-  const isEmployee = role === 'employee'
+  const isEmployee = !isManager
 
   // 员工端数据
   const { data: myTasks = [] } = useTasks()

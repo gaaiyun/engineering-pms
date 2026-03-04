@@ -1,4 +1,4 @@
-import { Card, Tag } from 'antd-mobile'
+import { Card, Tag, Toast } from 'antd-mobile'
 import { motion } from 'framer-motion'
 import { IoSparkles, IoAnalytics } from 'react-icons/io5'
 import type { AISummary } from '../../lib/api'
@@ -48,7 +48,7 @@ export function AISummaryCard({ summary }: Props) {
     }
 
     // Clean content (remove markdown code blocks if present)
-    const cleanContent = summary.content.replace(/^```markdown\n?/i, '').replace(/^```\n?/i, '').replace(/```$/i, '')
+    const cleanContent = (summary.content ?? '').replace(/^```markdown\n?/i, '').replace(/^```\n?/i, '').replace(/```$/i, '')
 
     return (
         <motion.div
@@ -114,7 +114,7 @@ export function AISummaryCard({ summary }: Props) {
                 <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
-                            onClick={() => alert('请在服务器运行: node scripts/generate-ai-summary.mjs 以获取最新数据')}
+                            onClick={() => Toast.show({ content: '请在服务器运行: node scripts/generate-ai-summary.mjs', duration: 3000 })}
                             style={{
                                 background: 'white', border: '1px solid #e2e8f0', borderRadius: 20,
                                 padding: '4px 12px', fontSize: 11, color: '#64748b',
@@ -124,7 +124,7 @@ export function AISummaryCard({ summary }: Props) {
                             更新数据
                         </button>
                         <button
-                            onClick={() => alert('AI 问答功能开发中... (Connect to DeepSeek API)')}
+                            onClick={() => Toast.show({ content: 'AI 问答功能开发中...', duration: 2000 })}
                             style={{
                                 background: 'white', border: '1px solid #e2e8f0', borderRadius: 20,
                                 padding: '4px 12px', fontSize: 11, color: '#0ea5e9', fontWeight: 600,

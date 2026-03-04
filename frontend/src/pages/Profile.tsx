@@ -76,9 +76,16 @@ export default function Profile() {
 
       // 如果选择了默认头像（URL方式），需要先下载再上传
       if (selectedAvatar && selectedAvatar.startsWith('http')) {
-        const response = await fetch(selectedAvatar)
-        const blob = await response.blob()
-        formData.append('avatar', blob, 'avatar.svg')
+        try {
+          const response = await fetch(selectedAvatar)
+          if (!response.ok) throw new Error('头像下载失败')
+          const blob = await response.blob()
+          formData.append('avatar', blob, 'avatar.svg')
+        } catch {
+          Toast.show({ icon: 'fail', content: '头像下载失败，请选择其他头像或上传自定义头像' })
+          setSaving(false)
+          return
+        }
       }
 
       await pb.collection('users').update(user.id, formData)

@@ -139,8 +139,6 @@ const AIConsole = () => {
 
             // Generate Report
             setDebugInfo('正在调用 AI API...')
-            console.log('Using model:', selectedModel)
-            
             const aiRes = await generateAIReport(data, currentApiKey, selectedModel)
             setDebugInfo('AI 响应成功，正在保存...')
             // 构建报告对象

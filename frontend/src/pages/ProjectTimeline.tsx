@@ -503,7 +503,7 @@ export default function ProjectTimeline() {
                     const top = ROW_PADDING_TOP + (task.visualRow * (TASK_HEIGHT + TASK_GAP))
                     const isBlocked = task.status === 'blocked'
                     const isDone = task.status === 'completed'
-                    const isOverdue = !isDone && dayjs(task.deadline).isBefore(dayjs())
+                    const isOverdue = !isDone && !!task.deadline && dayjs(task.deadline).isBefore(dayjs())
 
                     // Parse blocker reason if available (basic regex from description if blocker field missing in type)
                     let blockerReason = "阻塞中";
@@ -543,7 +543,7 @@ export default function ProjectTimeline() {
                           <div style={{ fontSize: 9, color: '#64748b', display: 'flex', gap: 6, marginTop: 2 }}>
                             {isBlocked && <span style={{ color: '#e11d48', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockerReason.slice(0, 6)}...</span>}
                             {isOverdue && !isBlocked && <span style={{ color: '#c2410c', whiteSpace: 'nowrap' }}>逾期</span>}
-                            {!isBlocked && !isOverdue && <span style={{ whiteSpace: 'nowrap' }}>{dayjs(task.deadline).format('MM/DD')}</span>}
+                            {!isBlocked && !isOverdue && task.deadline && <span style={{ whiteSpace: 'nowrap' }}>{dayjs(task.deadline).format('MM/DD')}</span>}
                           </div>
                         )}
                       </motion.div>

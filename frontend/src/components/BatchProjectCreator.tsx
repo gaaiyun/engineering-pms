@@ -89,21 +89,27 @@ export default function BatchProjectCreator({ visible, onClose, onSuccess }: Pro
 
     const validTasks = taskRows.filter(r => r.stage_name.trim())
 
+    const currentUserId = pb.authStore.model?.id
+    if (!currentUserId) {
+      Toast.show({ icon: 'fail', content: '请先登录' })
+      return
+    }
+
     try {
       // 1. 创建项目
       const project = await createProject.mutateAsync({
         name: projectName,
         description: projectDesc,
         deadline: projectDeadline,
-        manager: pb.authStore.model?.id || '',
-        members: projectMembers.length > 0 ? projectMembers : [pb.authStore.model?.id || '']
+        manager: currentUserId,
+        members: projectMembers.length > 0 ? projectMembers : [currentUserId]
       })
 
       // 2. 批量创建任务（如果有）
       if (validTasks.length > 0) {
         const tasks: BatchTaskItem[] = validTasks.map(r => ({
           stage_name: r.stage_name,
-          assignees: r.assignees.length > 0 ? r.assignees : [pb.authStore.model?.id].filter(Boolean) as string[],
+          assignees: r.assignees.length > 0 ? r.assignees : [currentUserId],
           deadline: r.deadline,
         }))
         await batchSaveTasks.mutateAsync({ projectId: project.id, tasks })

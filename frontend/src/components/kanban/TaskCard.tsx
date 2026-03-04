@@ -49,6 +49,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging })
     const formatDate = (dateStr?: string) => {
         if (!dateStr) return null
         const date = new Date(dateStr)
+        if (isNaN(date.getTime())) return null
         const now = new Date()
         const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -74,11 +75,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging })
                 <span className="task-title">{task.stage_name}</span>
                 {task.priority && (
                     <Tag
-                        color={priorityColors[task.priority]}
+                        color={priorityColors[task.priority] || '#1890ff'}
                         fill="outline"
                         style={{ fontSize: 10, padding: '0 4px' }}
                     >
-                        {priorityLabels[task.priority]}
+                        {priorityLabels[task.priority] || '中'}
                     </Tag>
                 )}
             </div>
