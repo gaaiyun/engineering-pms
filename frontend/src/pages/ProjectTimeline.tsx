@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
-import { isManager, useUsers } from '../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { isManager, useUsers, useProject, useTasks } from '../lib/api'
+import { queryKeys } from '../lib/queryClient'
 import dayjs from 'dayjs'
 import isBetween from 'dayjs/plugin/isBetween'
 import { IoArrowBack, IoAddCircle, IoExpand, IoContract, IoCreateOutline } from 'react-icons/io5'
@@ -68,15 +70,18 @@ const getAvatarUrl = (user: any) => {
       return pb.files.getUrl(user, user.avatar)
     }
     return ''
-  } catch (e) { return '' }
+  } catch { return '' }
 }
 
 export default function ProjectTimeline() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  // Data State
-  const [project, setProject] = useState<Project | null>(null)
+  const queryClient = useQueryClient()
+  const { data: rqProject } = useProject(id || '')
+  const { data: rqTasks = [], isLoading: tasksLoading } = useTasks(id)
+  const project = (rqProject as unknown as Project) || null
+
   const [groups, setGroups] = useState<TimelineGroup[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -124,35 +129,25 @@ export default function ProjectTimeline() {
   }, [])
 
   useEffect(() => {
-    if (id) loadData()
-    // SSE 实时刷新：任务变更时自动重新加载
-    pb.collection('tasks').subscribe('*', (e) => {
-      if (e.record.project === id) loadData()
-    })
-    return () => { pb.collection('tasks').unsubscribe('*') }
-  }, [id])
-
-  const loadData = async () => {
-    if (!id) return
-    try {
+    if (tasksLoading) {
       setLoading(true)
-      const proj = await pb.collection('projects').getOne<Project>(id)
-      setProject(proj)
-
-      const tasks = await pb.collection('tasks').getFullList<Task>({
-        filter: `project = "${id}"`,
-        sort: 'start_date,created',
-        expand: 'assignees'
-      })
-
-      processGroups(tasks)
-    } catch (err) {
-      console.error(err)
-      Toast.show({ content: '加载失败', icon: 'fail' })
-    } finally {
+      return
+    }
+    if (rqTasks.length > 0 || !tasksLoading) {
+      processGroups(rqTasks as unknown as Task[])
       setLoading(false)
     }
-  }
+  }, [rqTasks, tasksLoading])
+
+  useEffect(() => {
+    if (!id) return
+    pb.collection('tasks').subscribe('*', (e) => {
+      if (e.record.project === id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(id) })
+      }
+    })
+    return () => { pb.collection('tasks').unsubscribe('*') }
+  }, [id, queryClient])
 
   // --- Core Layout Logic ---
   const processGroups = (allTasks: Task[]) => {
@@ -594,7 +589,7 @@ export default function ProjectTimeline() {
         <BatchTaskEditor
           projectId={id || ''}
           visible={showBatchEditor}
-          onClose={() => { setShowBatchEditor(false); loadData() }}
+          onClose={() => { setShowBatchEditor(false); if (id) queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(id) }) }}
           projectMembers={project.members || []}
           allUsers={allUsers}
           existingTasks={groups.flatMap(g => g.tasks).map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.expand?.assignees?.map(u => u.id) || [], deadline: t.deadline || '' }))}

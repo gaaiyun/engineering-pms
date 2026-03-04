@@ -1,20 +1,28 @@
 /**
  * 项目看板页面
  */
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { KanbanBoard } from '../components/kanban'
 import { useProject, useTasks, useUsers, isManager } from '../lib/api'
+import { queryKeys } from '../lib/queryClient'
 import BatchTaskEditor from '../components/BatchTaskEditor'
 import { Button, SpinLoading } from 'antd-mobile'
 import { IoListOutline, IoWarningOutline } from 'react-icons/io5'
 
 const ProjectKanban: React.FC = () => {
     const { id } = useParams<{ id: string }>()
+    const queryClient = useQueryClient()
     const { data: project, isLoading: projectLoading, isError: projectError, refetch } = useProject(id || '')
     const { data: tasks = [], isLoading: tasksLoading } = useTasks(id)
     const { data: users = [] } = useUsers()
     const [showBatch, setShowBatch] = useState(false)
+
+    const handleBatchClose = useCallback(() => {
+        setShowBatch(false)
+        if (id) queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(id) })
+    }, [id, queryClient])
 
     const isLoading = projectLoading || tasksLoading
 
@@ -51,7 +59,7 @@ const ProjectKanban: React.FC = () => {
             />
             <BatchTaskEditor
                 visible={showBatch}
-                onClose={() => setShowBatch(false)}
+                onClose={handleBatchClose}
                 projectId={id}
                 projectMembers={project?.members || []}
                 allUsers={users}

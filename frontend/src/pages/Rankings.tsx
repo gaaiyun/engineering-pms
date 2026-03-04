@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { IoStatsChart, IoPerson, IoBusiness, IoRibbonOutline } from 'react-icons/io5'
-import { Dialog, Segmented, Toast } from 'antd-mobile'
-import { pb } from '../lib/pocketbase'
+import { Dialog, Segmented } from 'antd-mobile'
+import { useUsers, useTasks } from '../lib/api'
 import { motion } from 'framer-motion'
+import dayjs from 'dayjs'
 
 interface RankingUser {
   id: string
@@ -15,44 +16,48 @@ interface RankingUser {
   totalScore?: number // For department aggregation
 }
 
+const stableHash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h) }
+
 export default function Rankings() {
   const [tab, setTab] = useState<'individual' | 'dept'>('individual')
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month')
-  const [data, setData] = useState<RankingUser[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadRankings()
-  }, [period])
+  const { data: users = [], isLoading: usersLoading } = useUsers()
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks()
 
-  const loadRankings = async () => {
-    setLoading(true)
-    try {
-      const users = await pb.collection('users').getFullList({
-        sort: '-flower_count'
-      })
+  const loading = usersLoading || tasksLoading
 
-      // 用 id hash 生成稳定的伪随机值，避免每次渲染闪烁
-      const stableHash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h) }
-      const rankingList = users.map(u => ({
-        id: u.id,
-        name: u.name || u.username,
-        dept: u.department || '未分配',
-        score: u.flower_count || 0,
-        taskCount: Math.floor((u.flower_count || 0) * 0.8),
-        rate: 90 + (stableHash(u.id) % 10),
-        change: (stableHash(u.id + 'c') % 5) - 2
-      }))
-        .filter(u => u.score > 0)
+  const data = useMemo(() => {
+    const completedTasks = tasks.filter(t => t.status === 'completed')
+    const now = dayjs()
+    let rangeStart: dayjs.Dayjs
+    if (period === 'month') rangeStart = now.subtract(1, 'month')
+    else if (period === 'quarter') rangeStart = now.subtract(3, 'month')
+    else rangeStart = now.subtract(1, 'year')
 
-      setData(rankingList)
-    } catch (e) {
-      console.error(e)
-      Toast.show({ content: '加载排行榜失败', icon: 'fail' })
-    } finally {
-      setLoading(false)
+    const taskCounts: Record<string, number> = {}
+    for (const t of completedTasks) {
+      const completedDate = (t as any).completed_at || (t as any).updated || (t as any).created
+      if (completedDate && dayjs(completedDate).isAfter(rangeStart)) {
+        for (const uid of (t.assignees as string[] || [])) {
+          taskCounts[uid] = (taskCounts[uid] || 0) + 1
+        }
+      }
     }
-  }
+
+    const u = users as Array<{ id: string; name?: string; username: string; department?: string; flower_count?: number }>
+    return u.map(user => ({
+      id: user.id,
+      name: user.name || user.username,
+      dept: user.department || '未分配',
+      score: user.flower_count || 0,
+      taskCount: taskCounts[user.id] || 0,
+      rate: 90 + (stableHash(user.id) % 10),
+      change: (stableHash(user.id + 'c') % 5) - 2
+    }))
+      .filter(item => item.score > 0 || item.taskCount > 0)
+      .sort((a, b) => b.score - a.score) as RankingUser[]
+  }, [users, tasks, period])
 
   const topOne = data[0]
 

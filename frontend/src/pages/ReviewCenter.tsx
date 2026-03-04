@@ -68,10 +68,20 @@ const ReviewCenter: React.FC = () => {
 
   // SSE 实时订阅审计日志和交接记录
   useEffect(() => {
+    let mounted = true
     const unsubs: (() => void)[] = []
-    pb.collection('audit_logs').subscribe('*', () => { refetchLogs() }).then(() => unsubs.push(() => pb.collection('audit_logs').unsubscribe('*')))
-    pb.collection('handoffs').subscribe('*', () => { refetchHandoffs() }).then(() => unsubs.push(() => pb.collection('handoffs').unsubscribe('*')))
-    return () => { unsubs.forEach(fn => fn()) }
+
+    pb.collection('audit_logs').subscribe('*', () => { if (mounted) refetchLogs() })
+      .then(() => { unsubs.push(() => pb.collection('audit_logs').unsubscribe('*')) })
+    pb.collection('handoffs').subscribe('*', () => { if (mounted) refetchHandoffs() })
+      .then(() => { unsubs.push(() => pb.collection('handoffs').unsubscribe('*')) })
+
+    return () => {
+      mounted = false
+      unsubs.forEach(fn => fn())
+      pb.collection('audit_logs').unsubscribe('*').catch(() => {})
+      pb.collection('handoffs').unsubscribe('*').catch(() => {})
+    }
   }, [refetchLogs, refetchHandoffs])
 
   const displayLogs = useMemo(() => {

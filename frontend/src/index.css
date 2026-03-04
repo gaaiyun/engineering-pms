@@ -737,6 +737,27 @@ body {
   .timeline-container .timeline-scroll-area {
     overscroll-behavior: contain;
   }
+
+  /* Compact headers in landscape */
+  .glass-header {
+    padding: 8px 16px !important;
+  }
+
+  /* Compact cards in landscape */
+  .elevated-card {
+    padding: 12px !important;
+  }
+
+  /* Reduce page vertical padding */
+  .page {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* Popup/drawer height constraints */
+  .adm-popup-body {
+    max-height: 95dvh;
+  }
 }
 
 /* === Desktop Optimizations === */

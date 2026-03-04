@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   Button,
   Input,
@@ -78,7 +78,7 @@ export default function TaskCreate() {
     if (role !== 'admin' && role !== 'manager') {
       navigate('/app', { replace: true })
     }
-  }, [])
+  }, [navigate])
 
   const [searchParams] = useSearchParams()
   const preSelectedProjectId = searchParams.get('projectId')
@@ -115,18 +115,7 @@ export default function TaskCreate() {
   // 预览确认
   const [showPreview, setShowPreview] = useState(false)
 
-  useEffect(() => {
-    loadOptions()
-  }, [])
-
-  // 当选择项目后，加载该项目的现有任务
-  useEffect(() => {
-    if (selectedProject) {
-      loadProjectTasks(selectedProject)
-    }
-  }, [selectedProject])
-
-  const loadOptions = async () => {
+  const loadOptions = useCallback(async () => {
     try {
       const [projRes, userRes] = await Promise.all([
         pb.collection('projects').getFullList<Project>(50, { sort: '-created', filter: 'status != "archived"' }),
@@ -138,10 +127,21 @@ export default function TaskCreate() {
       if (preSelectedProjectId) {
         setSelectedProject(preSelectedProjectId)
       }
-    } catch (e) {
+    } catch {
       Toast.show({ icon: 'fail', content: '加载数据失败' })
     }
-  }
+  }, [preSelectedProjectId])
+
+  useEffect(() => {
+    loadOptions()
+  }, [loadOptions])
+
+  // 当选择项目后，加载该项目的现有任务
+  useEffect(() => {
+    if (selectedProject) {
+      loadProjectTasks(selectedProject)
+    }
+  }, [selectedProject])
 
   const loadProjectTasks = async (projectId: string) => {
     try {

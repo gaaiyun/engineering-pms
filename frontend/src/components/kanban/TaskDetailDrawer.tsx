@@ -26,6 +26,7 @@ import {
     useCreateComment,
     useTaskAuditLogs,
     useUsers,
+    isManagerRole,
     type Task
 } from '../../lib/api'
 import { useHandoffDraftStore, useBlockerDraftStore } from '../../lib/store'
@@ -88,7 +89,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             })
             Toast.show({ content: '任务已开始', icon: 'success' })
             onUpdate?.()
-        } catch (error) {
+        } catch {
             Toast.show({ content: '操作失败', icon: 'fail' })
         }
     }
@@ -118,7 +119,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             Toast.show({ content: '任务已完成，交接已提交', icon: 'success' })
             setShowHandoffForm(false)
             onUpdate?.()
-        } catch (error) {
+        } catch {
             Toast.show({ content: '提交失败', icon: 'fail' })
         }
     }
@@ -148,7 +149,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             Toast.show({ content: '卡点已上报', icon: 'success' })
             setShowBlockerForm(false)
             onUpdate?.()
-        } catch (error) {
+        } catch {
             Toast.show({ content: '提交失败', icon: 'fail' })
         }
     }
@@ -162,7 +163,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             })
             setCommentText('')
             Toast.show({ content: '评论已发送', icon: 'success' })
-        } catch (error) {
+        } catch {
             Toast.show({ content: '发送失败', icon: 'fail' })
         }
     }
@@ -272,9 +273,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
                         <Divider />
 
-                        {/* 操作按钮 */}
+                        {/* 操作按钮 — 经理可操作全部，员工只能上报卡点 */}
                         <div className="action-buttons">
-                            {currentTask.status === 'pending' && (
+                            {currentTask.status === 'pending' && isManagerRole() && (
                                 <Button
                                     color="primary"
                                     block
@@ -287,13 +288,15 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
                             {currentTask.status === 'in_progress' && (
                                 <>
-                                    <Button
-                                        color="success"
-                                        block
-                                        onClick={handleCompleteWithHandoff}
-                                    >
-                                        完成并交接下一步
-                                    </Button>
+                                    {isManagerRole() && (
+                                        <Button
+                                            color="success"
+                                            block
+                                            onClick={handleCompleteWithHandoff}
+                                        >
+                                            完成并交接下一步
+                                        </Button>
+                                    )}
                                     <Button
                                         color="warning"
                                         block
@@ -305,7 +308,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                                 </>
                             )}
 
-                            {currentTask.status === 'blocked' && (
+                            {currentTask.status === 'blocked' && isManagerRole() && (
                                 <Button
                                     color="primary"
                                     block

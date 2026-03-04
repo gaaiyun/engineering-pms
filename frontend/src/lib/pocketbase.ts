@@ -1,21 +1,19 @@
 import PocketBase from 'pocketbase'
 
+// 线上 PocketBase 地址（APK / localhost 均走此地址）
+const PRODUCTION_PB_URL = 'http://127.0.0.1:8090'
+
 // 连接策略（按优先级）：
 // 1) 构建时注入：VITE_PB_URL（适用于 App 打包/多环境）
-// 2) 运行时推导：
-//    - http 站点：当前域名 + :8090（例如 http://your-domain.com -> http://your-domain.com:8090）
-//    - https 站点：默认使用同域 /pb（需要 Nginx 反代到 8090，避免 Mixed Content）
-// 3) 本地兜底：127.0.0.1:8090
-//
-// 说明：
-// - 若你以后开 https，强烈建议在 Nginx 里做 /pb 反代到 8090，避免 Mixed Content
-// - 允许通过 localStorage 临时覆盖（无需重新打包）：localStorage.setItem('pb_url', 'http://x.x.x.x:8090')
+// 2) localStorage 覆盖：pb_url（运行时临时调试）
+// 3) localhost / 127.0.0.1 → 线上地址（Capacitor WebView 和本地开发共用）
+// 4) https 站点 → 同域 /pb（Nginx 反代）
+// 5) http 站点 → 同域名 :8090
 
-function getPocketBaseUrl() {
+function getPocketBaseUrl(): string {
   const envUrl = (import.meta.env.VITE_PB_URL || '').trim()
   if (envUrl) return envUrl
 
-  // 允许运行时覆盖：适合在未设置 VITE_PB_URL 时临时联调/排障
   if (typeof window !== 'undefined') {
     const storedUrl = (window.localStorage.getItem('pb_url') || '').trim()
     if (storedUrl) return storedUrl
@@ -23,15 +21,14 @@ function getPocketBaseUrl() {
     const { protocol, hostname, origin } = window.location
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
 
-    if (isLocalhost) return 'http://127.0.0.1:8090'
+    // Capacitor WebView 以 http://localhost 加载，直接走线上地址
+    if (isLocalhost) return PRODUCTION_PB_URL
 
-    // https 站点默认走同域反代（/pb），避免 Mixed Content
     if (protocol === 'https:') return `${origin}/pb`
 
     return `${protocol}//${hostname}:8090`
   }
 
-  // SSR/测试环境兜底
   return 'http://127.0.0.1:8090'
 }
 
@@ -40,8 +37,6 @@ export const PB_URL = getPocketBaseUrl()
 export const pb = new PocketBase(PB_URL)
 
 // 未勾选"记住登录"时，关闭浏览器后清除 token
-// 原理：登录时如果没勾选记住，会把 auth 同时存到 sessionStorage；
-// 下次打开时 sessionStorage 为空 → 说明是新会话 → 清除 localStorage 中的 auth
 if (typeof window !== 'undefined') {
   const remembered = localStorage.getItem('rememberMe') === '1'
   if (!remembered && !sessionStorage.getItem('pocketbase_auth')) {
@@ -66,7 +61,6 @@ export function subscribeToChanges(invalidate: (keys: string[][]) => void) {
 
   const collections = ['tasks', 'projects', 'handoffs', 'notifications', 'audit_logs', 'comments']
   
-  // 每个集合的变更 → invalidate 对应的 query keys
   const keyMap: Record<string, string[][]> = {
     tasks: [['tasks'], ['projects'], ['notifications'], ['audit_logs']],
     projects: [['projects'], ['notifications']],

@@ -95,7 +95,7 @@ export default function Login() {
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
       await Promise.race([pb.health.check(), timeoutPromise])
       setServerStatus('online')
-    } catch (e) {
+    } catch {
       setServerStatus('offline')
     }
   }

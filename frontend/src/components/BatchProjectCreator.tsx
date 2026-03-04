@@ -76,7 +76,7 @@ export default function BatchProjectCreator({ visible, onClose, onSuccess }: Pro
     setTaskRows(prev => prev.filter((_, i) => i !== index))
   }
 
-  const updateTaskRow = (index: number, field: keyof TaskRow, value: any) => {
+  const updateTaskRow = (index: number, field: keyof TaskRow, value: string | string[]) => {
     setTaskRows(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r))
   }
 
@@ -120,14 +120,15 @@ export default function BatchProjectCreator({ visible, onClose, onSuccess }: Pro
       
       onSuccess?.()
       onClose()
-    } catch (e: any) {
-      Toast.show({ icon: 'fail', content: '创建失败: ' + (e.message || '未知错误') })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      Toast.show({ icon: 'fail', content: '创建失败: ' + errorMessage })
     }
   }
 
   return (
     <Popup visible={visible} onMaskClick={onClose} position="bottom"
-      bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '92vh', display: 'flex', flexDirection: 'column' }}>
+      bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, height: 'min(92vh, 92dvh)', maxHeight: '92dvh', display: 'flex', flexDirection: 'column' }}>
       
       {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

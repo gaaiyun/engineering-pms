@@ -221,14 +221,14 @@ ${JSON.stringify(data, null, 2)}
             }
             
             return JSON.parse(cleanContent);
-        } catch (parseError) {
+        } catch {
             // 如果 JSON 解析失败，尝试从内容中提取 JSON
             console.warn("JSON 解析失败，尝试提取内容:", content);
             const jsonMatch = content?.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 try {
                     return JSON.parse(jsonMatch[0]);
-                } catch (e) {
+                } catch {
                     // 继续回退方案
                 }
             }

@@ -14,6 +14,40 @@ import {
 } from 'react-icons/io5'
 import { pb } from '../lib/pocketbase'
 
+interface SettingRowProps {
+  icon: React.ReactNode
+  color: string
+  label: string
+  value?: string
+  onClick?: () => void
+  rightContent?: React.ReactNode
+}
+
+const SettingRow: React.FC<SettingRowProps> = ({ icon, color, label, value, onClick, rightContent }) => (
+  <div className="profile-row" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ 
+        width: 32, 
+        height: 32, 
+        borderRadius: 8, 
+        background: color, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        color: '#fff' 
+      }}>
+        {icon}
+      </div>
+      <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>{label}</span>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {value && <span style={{ fontSize: 13, color: 'var(--neutral-400)' }}>{value}</span>}
+      {rightContent}
+      {onClick && !rightContent && <IoChevronForward color="#CBD5E1" />}
+    </div>
+  </div>
+)
+
 export default function SettingsPage() {
   const navigate = useNavigate()
   const user = pb.authStore.model
@@ -30,31 +64,6 @@ export default function SettingsPage() {
   useEffect(() => {
     setApiKey(localStorage.getItem('sf_api_key') || '')
   }, [])
-
-  const SettingRow = ({ icon, color, label, value, onClick, rightContent }: any) => (
-    <div className="profile-row" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ 
-          width: 32, 
-          height: 32, 
-          borderRadius: 8, 
-          background: color, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          color: '#fff' 
-        }}>
-          {icon}
-        </div>
-        <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>{label}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {value && <span style={{ fontSize: 13, color: 'var(--neutral-400)' }}>{value}</span>}
-        {rightContent}
-        {onClick && !rightContent && <IoChevronForward color="#CBD5E1" />}
-      </div>
-    </div>
-  )
 
   const handleNotificationToggle = (checked: boolean) => {
     setNotificationEnabled(checked)

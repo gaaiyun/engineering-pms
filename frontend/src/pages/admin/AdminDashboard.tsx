@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading } from 'antd-mobile'
 import { pb } from '../../lib/pocketbase'
+import { useQueryClient } from '@tanstack/react-query'
+import { useUsers, useProjects, useTasks as useAllTasks } from '../../lib/api'
+import { queryKeys } from '../../lib/queryClient'
 import {
   BarChart,
   Bar,
@@ -14,7 +17,6 @@ import {
   Cell,
 } from 'recharts'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-// react-query not needed — AdminDashboard uses local state
 import { motion } from 'framer-motion'
 import { 
   IoSparkles, IoGridOutline, IoPeopleOutline, IoBriefcaseOutline, 
@@ -78,8 +80,6 @@ const AdminDashboard = () => {
     }
   }, [tabFromUrl, setSearchParams])
   const authUser = pb.authStore.model
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
 
   const tabs = [
     { key: 'dashboard', title: '概览', icon: <IoGridOutline /> },
@@ -88,9 +88,19 @@ const AdminDashboard = () => {
     { key: 'ai', title: 'AI', icon: <IoSparkles /> },
     { key: 'profile', title: '我的', icon: <IoPersonOutline /> },
   ]
-  const [users, setUsers] = useState<User[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
+
+  const { data: users = [] as User[], isLoading: usersLoading, error: usersError } = useUsers()
+  const { data: rqProjects = [], isLoading: projectsLoading, error: projectsError } = useProjects()
+  const { data: rqTasks = [], isLoading: tasksLoading, error: tasksError } = useAllTasks()
+
+  const projects = rqProjects as unknown as Project[]
+  const tasks = rqTasks as unknown as Task[]
+  const loading = usersLoading || projectsLoading || tasksLoading
+  const loadError = (usersError || projectsError || tasksError)
+    ? ((usersError || projectsError || tasksError) as any)?.status === 403
+      ? '权限不足，请确认账号角色'
+      : '网络异常，数据加载失败'
+    : null
 
   const [showUserModal, setShowUserModal] = useState(false)
   const [showAddUserModal, setShowAddUserModal] = useState(false)
@@ -104,39 +114,21 @@ const AdminDashboard = () => {
   const [addTaskForm] = Form.useForm()
 
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.users })
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+    queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+  }
 
   useEffect(() => {
     const role = pb.authStore.model?.role?.toLowerCase()
     if (!pb.authStore.isValid || (role !== 'admin' && role !== 'manager')) {
       Toast.show({ icon: 'fail', content: '没有权限访问管理员后台' })
       navigate('/app')
-      return
     }
-    loadData()
-  }, [])
-
-  const loadData = async () => {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const [usersRes, projectsRes, tasksRes] = await Promise.all([
-        pb.collection('users').getFullList<User>(),
-        pb.collection('projects').getFullList<Project>(),
-        pb.collection('tasks').getFullList<Task>({ expand: 'project,assignees,creator' }),
-      ])
-      setUsers(usersRes)
-      setProjects(projectsRes)
-      setTasks(tasksRes)
-    } catch (error: any) {
-      console.error('Failed to load admin data:', error)
-      const msg = error?.status === 403 || error?.status === 401
-        ? '权限不足，请确认账号角色'
-        : '网络异常，数据加载失败'
-      setLoadError(msg)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [navigate])
 
   // ---- KPI & 图表数据 ----
   // 活跃项目（与工作进展、经理工作台口径一致，不含归档）
@@ -272,7 +264,7 @@ const AdminDashboard = () => {
       })
       Toast.show({ icon: 'success', content: '用户已更新' })
       setShowUserModal(false)
-      loadData()
+      refreshAll()
     } catch (error: any) {
       console.error('update user failed', error)
       Toast.show({ icon: 'fail', content: error.message || '更新失败' })
@@ -293,7 +285,7 @@ const AdminDashboard = () => {
       Toast.show({ icon: 'success', content: '新用户已创建' })
       setShowAddUserModal(false)
       addUserForm.resetFields()
-      loadData()
+      refreshAll()
     } catch (error: any) {
       console.error('add user failed', error)
       Toast.show({ icon: 'fail', content: error.message || '创建失败' })
@@ -306,7 +298,7 @@ const AdminDashboard = () => {
     try {
       await pb.collection('projects').update(project.id, { status: newStatus })
       Toast.show({ icon: 'success', content: '项目状态已更新' })
-      loadData()
+      refreshAll()
     } catch (error: any) {
       console.error('update project failed', error)
       Toast.show({ icon: 'fail', content: error.message || '更新失败' })
@@ -346,7 +338,7 @@ const AdminDashboard = () => {
       setShowAddTaskModal(false)
       addTaskForm.resetFields()
       handleSelectProject(selectedProject) // Refresh task list
-      loadData()
+      refreshAll()
     } catch (error: any) {
       console.error('add task failed', error)
       Toast.show({ icon: 'fail', content: error.message || '创建失败' })
@@ -364,7 +356,7 @@ const AdminDashboard = () => {
           await pb.collection('tasks').delete(taskId)
           Toast.show({ icon: 'success', content: '已删除' })
           if (selectedProject) handleSelectProject(selectedProject)
-          loadData()
+          refreshAll()
         } catch (error: any) {
           Toast.show({ icon: 'fail', content: error.message || '删除失败' })
         }
@@ -384,7 +376,7 @@ const AdminDashboard = () => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16, padding: 20 }}>
             <IoWarningOutline style={{ fontSize: 48, color: '#ef4444' }} />
             <span style={{ color: '#334155', fontSize: 16, fontWeight: 600 }}>{loadError}</span>
-            <Button color="primary" size="small" shape="rounded" onClick={loadData}>重试</Button>
+            <Button color="primary" size="small" shape="rounded" onClick={refreshAll}>重试</Button>
           </div>
         ) : (<>
         {activeKey === 'dashboard' && (
@@ -1327,7 +1319,7 @@ const AdminDashboard = () => {
       <BatchProjectCreator 
         visible={showAddProjectModal} 
         onClose={() => setShowAddProjectModal(false)}
-        onSuccess={() => loadData()}
+        onSuccess={() => refreshAll()}
       />
 
       {/* Add Task Modal */}

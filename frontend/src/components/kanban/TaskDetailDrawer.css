@@ -108,6 +108,21 @@
     height: calc(100dvh - 280px);
 }
 
+@media (orientation: landscape) and (max-width: 1024px) {
+    .comments-tab {
+        height: calc(100dvh - 200px);
+    }
+
+    .task-header {
+        padding: 12px 16px;
+    }
+
+    .task-name {
+        font-size: 17px;
+        margin-bottom: 8px;
+    }
+}
+
 .comments-list {
     flex: 1;
     overflow-y: auto;

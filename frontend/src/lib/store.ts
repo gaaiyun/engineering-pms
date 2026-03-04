@@ -112,17 +112,3 @@ export const useBlockerDraftStore = create<BlockerDraftState>()((set) => ({
     clearDraft: () => set({ draft: null }),
 }))
 
-// ========== 实时通知 Store ==========
-interface NotificationState {
-    unreadCount: number
-    setUnreadCount: (count: number) => void
-    incrementUnread: () => void
-    decrementUnread: () => void
-}
-
-export const useNotificationStore = create<NotificationState>()((set) => ({
-    unreadCount: 0,
-    setUnreadCount: (count) => set({ unreadCount: count }),
-    incrementUnread: () => set((state) => ({ unreadCount: state.unreadCount + 1 })),
-    decrementUnread: () => set((state) => ({ unreadCount: Math.max(0, state.unreadCount - 1) })),
-}))

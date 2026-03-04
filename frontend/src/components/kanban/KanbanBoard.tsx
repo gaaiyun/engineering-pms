@@ -130,7 +130,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
         // 如果 overId 是任务 ID，找到它的状态
         const overTask = tasks.find(t => t.id === overId)
         if (overTask) {
-            targetStatus = overTask.status
+            targetStatus = normalizeStatus(overTask.status)
             targetTask = overTask
         }
 
@@ -139,21 +139,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
             return
         }
 
+        const normalizedDragStatus = normalizeStatus(draggedTask.status)
         // 如果状态改变，更新任务
-        if (draggedTask.status !== targetStatus) {
+        if (normalizedDragStatus !== targetStatus) {
             try {
                 await updateTask.mutateAsync({
                     id: activeId,
                     data: { status: targetStatus as Task['status'] },
                 })
                 Toast.show({ content: '状态已更新', icon: 'success' })
-            } catch (error) {
+            } catch {
                 Toast.show({ content: '更新失败', icon: 'fail' })
             }
         }
 
         // 如果在同一列内排序
-        if (targetTask && draggedTask.status === targetStatus) {
+        if (targetTask && normalizedDragStatus === targetStatus) {
             const columnTasks = tasksByStatus[targetStatus]
             const oldIndex = columnTasks.findIndex(t => t.id === activeId)
             const newIndex = columnTasks.findIndex(t => t.id === overId)

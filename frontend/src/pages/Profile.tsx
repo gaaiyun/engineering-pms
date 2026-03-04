@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { Avatar, Input, Toast, Button } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { useNavigate } from 'react-router-dom'
@@ -18,7 +18,7 @@ export default function Profile() {
   
   // 获取真实数据
   const { data: tasks = [] } = useTasks()
-  const { data: projects = [] } = useProjects()
+  useProjects()
   
   // 计算用户统计数据
   const stats = useMemo(() => {
@@ -46,12 +46,16 @@ export default function Profile() {
       taskCount: myTasks,
       completionRate: myTasks > 0 ? Math.round((completedTasks / myTasks) * 100) : 0
     }
-  }, [tasks, projects, user?.id])
+  }, [tasks, user?.id])
 
   // 编辑状态
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(user?.name || '')
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
+
+  useEffect(() => {
+    if (user?.name) setEditName(user.name)
+  }, [user?.name])
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 

@@ -2,7 +2,7 @@
  * 批量任务编辑器 - 三列表格：任务名 | 执行人 | 截止时间
  * 支持动态增删行，一键保存
  */
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Button, Input, Toast, Popup, SearchBar } from 'antd-mobile'
 import { IoAddCircleOutline, IoTrashOutline, IoCheckmarkCircle, IoPersonOutline } from 'react-icons/io5'
 import { useBatchSaveTasks, type BatchTaskItem } from '../lib/api'
@@ -42,6 +42,24 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
     return [{ key: 'new-0', stage_name: '', assignees: [], deadline: '' }]
   })
 
+  const prevVisibleRef = React.useRef(visible)
+  useEffect(() => {
+    const wasHidden = !prevVisibleRef.current
+    prevVisibleRef.current = visible
+    if (!visible || !wasHidden) return
+    if (existingTasks.length > 0) {
+      setRows(existingTasks.map((t, i) => ({
+        key: `existing-${i}`,
+        id: t.id,
+        stage_name: t.stage_name,
+        assignees: t.assignees || [],
+        deadline: t.deadline ? dayjs(t.deadline).format('YYYY-MM-DD') : '',
+      })))
+    } else {
+      setRows([{ key: 'new-0', stage_name: '', assignees: [], deadline: '' }])
+    }
+  }, [visible, existingTasks])
+
   const [pickerRow, setPickerRow] = useState<number | null>(null)
   const [searchText, setSearchText] = useState('')
 
@@ -66,7 +84,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
     setRows(prev => prev.filter((_, i) => i !== index))
   }
 
-  const updateRow = (index: number, field: keyof RowData, value: any) => {
+  const updateRow = (index: number, field: keyof RowData, value: string | string[]) => {
     setRows(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r))
   }
 
@@ -98,7 +116,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
 
   return (
     <Popup visible={visible} onMaskClick={onClose} position="bottom"
-      bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '90vh', display: 'flex', flexDirection: 'column' }}>
+      bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, height: 'min(90vh, 90dvh)', maxHeight: '90dvh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>

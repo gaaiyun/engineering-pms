@@ -101,7 +101,9 @@ const AIConsole = () => {
         if (savedHistory) {
             try {
                 setChatHistory(JSON.parse(savedHistory));
-            } catch (e) { }
+            } catch {
+                // Ignore parse errors - start with empty history
+            }
         }
     }, [])
 

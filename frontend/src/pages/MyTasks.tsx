@@ -1,53 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Toast, Tabs, Button, Tag } from 'antd-mobile'
 import { IoArrowBackOutline, IoTimeOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
 import dayjs from 'dayjs'
 import { SkeletonList } from '../components/Skeleton'
-
-interface TaskRecord {
-  id: string
-  stage_name: string
-  status: 'pending' | 'in_progress' | 'processing' | 'completed' | 'overdue' | 'blocked'
-  deadline?: string
-  expand?: {
-    project?: { name: string }
-  }
-}
+import { useMyTasks, useProjects } from '../lib/api'
+import type { Task } from '../lib/api'
 
 export default function MyTasks() {
   const navigate = useNavigate()
-  const [tasks, setTasks] = useState<TaskRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const userId = pb.authStore.model?.id ?? ''
+  const { data: tasks = [], isLoading: tasksLoading, error: tasksError } = useMyTasks(userId)
+  const { isLoading: projectsLoading, error: projectsError } = useProjects()
+
+  const loading = tasksLoading || projectsLoading
+  const error = tasksError || projectsError
 
   useEffect(() => {
-    load()
-  }, [])
-
-  const load = async () => {
-    try {
-      const userId = pb.authStore.model?.id
-      if (!userId) return
-      const list = await pb
-        .collection('tasks')
-        .getFullList<TaskRecord>({ filter: `assignees.id ?= "${userId}"`, expand: 'project', sort: '-created' })
-      setTasks(list)
-    } catch (e) {
-      console.error(e)
+    if (error) {
       Toast.show({ icon: 'fail', content: '加载任务失败' })
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [error])
 
   // Group Tasks
   const todoTasks = tasks.filter(t => t.status === 'pending')
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'processing' || t.status === 'blocked')
+  const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || (t.status as string) === 'processing' || t.status === 'blocked')
   const overdueTasks = tasks.filter(t => t.status === 'overdue')
   const doneTasks = tasks.filter(t => t.status === 'completed')
 
-  const TaskCard = ({ task }: { task: TaskRecord }) => {
+  const TaskCard = ({ task }: { task: Task }) => {
     const isOverdue = task.status === 'overdue'
 
     return (
@@ -60,7 +42,7 @@ export default function MyTasks() {
           <Tag fill='outline' style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-500)', fontWeight: 600 }}>
             {task.expand?.project?.name || '未知项目'}
           </Tag>
-          {(task.status === 'in_progress' || task.status === 'processing') && <Tag color='primary'>进行中</Tag>}
+          {(task.status === 'in_progress' || (task.status as string) === 'processing') && <Tag color='primary'>进行中</Tag>}
           {task.status === 'pending' && <Tag color='default'>待办</Tag>}
           {task.status === 'overdue' && <Tag color='danger'>已逾期</Tag>}
           {task.status === 'completed' && <Tag color='success'>已完成</Tag>}

@@ -96,11 +96,15 @@ export interface AuditLog extends RecordModel {
     task?: string
     action_type: string
     operator: string
-    before_data?: Record<string, any>
-    after_data?: Record<string, any>
+    before_data?: Record<string, unknown>
+    after_data?: Record<string, unknown>
     note?: string
+    review_status?: 'unread' | 'read' | 'approved'
+    reviewed_by?: string
     expand?: {
         operator?: User
+        project?: Project
+        task?: Task
     }
 }
 
@@ -208,7 +212,7 @@ export function useProject(id: string) {
 export function useTasks(projectId?: string) {
     return useQuery({
         queryKey: projectId ? queryKeys.projectTasks(projectId) : queryKeys.tasks,
-        enabled: pb.authStore.isValid,
+        enabled: pb.authStore.isValid && (projectId === undefined || !!projectId),
         queryFn: async () => {
             const userId = pb.authStore.model?.id
             const role = pb.authStore.model?.role
@@ -319,6 +323,7 @@ export function useUpdateTaskSequence() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+            queryClient.invalidateQueries({ queryKey: queryKeys.projects })
         },
     })
 }
@@ -1203,7 +1208,10 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
                 parts.push(`review_status="${filters.review_status}"`)
               }
             }
-            if (filters?.search) parts.push(`(note ~ "${filters.search}" || action_type ~ "${filters.search}")`)
+            if (filters?.search) {
+              const escaped = filters.search.replace(/"/g, '\\"')
+              parts.push(`(note ~ "${escaped}" || action_type ~ "${escaped}")`)
+            }
             const filter = parts.length > 0 ? parts.join(' && ') : ''
             return await pb.collection('audit_logs').getFullList({
                 filter,

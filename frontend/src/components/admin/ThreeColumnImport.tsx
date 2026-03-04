@@ -2,15 +2,66 @@
  * 三列文本框快速导入组件
  * 支持从 Excel 直接粘贴任务列表
  */
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Dialog, Form, Input, TextArea, Toast, Tag } from 'antd-mobile'
 import { useUsers } from '../../lib/api'
 import { parseThreeColumnTasks, formatDate, type ParseResult } from '../../lib/task-parser'
 
+interface TaskData {
+  stage_name: string
+  assignees: string[]
+  deadline: string
+  priority: string
+  sequence: number
+}
+
+interface ProjectImportData {
+  projectName: string
+  projectCode: string
+  manager: string
+  startDate: string
+  deadline: string
+  tasks: TaskData[]
+  members: string[]
+}
+
+interface FormValues {
+  projectName: string
+  projectCode: string
+  manager: string
+  startDate: string
+  deadline: string
+}
+
+interface ManagerSelectProps {
+  value?: string
+  onChange?: (val: string) => void
+  users: Array<{ id: string; name?: string; username: string }>
+}
+
+const ManagerSelect: React.FC<ManagerSelectProps> = ({ value, onChange, users }) => (
+  <select
+    value={value || ''}
+    onChange={e => onChange?.(e.target.value)}
+    style={{
+      width: '100%',
+      padding: '8px 12px',
+      borderRadius: 8,
+      border: '1px solid #E2E8F0',
+      fontSize: 14,
+    }}
+  >
+    <option value="">请选择</option>
+    {users.map(u => (
+      <option key={u.id} value={u.id}>{u.name || u.username}</option>
+    ))}
+  </select>
+)
+
 interface ThreeColumnImportProps {
   visible: boolean
   onClose: () => void
-  onSubmit: (data: any) => Promise<void>
+  onSubmit: (data: ProjectImportData) => Promise<void>
 }
 
 export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({ 
@@ -39,7 +90,7 @@ export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({
     setParseResult(result)
   }, [tasksText, users, form])
   
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: FormValues) => {
     if (!parseResult || parseResult.validTasks === 0) {
       Toast.show({ icon: 'fail', content: '请输入有效的任务列表' })
       return
@@ -79,8 +130,9 @@ export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({
       onClose()
       form.resetFields()
       setTasksText('')
-    } catch (error: any) {
-      Toast.show({ icon: 'fail', content: error.message || '创建失败' })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '创建失败'
+      Toast.show({ icon: 'fail', content: errorMessage })
     } finally {
       setSubmitting(false)
     }
@@ -115,21 +167,9 @@ export const ThreeColumnImport: React.FC<ThreeColumnImportProps> = ({
               name="manager" 
               label="项目经理"
               rules={[{ required: true, message: '请选择项目经理' }]}
+              trigger="onChange"
             >
-              <select style={{ 
-                width: '100%', 
-                padding: '8px 12px', 
-                borderRadius: 8,
-                border: '1px solid #E2E8F0',
-                fontSize: 14
-              }}>
-                <option value="">请选择</option>
-                {users
-                  .filter(u => u.role === 'admin' || u.role === 'manager')
-                  .map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-              </select>
+              <ManagerSelect users={users.filter(u => u.role === 'admin' || u.role === 'manager')} />
             </Form.Item>
             
             <div style={{ display: 'flex', gap: 12 }}>

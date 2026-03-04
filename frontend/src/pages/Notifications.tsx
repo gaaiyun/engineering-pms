@@ -9,8 +9,11 @@ import {
   IoTrashOutline
 } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Toast, Dialog, Tabs } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
+import { useNotifications as useNotificationsQuery } from '../lib/api'
+import { queryKeys } from '../lib/queryClient'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // 使用与 api.ts 一致的接口定义
@@ -28,41 +31,23 @@ interface Notification {
 
 export default function Notifications() {
   const navigate = useNavigate()
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const userId = pb.authStore.model?.id || ''
+  const { data: rqNotifications = [], isLoading: loading } = useNotificationsQuery(userId)
+  const notifications = rqNotifications as unknown as Notification[]
   const [activeTab, setActiveTab] = useState('all')
 
   useEffect(() => {
-    loadNotifications()
-    
-    // 监听 PocketBase SSE 实现实时刷新
-    const userId = pb.authStore.model?.id
+    if (!userId) return
     let subscribed = false
-    if (userId) {
-      subscribed = true
-      pb.collection('notifications').subscribe('*', (e) => {
-        if (e.record.user === userId) loadNotifications()
-      })
-    }
+    subscribed = true
+    pb.collection('notifications').subscribe('*', (e) => {
+      if (e.record.user === userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
+      }
+    })
     return () => { if (subscribed) pb.collection('notifications').unsubscribe('*') }
-  }, [])
-
-  const loadNotifications = async () => {
-    setLoading(true)
-    try {
-      const userId = pb.authStore.model?.id
-      if (!userId) return
-      const list = await pb.collection('notifications').getList<Notification>(1, 100, {
-        filter: `user = "${userId}"`,
-        sort: '-created',
-      })
-      setNotifications(list.items)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [userId, queryClient])
 
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications
@@ -82,7 +67,7 @@ export default function Notifications() {
     if (notif.is_read) return
     try {
       await pb.collection('notifications').update(notif.id, { is_read: true })
-      setNotifications(prev => prev.map(n => (n.id === notif.id ? { ...n, is_read: true } : n)))
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
     } catch (e) {
       console.error(e)
     }
@@ -99,7 +84,7 @@ export default function Notifications() {
       await Promise.all(unread.map(n => 
         pb.collection('notifications').update(n.id, { is_read: true })
       ))
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
       Toast.show({ content: `已全部标为已读`, icon: 'success' })
     } catch (e) {
       console.error(e)
@@ -117,9 +102,9 @@ export default function Notifications() {
     if (result) {
       try {
         await pb.collection('notifications').delete(notif.id)
-        setNotifications(prev => prev.filter(n => n.id !== notif.id))
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
         Toast.show({ content: '已删除', icon: 'success' })
-      } catch (e) {
+      } catch {
         Toast.show({ content: '删除失败', icon: 'fail' })
       }
     }

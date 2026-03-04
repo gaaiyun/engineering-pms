@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button, Toast, Dialog, Avatar, TextArea, Input, SpinLoading } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
@@ -33,16 +33,7 @@ const TaskDetail = () => {
   const currentUser = pb.authStore.model
   const isManager = currentUser?.role === 'admin' || currentUser?.role === 'manager'
 
-  useEffect(() => {
-    loadData()
-    // SSE 实时刷新：当前任务变更时自动重新加载
-    if (id) {
-      pb.collection('tasks').subscribe(id, () => loadData())
-    }
-    return () => { if (id) pb.collection('tasks').unsubscribe(id) }
-  }, [id])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return
     try {
       const taskData = await pb.collection('tasks').getOne(id, {
@@ -55,12 +46,21 @@ const TaskDetail = () => {
         completed_steps: taskData.completed_steps || '',
         next_steps: taskData.next_steps || ''
       })
-    } catch (e) {
+    } catch {
       Toast.show({ content: '加载失败', icon: 'fail' })
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    loadData()
+    // SSE 实时刷新：当前任务变更时自动重新加载
+    if (id) {
+      pb.collection('tasks').subscribe(id, () => loadData())
+    }
+    return () => { if (id) pb.collection('tasks').unsubscribe(id) }
+  }, [id, loadData])
 
   const handleSaveEdit = async () => {
     if (!isManager || !id) return
@@ -92,7 +92,7 @@ const TaskDetail = () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
-    } catch (e) {
+    } catch {
       Toast.show({ content: '保存失败', icon: 'fail' })
     } finally {
       setCompleting(false)
