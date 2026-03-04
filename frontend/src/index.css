@@ -89,8 +89,7 @@
 
 /* --- Global Reset & Base --- */
 html {
-  /* Enable edge-to-edge mode for Android gesture navigation */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  box-sizing: border-box;
 }
 
 body {
@@ -757,6 +756,75 @@ body {
   /* Popup/drawer height constraints */
   .adm-popup-body {
     max-height: 95dvh;
+  }
+}
+
+/* === Phone Landscape Mode (height < 500px) === */
+@media (orientation: landscape) and (max-height: 500px) {
+  #root {
+    max-width: 100% !important;
+  }
+
+  body {
+    padding-left: env(safe-area-inset-left) !important;
+    padding-right: env(safe-area-inset-right) !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .glass-header {
+    padding: 4px 16px !important;
+    min-height: auto !important;
+  }
+
+  .page {
+    padding: 4px 16px !important;
+    padding-bottom: 8px !important;
+    min-height: auto !important;
+  }
+
+  /* Ant Design Mobile chrome compaction */
+  .adm-nav-bar {
+    --height: 36px !important;
+    min-height: 36px !important;
+  }
+
+  .adm-tabs .adm-tabs-header {
+    padding: 0 !important;
+  }
+
+  .adm-tabs .adm-tabs-tab {
+    padding: 8px 0 !important;
+    font-size: 13px !important;
+  }
+
+  .adm-search-bar {
+    --height: 30px !important;
+  }
+
+  .adm-tab-bar {
+    padding-bottom: 0 !important;
+  }
+
+  .adm-tab-bar-item {
+    padding: 2px 0 !important;
+  }
+
+  .adm-tab-bar-item-icon {
+    font-size: 18px !important;
+  }
+
+  .adm-tab-bar-item-title {
+    font-size: 10px !important;
+  }
+
+  .adm-popup-body {
+    max-height: 90dvh !important;
+  }
+
+  .adm-dialog-body {
+    max-height: 80dvh !important;
+    overflow-y: auto !important;
   }
 }
 
