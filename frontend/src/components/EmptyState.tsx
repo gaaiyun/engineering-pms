@@ -103,14 +103,6 @@ export const EmptyProjects: React.FC<{ onAction?: () => void }> = ({ onAction })
     />
 )
 
-export const EmptyRankings: React.FC = () => (
-    <EmptyState
-        icon=""
-        title="暂无排名数据"
-        description="完成任务后，这里将显示排行榜信息"
-    />
-)
-
 export const EmptyNotifications: React.FC = () => (
     <EmptyState
         icon="--"

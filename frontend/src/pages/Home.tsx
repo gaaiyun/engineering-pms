@@ -8,7 +8,6 @@ import { useState, useEffect, useRef } from 'react'
 import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import Tasks from './Tasks'
-// import Rankings from './Rankings' // 暂时隐藏，待领导确认需求
 import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'

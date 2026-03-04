@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { EmptyState, EmptyTasks, EmptyProjects, EmptyRankings, EmptyNotifications } from './EmptyState'
+import { EmptyState, EmptyTasks, EmptyProjects, EmptyNotifications } from './EmptyState'
 
 describe('EmptyState', () => {
   it('应渲染标题', () => {
@@ -41,11 +41,6 @@ describe('EmptyState 预设组件', () => {
   it('EmptyProjects 渲染正确文案', () => {
     render(<EmptyProjects />)
     expect(screen.getByText('暂无项目')).toBeInTheDocument()
-  })
-
-  it('EmptyRankings 渲染正确文案', () => {
-    render(<EmptyRankings />)
-    expect(screen.getByText('暂无排名数据')).toBeInTheDocument()
   })
 
   it('EmptyNotifications 渲染正确文案', () => {

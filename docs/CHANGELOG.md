@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 ## 2026-03-03 — Lint 修复与代码质量 (v2.2.0)
 
@@ -56,7 +56,6 @@
 ### P1 体验级（12 项）
 
 - `ProjectKanban`/`MyProjects`: 加 loading/error UI + 重试
-- `Rankings`: `Math.random` 每次渲染闪烁 → 用 id hash 生成稳定值
 - `ReviewCenter`: reject 按钮加 `disabled={isPending}`
 - `Home`: 滑动逻辑硬编码跳过 manager tab → 基于 tabs 数组动态计算
 - `Notifications`: `unsubscribe('*')` 取消所有订阅 → 仅在已订阅时 cleanup
@@ -135,3 +134,4 @@
 - 经理全流程：创建项目 → 创建任务 → 看板拖拽 → 通知/审批记录
 - 项目分类 Tab 切换与排序
 - 时间轴移动端视口横屏
+
