@@ -79,7 +79,7 @@ export default function ProjectTimeline() {
 
   const queryClient = useQueryClient()
   const { data: rqProject } = useProject(id || '')
-  const { data: rqTasks = [], isLoading: tasksLoading } = useTasks(id)
+  const { data: rqTasks = [], isLoading: tasksLoading } = useTasks(id || '')
   const project = (rqProject as unknown as Project) || null
 
   const [groups, setGroups] = useState<TimelineGroup[]>([])

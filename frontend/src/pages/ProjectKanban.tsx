@@ -15,7 +15,7 @@ const ProjectKanban: React.FC = () => {
     const { id } = useParams<{ id: string }>()
     const queryClient = useQueryClient()
     const { data: project, isLoading: projectLoading, isError: projectError, refetch } = useProject(id || '')
-    const { data: tasks = [], isLoading: tasksLoading } = useTasks(id)
+    const { data: tasks = [], isLoading: tasksLoading } = useTasks(id || '')
     const { data: users = [] } = useUsers()
     const [showBatch, setShowBatch] = useState(false)
 

@@ -1203,7 +1203,7 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
             if (filters?.action_type) parts.push(`action_type="${filters.action_type}"`)
             if (filters?.review_status) {
               if (filters.review_status === 'unread') {
-                parts.push(`(review_status="unread" || review_status="")`)
+                parts.push(`(review_status="" || review_status="unread" || review_status=null)`)
               } else {
                 parts.push(`review_status="${filters.review_status}"`)
               }

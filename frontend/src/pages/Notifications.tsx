@@ -52,10 +52,10 @@ export default function Notifications() {
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications
     if (activeTab === 'unread') return notifications.filter(n => !n.is_read)
-    if (activeTab === 'task') return notifications.filter(n => n.type.startsWith('task') || n.type === 'step_updated' || n.type === 'overdue')
-    if (activeTab === 'handoff') return notifications.filter(n => n.type.startsWith('handoff'))
-    if (activeTab === 'blocker') return notifications.filter(n => n.type.startsWith('blocker') || n.type === 'escalation')
-    if (activeTab === 'project') return notifications.filter(n => n.type.startsWith('project'))
+    if (activeTab === 'task') return notifications.filter(n => n.type?.startsWith('task') || n.type === 'step_updated' || n.type === 'overdue')
+    if (activeTab === 'handoff') return notifications.filter(n => n.type?.startsWith('handoff'))
+    if (activeTab === 'blocker') return notifications.filter(n => n.type?.startsWith('blocker') || n.type === 'escalation')
+    if (activeTab === 'project') return notifications.filter(n => n.type?.startsWith('project'))
     return notifications.filter(n => n.type === activeTab)
   }, [notifications, activeTab])
 
