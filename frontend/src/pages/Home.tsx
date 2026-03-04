@@ -5,13 +5,13 @@ import {
   SetOutline,
 } from 'antd-mobile-icons'
 import { useState, useEffect, useRef } from 'react'
-import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline } from 'react-icons/io5'
+import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline, IoChevronForwardOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import Tasks from './Tasks'
 import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useUnreadNotificationCount, useTasks, useNotifications } from '../lib/api'
+import { useUnreadNotificationCount, useTasks, useNotifications, useProjects } from '../lib/api'
 import dayjs from 'dayjs'
 
 export default function Home() {
@@ -28,6 +28,7 @@ export default function Home() {
   // 员工端数据
   const { data: myTasks = [] } = useTasks()
   const { data: notifications = [] } = useNotifications(userId)
+  const { data: myProjects = [] } = useProjects()
 
   // 员工的当前任务（进行中和待办）
   const currentTasks = myTasks.filter(t => t.status === 'in_progress' || t.status === 'pending').slice(0, 5)
@@ -40,6 +41,11 @@ export default function Home() {
       title: '工作进展',
       icon: <UnorderedListOutline />,
     },
+    ...(isEmployee ? [{
+      key: 'timeline',
+      title: '时间轴',
+      icon: <IoTimeOutline />,
+    }] : []),
     ...(isManager ? [{
       key: 'manager',
       title: '管理',
@@ -310,6 +316,86 @@ export default function Home() {
                   // 经理/管理员显示原有的 Tasks 组件
                   <Tasks />
                 )
+              )}
+              {activeKey === 'timeline' && (
+                <div style={{ paddingTop: 20, paddingBottom: 40 }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: '#0f172a' }}>项目时间轴</h2>
+                  <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>点击项目查看甘特图</p>
+
+                  {myProjects.filter(p => p.status === 'active').length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {myProjects.filter(p => p.status === 'active').map((project, index) => {
+                        const pTasks = myTasks.filter(t => t.project === project.id)
+                        const completed = pTasks.filter(t => t.status === 'completed').length
+                        const progress = pTasks.length > 0 ? Math.round((completed / pTasks.length) * 100) : 0
+                        return (
+                          <div
+                            key={project.id}
+                            onClick={() => navigate(`/project/${project.id}/timeline`)}
+                            style={{
+                              background: '#fff', borderRadius: 16, padding: 20, cursor: 'pointer',
+                              border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                              <div style={{
+                                width: 40, height: 40, borderRadius: 10,
+                                background: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'][index % 4],
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: 'white', fontWeight: 700, fontSize: 14
+                              }}>
+                                {project.name?.charAt(0) || 'P'}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {project.name}
+                                </div>
+                                <div style={{ fontSize: 12, color: '#94a3b8' }}>{project.code || '暂无编号'}</div>
+                              </div>
+                              <IoChevronForwardOutline size={18} color="#94a3b8" />
+                            </div>
+
+                            <div style={{ background: '#f1f5f9', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: 8 }}>
+                              <div style={{ height: '100%', borderRadius: 4, width: `${progress}%`, background: progress === 100 ? '#10b981' : '#3b82f6', transition: 'width 0.3s' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b' }}>
+                              <span>进度 {progress}%</span>
+                              <span>{completed}/{pTasks.length} 已完成</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8', fontSize: 14 }}>
+                      暂无参与中的项目
+                    </div>
+                  )}
+
+                  {myProjects.filter(p => p.status === 'completed').length > 0 && (
+                    <div style={{ marginTop: 32 }}>
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: '#64748b', marginBottom: 12 }}>已完成的项目</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {myProjects.filter(p => p.status === 'completed').map(project => (
+                          <div
+                            key={project.id}
+                            onClick={() => navigate(`/project/${project.id}/timeline`)}
+                            style={{
+                              background: '#f8fafc', borderRadius: 12, padding: 16, cursor: 'pointer',
+                              border: '1px solid #e2e8f0', opacity: 0.8
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ fontWeight: 600, color: '#475569', fontSize: 14 }}>{project.name}</div>
+                              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, background: '#ecfdf5', padding: '2px 8px', borderRadius: 4 }}>已完成</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               {activeKey === 'me' && <Profile />}
             </motion.div>

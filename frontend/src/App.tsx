@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import DataImportCenter from './pages/admin/DataImportCenter'
 import TaskCreate from './pages/TaskCreate'
 import TaskDetail from './pages/TaskDetail'
 import ProjectTimeline from './pages/ProjectTimeline'
@@ -79,6 +80,16 @@ function App() {
           element={
             <AdminRoute>
               <AdminDashboard />
+            </AdminRoute>
+          }
+        />
+
+        {/* 数据导入中心 */}
+        <Route
+          path="/admin/import"
+          element={
+            <AdminRoute>
+              <DataImportCenter />
             </AdminRoute>
           }
         />

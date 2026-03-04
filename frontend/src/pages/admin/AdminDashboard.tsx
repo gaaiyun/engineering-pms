@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading } from 'antd-mobile'
 import { pb } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
-import { useUsers, useProjects, useTasks as useAllTasks } from '../../lib/api'
+import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount } from '../../lib/api'
 import { queryKeys } from '../../lib/queryClient'
 import {
   BarChart,
@@ -22,7 +22,7 @@ import {
   IoSparkles, IoGridOutline, IoPeopleOutline, IoBriefcaseOutline, 
   IoCheckmarkCircleOutline, IoFolderOutline, IoAddCircleOutline, IoWarningOutline,
   IoTimeOutline, IoPersonOutline, IoSettingsOutline, IoNotificationsOutline,
-  IoLogOutOutline, IoChevronForwardOutline, IoCalendarOutline
+  IoLogOutOutline, IoChevronForwardOutline, IoCalendarOutline, IoCloudUploadOutline
 } from 'react-icons/io5'
 import AIConsole from './AIConsole'
 import BatchProjectCreator from '../../components/BatchProjectCreator'
@@ -92,6 +92,7 @@ const AdminDashboard = () => {
   const { data: users = [] as User[], isLoading: usersLoading, error: usersError } = useUsers()
   const { data: rqProjects = [], isLoading: projectsLoading, error: projectsError } = useProjects()
   const { data: rqTasks = [], isLoading: tasksLoading, error: tasksError } = useAllTasks()
+  const { data: unreadAuditCount = 0 } = useUnreadAuditCount()
 
   const projects = rqProjects as unknown as Project[]
   const tasks = rqTasks as unknown as Task[]
@@ -1200,9 +1201,9 @@ const AdminDashboard = () => {
                   <span style={{ fontWeight: 600, color: '#1e293b' }}>审核中心</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {pendingApprovals.length > 0 && (
+                  {unreadAuditCount > 0 && (
                     <span style={{ background: '#ef4444', color: 'white', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
-                      {pendingApprovals.length}
+                      {unreadAuditCount}
                     </span>
                   )}
                   <IoChevronForwardOutline size={18} color="#94a3b8" />
@@ -1221,6 +1222,22 @@ const AdminDashboard = () => {
                     <IoSettingsOutline size={20} color="#64748b" />
                   </div>
                   <span style={{ fontWeight: 600, color: '#1e293b' }}>系统设置</span>
+                </div>
+                <IoChevronForwardOutline size={18} color="#94a3b8" />
+              </div>
+
+              <div
+                onClick={() => navigate('/admin/import')}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, cursor: 'pointer', borderRadius: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IoCloudUploadOutline size={20} color="#3b82f6" />
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>数据导入</span>
                 </div>
                 <IoChevronForwardOutline size={18} color="#94a3b8" />
               </div>

@@ -1221,6 +1221,21 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
     })
 }
 
+// ========== 未复核审计日志计数 (独立于 tab) ==========
+export function useUnreadAuditCount() {
+    return useQuery({
+        queryKey: ['audit_logs', 'unread_count'],
+        enabled: pb.authStore.isValid,
+        queryFn: async () => {
+            const result = await pb.collection('audit_logs').getList(1, 1, {
+                filter: 'review_status != "read" && review_status != "approved"',
+            })
+            return result.totalItems
+        },
+        staleTime: 10 * 1000,
+    })
+}
+
 // ========== 更新审计日志复核状态 ==========
 export function useUpdateAuditLogStatus() {
     const queryClient = useQueryClient()
@@ -1234,6 +1249,7 @@ export function useUpdateAuditLogStatus() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs', 'unread_count'] })
         },
     })
 }

@@ -511,7 +511,9 @@ async function setupCollections() {
         { name: 'note', type: 'text' },
         { name: 'review_status', type: 'select', options: { maxSelect: 1, values: ['unread', 'read', 'approved'] } },
         { name: 'reviewed_by', type: 'relation', options: { collectionId: '_pb_users_auth_', maxSelect: 1 } },
-    ]);
+    ], {
+        updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
+    });
     
     // AI Summaries 集合
     await ensureCollection('ai_summaries', [

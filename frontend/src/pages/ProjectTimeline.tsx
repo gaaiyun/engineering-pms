@@ -6,7 +6,7 @@ import { isManager, useUsers, useProject, useTasks } from '../lib/api'
 import { queryKeys } from '../lib/queryClient'
 import dayjs from 'dayjs'
 import isBetween from 'dayjs/plugin/isBetween'
-import { IoArrowBack, IoAddCircle, IoExpand, IoContract, IoCreateOutline } from 'react-icons/io5'
+import { IoArrowBack, IoAddCircle, IoExpand, IoContract, IoCreateOutline, IoChevronUp, IoChevronDown } from 'react-icons/io5'
 import { Button, Toast, Avatar } from 'antd-mobile'
 import BatchTaskEditor from '../components/BatchTaskEditor'
 import { motion } from 'framer-motion'
@@ -107,6 +107,8 @@ export default function ProjectTimeline() {
     window.innerWidth > window.innerHeight
   )
   const [showBatchEditor, setShowBatchEditor] = useState(false)
+  const isPhoneLandscape = !isPC && window.innerHeight < 500 && window.innerWidth > window.innerHeight
+  const [summaryCollapsed, setSummaryCollapsed] = useState(isPhoneLandscape)
 
   const { data: allUsers = [] } = useUsers()
 
@@ -118,11 +120,13 @@ export default function ProjectTimeline() {
   // Refs
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Detect PC/Mobile resize + natural orientation
+  // Detect PC/Mobile resize + natural orientation + landscape collapse
   useEffect(() => {
     const handleResize = () => {
       setIsPC(checkIsPC())
       setIsNaturalLandscape(window.innerWidth > window.innerHeight)
+      const nowPhoneLandscape = window.innerHeight < 500 && window.innerWidth > window.innerHeight
+      if (nowPhoneLandscape) setSummaryCollapsed(true)
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
@@ -595,42 +599,52 @@ export default function ProjectTimeline() {
           existingTasks={groups.flatMap(g => g.tasks).map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.expand?.assignees?.map(u => u.id) || [], deadline: t.deadline || '' }))}
         />
       )}
-      {/* 3. Project Summary Area (Requested Extra Component) */}
-      <div style={{ background: '#fff', borderTop: '1px solid #e2e8f0', padding: 24, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', zIndex: 50 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: '#334155' }}>项目概览 & 关键节点</h3>
-        <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
-          {project && (
-            <div style={{
-              minWidth: 200, padding: 16, borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
-              display: 'flex', flexDirection: 'column', gap: 4
-            }}>
-              <div style={{ fontSize: 12, color: '#64748b' }}>当前项目</div>
-              <div style={{ fontWeight: 700, color: '#0f172a' }}>{project.name}</div>
-              <div style={{ fontSize: 11, color: '#2563eb', marginTop: 4 }}>{project.status === 'active' ? '进行中' : project.status}</div>
-            </div>
-          )}
-          {/* Group summaries */}
-          {groups.map(g => (
-            <div key={g.id} style={{
-              minWidth: 160, padding: 12, borderRadius: 12, border: '1px solid #f1f5f9', background: '#fff',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Avatar src={getAvatarUrl(g.user)} style={{ '--size': '24px' }} />
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{g.user?.name || '待分配'}</div>
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>
-                <div>任务: {g.tasks.length}</div>
-                <div style={{ color: g.tasks.some(t => t.status === 'overdue') ? '#ef4444' : '#64748b' }}>
-                  逾期: {g.tasks.filter(t => t.status === 'overdue').length}
-                </div>
-                <div style={{ color: g.tasks.some(t => t.status === 'blocked') ? '#f59e0b' : '#64748b' }}>
-                  阻塞: {g.tasks.filter(t => t.status === 'blocked').length}
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* 3. Collapsible Project Summary */}
+      <div style={{ background: '#fff', borderTop: '1px solid #e2e8f0', paddingBottom: summaryCollapsed ? 0 : 'calc(8px + env(safe-area-inset-bottom))', zIndex: 50 }}>
+        <div
+          onClick={() => setSummaryCollapsed(c => !c)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 24px', cursor: 'pointer', userSelect: 'none'
+          }}
+        >
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#334155' }}>项目概览 & 关键节点</h3>
+          {summaryCollapsed ? <IoChevronUp size={18} color="#94a3b8" /> : <IoChevronDown size={18} color="#94a3b8" />}
         </div>
+        {!summaryCollapsed && (
+          <div style={{ padding: '0 24px 16px', display: 'flex', gap: 16, overflowX: 'auto' }}>
+            {project && (
+              <div style={{
+                minWidth: 200, padding: 16, borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc',
+                display: 'flex', flexDirection: 'column', gap: 4
+              }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>当前项目</div>
+                <div style={{ fontWeight: 700, color: '#0f172a' }}>{project.name}</div>
+                <div style={{ fontSize: 11, color: '#2563eb', marginTop: 4 }}>{project.status === 'active' ? '进行中' : project.status}</div>
+              </div>
+            )}
+            {groups.map(g => (
+              <div key={g.id} style={{
+                minWidth: 160, padding: 12, borderRadius: 12, border: '1px solid #f1f5f9', background: '#fff',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Avatar src={getAvatarUrl(g.user)} style={{ '--size': '24px' }} />
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{g.user?.name || '待分配'}</div>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>
+                  <div>任务: {g.tasks.length}</div>
+                  <div style={{ color: g.tasks.some(t => t.status === 'overdue') ? '#ef4444' : '#64748b' }}>
+                    逾期: {g.tasks.filter(t => t.status === 'overdue').length}
+                  </div>
+                  <div style={{ color: g.tasks.some(t => t.status === 'blocked') ? '#f59e0b' : '#64748b' }}>
+                    阻塞: {g.tasks.filter(t => t.status === 'blocked').length}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

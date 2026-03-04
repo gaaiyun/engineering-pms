@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import {
-  useAuditLogs, useUpdateAuditLogStatus,
+  useAuditLogs, useUpdateAuditLogStatus, useUnreadAuditCount,
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
   type Handoff, type User
 } from '../lib/api'
@@ -142,7 +142,7 @@ const ReviewCenter: React.FC = () => {
     return parts.length > 0 ? parts.join(' | ') : log.action_type
   }
 
-  const unreadCount = logs.filter((l: any) => !l.review_status || l.review_status === 'unread').length
+  const { data: unreadCount = 0 } = useUnreadAuditCount()
 
   return (
     <div className="review-center">
