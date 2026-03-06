@@ -219,14 +219,29 @@ export function useTasks(projectId?: string) {
             
             let filter = projectId ? `project="${projectId}"` : ''
             
-            // 普通员工：按 assignees 过滤（不依赖跨集合 project.members）
-            if (role !== 'admin' && role !== 'manager') {
+            // 普通员工且未指定项目时：只拉自己的任务
+            // 指定了 projectId 时：拉整个项目的任务（时间轴需要展示所有人）
+            if (!projectId && role !== 'admin' && role !== 'manager') {
                 const assigneeFilter = `assignees ~ "${userId}"`
                 filter = filter ? `${filter} && ${assigneeFilter}` : assigneeFilter
             }
             
             return await pb.collection('tasks').getFullList<Task>({
                 filter,
+                sort: 'sequence,created',
+                expand: 'project,assignees',
+            })
+        },
+    })
+}
+
+// 获取用户可见的所有任务（员工看到所属项目全部任务，用于时间轴概览）
+export function useVisibleTasks() {
+    return useQuery({
+        queryKey: ['visible_tasks'],
+        enabled: pb.authStore.isValid,
+        queryFn: async () => {
+            return await pb.collection('tasks').getFullList<Task>({
                 sort: 'sequence,created',
                 expand: 'project,assignees',
             })

@@ -240,8 +240,6 @@ const AdminDashboard = () => {
 
 
 
-  const pendingApprovals = activeTasks.filter(t => t.status === 'completed' && !t.approved)
-
   // ---- 用户管理 ----
 
   const handleEditUser = (user: User) => {
@@ -680,7 +678,7 @@ const AdminDashboard = () => {
                       position: 'relative'
                     }}
                   >
-                    {pendingApprovals.length > 0 && (
+                    {unreadAuditCount > 0 && (
                       <div style={{
                         position: 'absolute', top: -4, right: -4,
                         background: '#EF4444', color: 'white',
@@ -688,7 +686,7 @@ const AdminDashboard = () => {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 10, fontWeight: 'bold'
                       }}>
-                        {pendingApprovals.length}
+                        {unreadAuditCount}
                       </div>
                     )}
                     <IoCheckmarkCircleOutline size={24} color="white" />
@@ -716,7 +714,7 @@ const AdminDashboard = () => {
             </div>
 
             {/* 待处理事项 */}
-            {pendingApprovals.length > 0 && (
+            {unreadAuditCount > 0 && (
               <div className="fade-in" style={{ 
                 animationDelay: '0.7s', 
                 marginBottom: 24, 
@@ -735,7 +733,7 @@ const AdminDashboard = () => {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, color: '#92400E', fontSize: 15 }}>
-                      有 {pendingApprovals.length} 个任务待审核
+                      有 {unreadAuditCount} 条变更待复核
                     </div>
                     <div style={{ fontSize: 12, color: '#A16207', marginTop: 2 }}>
                       请及时处理，以免影响项目进度

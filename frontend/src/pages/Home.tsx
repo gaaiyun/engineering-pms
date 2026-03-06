@@ -11,7 +11,7 @@ import Tasks from './Tasks'
 import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useUnreadNotificationCount, useTasks, useNotifications, useProjects } from '../lib/api'
+import { useUnreadNotificationCount, useTasks, useVisibleTasks, useNotifications, useProjects } from '../lib/api'
 import dayjs from 'dayjs'
 
 export default function Home() {
@@ -27,6 +27,7 @@ export default function Home() {
 
   // 员工端数据
   const { data: myTasks = [] } = useTasks()
+  const { data: allVisibleTasks = [] } = useVisibleTasks()
   const { data: notifications = [] } = useNotifications(userId)
   const { data: myProjects = [] } = useProjects()
 
@@ -325,7 +326,7 @@ export default function Home() {
                   {myProjects.filter(p => p.status === 'active').length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {myProjects.filter(p => p.status === 'active').map((project, index) => {
-                        const pTasks = myTasks.filter(t => t.project === project.id)
+                        const pTasks = allVisibleTasks.filter(t => t.project === project.id)
                         const completed = pTasks.filter(t => t.status === 'completed').length
                         const progress = pTasks.length > 0 ? Math.round((completed / pTasks.length) * 100) : 0
                         return (

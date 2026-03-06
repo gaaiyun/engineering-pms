@@ -447,8 +447,11 @@ async function setupCollections() {
         { name: 'members', type: 'relation', options: { collectionId: '_pb_users_auth_' } },
     ], managerOnlyRules);
     
-    // Tasks 集合 - 员工可更新自己被分配的任务，经理/管理员可更新所有
+    // Tasks 集合 - 员工可查看同项目所有任务（时间轴需要），可更新自己被分配的任务
+    const taskMemberRule = '@request.auth.id != "" && (assignees.id ?= @request.auth.id || @request.auth.role = "manager" || @request.auth.role = "admin" || project.members ~ @request.auth.id)';
     const taskRules = {
+        listRule: taskMemberRule,
+        viewRule: taskMemberRule,
         updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager" || assignees.id ?= @request.auth.id',
         deleteRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
     };
