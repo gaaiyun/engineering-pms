@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { ProgressBar, Tag, Popup, Badge } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { IoTimeOutline, IoCheckmarkCircleOutline, IoBriefcaseOutline, IoAddCircle, IoCloseCircle, IoNotificationsOutline, IoChevronForward } from 'react-icons/io5'
@@ -167,6 +167,7 @@ export default function Tasks() {
   const { data: myTasks = [] } = useTasks()
   const isManagerUser = isManager()
   useUsers()
+  const taskListRef = useRef<HTMLDivElement>(null)
 
   // 员工待办任务（未完成的）
   const activeTasks = useMemo(() => {
@@ -182,6 +183,13 @@ export default function Tasks() {
       })
       .slice(0, 8)
   }, [myTasks])
+
+  // 自动滚动到第一个进行中的任务
+  useEffect(() => {
+    if (!taskListRef.current) return
+    const el = taskListRef.current.querySelector('[data-task-status="in_progress"]') as HTMLElement
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [activeTasks])
 
   useEffect(() => {
     const handleResize = () => setIsPC(window.innerWidth > 768)
@@ -264,17 +272,21 @@ export default function Tasks() {
       {!isManagerUser && activeTasks.length > 0 && (
         <div style={{ padding: '0 20px', marginBottom: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 10 }}>我的待办任务</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {activeTasks.map((task: Task) => (
+          <div ref={taskListRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '60vh', overflowY: 'auto' }}>
+            {activeTasks.map((task: Task, idx: number) => (
               <motion.div key={task.id}
+                data-task-status={task.status}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                 onClick={() => navigate(`/task/${task.id}`)}
                 style={{
                   background: 'white', borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                  boxShadow: task.status === 'in_progress' ? '0 0 0 2px rgba(59,130,246,0.3), 0 2px 8px rgba(59,130,246,0.15)' : '0 1px 4px rgba(0,0,0,0.04)',
                   borderLeft: `4px solid ${task.status === 'blocked' ? '#ef4444' : task.status === 'in_progress' ? '#3b82f6' : '#94a3b8'}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                 }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: task.status === 'in_progress' ? '#3b82f6' : '#e2e8f0', color: task.status === 'in_progress' ? '#fff' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginRight: 10 }}>
+                  {idx + 1}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {task.stage_name}

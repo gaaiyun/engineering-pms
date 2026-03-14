@@ -9,7 +9,6 @@
 
 ## 0. 打开 PocketBase 管理后台
 
-- **本地**：`http://127.0.0.1:8090/_/`
 - **服务器（HTTP）**：`http://<YOUR_PB_HOST>:8090/_/`
 - **服务器（HTTPS）**：建议先配置同域 `/pb` 反代（见 `v2/docs/宝塔部署操作手册.md`），再使用 `https://<YOUR_DOMAIN>/pb/_/`
 

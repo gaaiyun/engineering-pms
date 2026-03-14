@@ -914,20 +914,32 @@ export function useDeleteProject() {
 
     return useMutation({
         mutationFn: async (projectId: string) => {
-            const project = await pb.collection('projects').getOne(projectId)
-            const userName = pb.authStore.model?.name || pb.authStore.model?.username
-            // 通知项目全员（删除前发送）
-            await notifyProjectMembers(projectId, '项目删除', `${userName} 删除了项目「${project.name}」`, 'project_update', pb.authStore.model?.id).catch(() => {})
-            // 审计日志
-            await pb.collection('audit_logs').create({
-                project: projectId, action_type: 'delete_project',
-                operator: pb.authStore.model?.id,
-                before_data: { name: project.name, status: project.status },
-            }).catch(() => {})
-            // 删除项目下所有任务（使用 allSettled 避免部分失败阻断后续删除）
-            const tasks = await pb.collection('tasks').getFullList({ filter: `project="${projectId}"`, fields: 'id' })
-            await Promise.allSettled(tasks.map(t => pb.collection('tasks').delete(t.id)))
-            await pb.collection('projects').delete(projectId)
+            try {
+                const project = await pb.collection('projects').getOne(projectId)
+                const userName = pb.authStore.model?.name || pb.authStore.model?.username
+                // 通知项目全员（删除前发送）
+                await notifyProjectMembers(projectId, '项目删除', `${userName} 删除了项目「${project.name}」`, 'project_update', pb.authStore.model?.id).catch(() => {})
+                // 审计日志
+                await pb.collection('audit_logs').create({
+                    project: projectId, action_type: 'delete_project',
+                    operator: pb.authStore.model?.id,
+                    before_data: { name: project.name, status: project.status },
+                }).catch(() => {})
+                // 删除项目下所有任务（使用 allSettled 避免部分失败阻断后续删除）
+                const tasks = await pb.collection('tasks').getFullList({ filter: `project="${projectId}"`, fields: 'id' })
+                await Promise.allSettled(tasks.map(t => pb.collection('tasks').delete(t.id)))
+                await pb.collection('projects').delete(projectId)
+            } catch (e: unknown) {
+                const err = e as { status?: number }
+                if (err?.status === 404) {
+                    queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+                    queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+                    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+                    queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
+                    return
+                }
+                throw e
+            }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
@@ -1087,6 +1099,7 @@ export interface BatchTaskItem {
     id?: string // 有 id 则更新，无则创建
     stage_name: string
     assignees: string[]
+    start_date?: string
     deadline: string
 }
 
@@ -1104,6 +1117,7 @@ export function useBatchSaveTasks() {
                     stage_name: t.stage_name,
                     assignees: t.assignees,
                     deadline: t.deadline || null,
+                    start_date: t.start_date || new Date().toISOString(),
                     status: 'pending',
                     created_by: currentUser?.id,
                     sequence: Date.now(),
@@ -1112,6 +1126,7 @@ export function useBatchSaveTasks() {
                     const r = await pb.collection('tasks').update(t.id, {
                         stage_name: t.stage_name,
                         assignees: t.assignees,
+                        start_date: t.start_date || null,
                         deadline: t.deadline || null,
                     })
                     results.push(r)

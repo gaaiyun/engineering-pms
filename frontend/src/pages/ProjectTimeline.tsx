@@ -1,13 +1,13 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
-import { isManager, useUsers, useProject, useTasks } from '../lib/api'
+import { isManager, useUsers, useProject, useTasks, useNotifications } from '../lib/api'
 import { queryKeys } from '../lib/queryClient'
 import dayjs from 'dayjs'
 import isBetween from 'dayjs/plugin/isBetween'
-import { IoArrowBack, IoAddCircle, IoExpand, IoContract, IoCreateOutline, IoChevronUp, IoChevronDown } from 'react-icons/io5'
-import { Button, Toast, Avatar } from 'antd-mobile'
+import { IoArrowBack, IoExpand, IoContract, IoCreateOutline, IoChevronUp, IoChevronDown } from 'react-icons/io5'
+import { Button, Toast, Avatar, Badge } from 'antd-mobile'
 import BatchTaskEditor from '../components/BatchTaskEditor'
 import { motion } from 'framer-motion'
 import { SkeletonTimeline } from '../components/Skeleton'
@@ -111,6 +111,19 @@ export default function ProjectTimeline() {
   const [summaryCollapsed, setSummaryCollapsed] = useState(isPhoneLandscape)
 
   const { data: allUsers = [] } = useUsers()
+  const userId = pb.authStore.model?.id || ''
+  const { data: allNotifs = [] } = useNotifications(userId)
+  const projectNotifCount = useMemo(() => {
+    if (!id) return 0
+    const taskIds = new Set(rqTasks.map((t: any) => t.id))
+    let count = 0
+    for (const n of allNotifs) {
+      if (n.is_read) continue
+      if (n.link_type === 'project' && n.link_id === id) count++
+      else if (n.link_type === 'task' && n.link_id && taskIds.has(n.link_id)) count++
+    }
+    return count
+  }, [id, allNotifs, rqTasks])
 
   // 移动端动态间距
   const TASK_GAP = isPC ? TASK_GAP_PC : TASK_GAP_MOBILE
@@ -141,7 +154,7 @@ export default function ProjectTimeline() {
       processGroups(rqTasks as unknown as Task[])
       setLoading(false)
     }
-  }, [rqTasks, tasksLoading])
+  }, [rqTasks, tasksLoading, isPC])
 
   useEffect(() => {
     if (!id) return
@@ -339,8 +352,13 @@ export default function ProjectTimeline() {
           </Button>
           <div style={{ minWidth: 0, overflow: 'hidden' }}>
             {isPC && <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 2 }}>项目进度看板 (v2.2)</div>}
-            <div style={{ fontSize: isPC ? 18 : 16, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {project?.name || '加载中...'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: isPC ? 18 : 16, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {project?.name || '加载中...'}
+              </span>
+              {projectNotifCount > 0 && (
+                <Badge content={projectNotifCount > 99 ? '99+' : projectNotifCount} style={{ '--color': '#DC2626', flexShrink: 0, fontSize: 10 }} />
+              )}
             </div>
           </div>
         </div>
@@ -519,6 +537,7 @@ export default function ProjectTimeline() {
                     return (
                       <motion.div
                         key={task.id}
+                        className={task.status === 'in_progress' ? 'task-active-glow' : ''}
                         onClick={() => navigate(`/task/${task.id}`)}
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -540,7 +559,10 @@ export default function ProjectTimeline() {
                           cursor: 'pointer', zIndex: 10, overflow: 'hidden'
                         }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ background: isDone ? '#34d399' : isBlocked ? '#f43f5e' : '#3b82f6', color: '#fff', borderRadius: '50%', width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                            {group.tasks.indexOf(task) + 1}
+                          </span>
                           {task.stage_name}
                         </div>
                         {scale > 0.6 && (
@@ -560,30 +582,19 @@ export default function ProjectTimeline() {
         </div>
       </div>
 
-      {/* Floating Actions - manager only */}
+      {/* Floating Action - 批量编辑任务（经理可用） */}
       {isManager() && (
-        <div style={{ position: 'fixed', bottom: 'calc(32px + env(safe-area-inset-bottom))', right: 32, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+        <div style={{ position: 'fixed', bottom: 'calc(32px + env(safe-area-inset-bottom))', right: 32, zIndex: 100 }}>
           <div
             onClick={() => setShowBatchEditor(true)}
             style={{
-              width: 48, height: 48, borderRadius: '50%',
-              background: '#7c3aed', color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 6px 14px rgba(124, 58, 237, 0.3)', cursor: 'pointer'
-            }}
-          >
-            <IoCreateOutline size={24} />
-          </div>
-          <div
-            onClick={() => navigate(`/task/create?projectId=${id}`)}
-            style={{
               width: 56, height: 56, borderRadius: '50%',
-              background: '#2563eb', color: '#fff',
+              background: 'linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)', color: '#fff',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 8px 16px rgba(37, 99, 235, 0.3)', cursor: 'pointer'
             }}
           >
-            <IoAddCircle size={32} />
+            <IoCreateOutline size={28} />
           </div>
         </div>
       )}
@@ -596,7 +607,7 @@ export default function ProjectTimeline() {
           onClose={() => { setShowBatchEditor(false); if (id) queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(id) }) }}
           projectMembers={project.members || []}
           allUsers={allUsers}
-          existingTasks={groups.flatMap(g => g.tasks).map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.expand?.assignees?.map(u => u.id) || [], deadline: t.deadline || '' }))}
+          existingTasks={groups.flatMap(g => g.tasks).map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.expand?.assignees?.map(u => u.id) || [], start_date: t.start_date || '', deadline: t.deadline || '' }))}
         />
       )}
       {/* 3. Collapsible Project Summary */}
@@ -620,7 +631,7 @@ export default function ProjectTimeline() {
               }}>
                 <div style={{ fontSize: 12, color: '#64748b' }}>当前项目</div>
                 <div style={{ fontWeight: 700, color: '#0f172a' }}>{project.name}</div>
-                <div style={{ fontSize: 11, color: '#2563eb', marginTop: 4 }}>{project.status === 'active' ? '进行中' : project.status}</div>
+                <div style={{ fontSize: 11, color: '#2563eb', marginTop: 4 }}>{project.status === 'active' ? '进行中' : project.status === 'completed' ? '已完成' : project.status === 'archived' ? '已归档' : project.status}</div>
               </div>
             )}
             {groups.map(g => (

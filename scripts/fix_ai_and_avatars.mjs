@@ -262,16 +262,43 @@ async function generateTestReport() {
     }
 }
 
+// 从中文姓名推断性别（常见女性用字）
+const FEMALE_CHARS = '芳萍欣娟丽艳敏玲琴红梅燕霞芬琳娜婷慧颖静雪璐瑶蕾薇妍菲晶露淑英秀珍玉凤云莲香兰菊翠桂娥妹娣娇';
+function inferGender(name) {
+    if (!name || typeof name !== 'string') return 'male';
+    const n = String(name).replace(/\s*\([^)]*\)/g, '').trim();
+    const lastChar = n.slice(-1);
+    if (FEMALE_CHARS.includes(lastChar)) return 'female';
+    if (/[师员]/.test(n) && n.length >= 3) return 'male';
+    return 'male';
+}
+
 // ========== 添加员工头像 ==========
+// AVATAR_STYLE=cartoon 专业卡通（Personas，符合性别）| text 文字全名（UI Avatars）
 async function addAvatars() {
-    log.info('\n👤 ========== 添加员工头像 ==========\n');
+    const style = (process.env.AVATAR_STYLE || 'cartoon').toLowerCase();
+    const forceReplace = process.env.AVATAR_REPLACE_ALL === '1' || process.env.AVATAR_REPLACE_ALL === 'true';
     
-    // 中国风格头像URL（使用DiceBear API）
-    const getAvatarUrl = (seed, gender = 'male') => {
-        // 使用不同风格的头像
-        const styles = ['adventurer', 'avataaars', 'big-smile', 'lorelei', 'micah'];
-        const style = styles[Math.abs(seed.charCodeAt(0)) % styles.length];
-        return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+    log.info(`\n👤 ========== 添加员工头像（${style === 'cartoon' ? '专业卡通' : '文字全名'}）==========\n`);
+    if (forceReplace) log.info('   ℹ️ AVATAR_REPLACE_ALL=1，将替换所有用户头像\n');
+    
+    const getAvatarUrl = (seed, gender) => {
+        if (style === 'text') {
+            const colors = ['2563eb', '475569', '1e40af', '334155'];
+            const color = colors[Math.abs(String(seed).split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % colors.length];
+            const len = Math.min(4, Math.max(2, seed.length));
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(seed)}&length=${len}&size=256&background=${color}&color=fff&bold=true&rounded=true&uppercase=false&format=svg`;
+        }
+        const isFemale = gender === 'female';
+        const hair = isFemale ? 'long,bobCut,pigtails,curly,bobBangs,curlyBun,straightBun' : 'buzzcut,shortCombover,fade,bald,balding';
+        const params = new URLSearchParams({
+            seed, hair, radius: '50', backgroundType: 'solid',
+            eyes: 'open,glasses,happy', mouth: 'smile,smirk',
+            body: 'rounded', clothingColor: '456dff,475569',
+            facialHairProbability: isFemale ? '0' : '35',
+            backgroundColor: 'e8eef5,f1f5f9',
+        });
+        return `https://api.dicebear.com/7.x/personas/svg?${params}`;
     };
     
     try {
@@ -279,26 +306,20 @@ async function addAvatars() {
         let updatedCount = 0;
         
         for (const user of users) {
-            // 只为没有头像的用户添加
-            if (!user.avatar) {
+            const shouldUpdate = forceReplace || !user.avatar;
+            if (shouldUpdate) {
                 try {
-                    // 生成头像 URL
-                    const avatarUrl = getAvatarUrl(user.name || user.username);
-                    
-                    // 下载头像
+                    const seed = (user.name || user.username).replace(/\s*\([^)]*\)/g, '').trim() || user.username;
+                    const gender = inferGender(user.name || user.username);
+                    const avatarUrl = getAvatarUrl(seed, gender);
                     const avatarRes = await fetch(avatarUrl);
                     if (!avatarRes.ok) continue;
-                    
                     const svgContent = await avatarRes.text();
-                    
-                    // 创建 FormData 上传
                     const formData = new FormData();
                     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
                     formData.append('avatar', blob, `${user.username}_avatar.svg`);
-                    
                     await pb.collection('users').update(user.id, formData);
-                    
-                    log.success(`   ✅ ${user.name || user.username} 头像已添加`);
+                    log.success(`   ✅ ${seed} 头像已${user.avatar ? '替换' : '添加'}`);
                     updatedCount++;
                 } catch (e) {
                     log.warn(`   ⚠️ ${user.name || user.username} 头像添加失败: ${e.message}`);

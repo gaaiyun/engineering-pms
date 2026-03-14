@@ -63,7 +63,7 @@ const ProjectKanban: React.FC = () => {
                 projectId={id}
                 projectMembers={project?.members || []}
                 allUsers={users}
-                existingTasks={tasks.map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.assignees || [], deadline: t.deadline || '' }))}
+                existingTasks={tasks.map(t => ({ id: t.id, stage_name: t.stage_name, assignees: t.assignees || [], start_date: t.start_date || '', deadline: t.deadline || '' }))}
             />
         </>
     )

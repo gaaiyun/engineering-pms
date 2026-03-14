@@ -192,7 +192,7 @@ export default function Notifications() {
               <IoArrowBackOutline size={20} color="#64748B" />
             </button>
             <div>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Notifications</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: 1 }}>消息通知</div>
               <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: '#0f172a' }}>消息中心</h2>
             </div>
           </div>

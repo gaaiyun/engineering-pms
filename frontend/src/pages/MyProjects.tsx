@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
+import { pb } from '../lib/pocketbase'
 import { IoArrowBackOutline, IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoTrashOutline, IoPeopleOutline, IoReturnUpBackOutline, IoDocumentTextOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
-import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, isManager } from '../lib/api'
+import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, useNotifications, isManager } from '../lib/api'
 import { Dialog, Popup, SearchBar, SpinLoading } from 'antd-mobile'
 import dayjs from 'dayjs'
 import BatchProjectCreator from '../components/BatchProjectCreator'
@@ -20,6 +21,21 @@ export default function MyProjects() {
   const deleteProject = useDeleteProject()
   const updateMembers = useUpdateProjectMembers()
   const managerUser = isManager()
+  const userId = pb.authStore.model?.id || ''
+  const { data: allNotifs = [] } = useNotifications(userId)
+  const projectNotifCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const taskProjectMap: Record<string, string> = {}
+    allTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+    for (const n of allNotifs) {
+      if (n.is_read) continue
+      let projectId: string | undefined
+      if (n.link_type === 'project') projectId = n.link_id
+      else if (n.link_type === 'task' && n.link_id) projectId = taskProjectMap[n.link_id]
+      if (projectId) counts[projectId] = (counts[projectId] || 0) + 1
+    }
+    return counts
+  }, [allNotifs, allTasks])
 
   // 成员管理弹窗
   const [memberPopup, setMemberPopup] = useState<{ visible: boolean; projectId: string; members: string[]; originalMembers: string[] }>({ visible: false, projectId: '', members: [], originalMembers: [] })
@@ -138,8 +154,20 @@ export default function MyProjects() {
           return (
             <div key={p.id} className="project-card" style={{
               display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12,
-              opacity: p.status === 'archived' ? 0.7 : 1
+              opacity: p.status === 'archived' ? 0.7 : 1,
+              position: 'relative'
             }}>
+              {(projectNotifCounts[p.id] || 0) > 0 && (
+                <div style={{
+                  position: 'absolute', top: -6, right: 0, zIndex: 10,
+                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', color: 'white',
+                  borderRadius: '50%', minWidth: 20, height: 20, padding: '0 6px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 'bold', boxShadow: '0 2px 8px rgba(239,68,68,0.4)'
+                }}>
+                  {projectNotifCounts[p.id] > 99 ? '99+' : projectNotifCounts[p.id]}
+                </div>
+              )}
               <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}
                 onClick={() => navigate(`/project/${p.id}/timeline`)}>
                 <div style={{

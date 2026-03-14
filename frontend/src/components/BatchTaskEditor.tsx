@@ -15,7 +15,7 @@ interface Props {
   projectId: string
   projectMembers: string[] // 项目成员 ID 列表
   allUsers: Array<{ id: string; name?: string; username: string; department?: string }>
-  existingTasks?: Array<{ id: string; stage_name: string; assignees: string[]; deadline: string }>
+  existingTasks?: Array<{ id: string; stage_name: string; assignees: string[]; start_date?: string; deadline: string }>
 }
 
 interface RowData {
@@ -23,6 +23,7 @@ interface RowData {
   id?: string
   stage_name: string
   assignees: string[]
+  start_date: string
   deadline: string
 }
 
@@ -36,10 +37,11 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
         id: t.id,
         stage_name: t.stage_name,
         assignees: t.assignees || [],
+        start_date: t.start_date ? dayjs(t.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
         deadline: t.deadline ? dayjs(t.deadline).format('YYYY-MM-DD') : '',
       }))
     }
-    return [{ key: 'new-0', stage_name: '', assignees: [], deadline: '' }]
+    return [{ key: 'new-0', stage_name: '', assignees: [], start_date: dayjs().format('YYYY-MM-DD'), deadline: '' }]
   })
 
   const prevVisibleRef = React.useRef(visible)
@@ -53,10 +55,11 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
         id: t.id,
         stage_name: t.stage_name,
         assignees: t.assignees || [],
+        start_date: t.start_date ? dayjs(t.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
         deadline: t.deadline ? dayjs(t.deadline).format('YYYY-MM-DD') : '',
       })))
     } else {
-      setRows([{ key: 'new-0', stage_name: '', assignees: [], deadline: '' }])
+      setRows([{ key: 'new-0', stage_name: '', assignees: [], start_date: dayjs().format('YYYY-MM-DD'), deadline: '' }])
     }
   }, [visible, existingTasks])
 
@@ -76,7 +79,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
   }, [allUsers, projectMembers, searchText])
 
   const addRow = () => {
-    setRows(prev => [...prev, { key: `new-${Date.now()}`, stage_name: '', assignees: [], deadline: '' }])
+    setRows(prev => [...prev, { key: `new-${Date.now()}`, stage_name: '', assignees: [], start_date: dayjs().format('YYYY-MM-DD'), deadline: '' }])
   }
 
   const removeRow = (index: number) => {
@@ -104,6 +107,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
         id: r.id,
         stage_name: r.stage_name,
         assignees: r.assignees.length > 0 ? r.assignees : [pb.authStore.model?.id].filter(Boolean) as string[],
+        start_date: r.start_date || dayjs().format('YYYY-MM-DD'),
         deadline: r.deadline,
       }))
       await batchSave.mutateAsync({ projectId, tasks })
@@ -121,7 +125,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>批量编辑任务</div>
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>填写任务名、负责人和截止时间</div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>填写任务名、负责人、开始和截止时间</div>
         </div>
         <Button size="small" onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8 }}>关闭</Button>
       </div>
@@ -130,6 +134,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
       <div style={{ display: 'flex', padding: '10px 20px', background: '#f8fafc', fontSize: 12, fontWeight: 700, color: '#64748b', gap: 8 }}>
         <div style={{ flex: 3 }}>任务名称</div>
         <div style={{ flex: 2 }}>执行人员</div>
+        <div style={{ flex: 2 }}>开始时间</div>
         <div style={{ flex: 2 }}>截止时间</div>
         <div style={{ width: 32 }}></div>
       </div>
@@ -153,6 +158,10 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
                   ? row.assignees.map(id => getUserName(id)).join(', ')
                   : <><IoPersonOutline size={14} /> 选择</>}
               </div>
+            </div>
+            <div style={{ flex: 2 }}>
+              <input type="date" value={row.start_date} onChange={e => updateRow(idx, 'start_date', e.target.value)}
+                style={{ width: '100%', padding: '8px 6px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, color: '#334155' }} />
             </div>
             <div style={{ flex: 2 }}>
               <input type="date" value={row.deadline} onChange={e => updateRow(idx, 'deadline', e.target.value)}

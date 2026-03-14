@@ -26,6 +26,7 @@ import {
 } from 'react-icons/io5'
 import AIConsole from './AIConsole'
 import BatchProjectCreator from '../../components/BatchProjectCreator'
+import BatchTaskEditor from '../../components/BatchTaskEditor'
 
 interface User {
   id: string
@@ -112,7 +113,6 @@ const AdminDashboard = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [userForm] = Form.useForm()
   const [addUserForm] = Form.useForm()
-  const [addTaskForm] = Form.useForm()
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -322,27 +322,6 @@ const AdminDashboard = () => {
     }
   }
 
-  const handleAddTask = async (values: any) => {
-    if (!selectedProject) return
-    try {
-      await pb.collection('tasks').create({
-        project: selectedProject.id,
-        stage_name: values.stage_name,
-        status: 'pending',
-        assignees: values.assignees || [],
-        deadline: values.deadline || null,
-        creator: pb.authStore.model?.id
-      })
-      Toast.show({ icon: 'success', content: '任务创建成功' })
-      setShowAddTaskModal(false)
-      addTaskForm.resetFields()
-      handleSelectProject(selectedProject) // Refresh task list
-      refreshAll()
-    } catch (error: any) {
-      console.error('add task failed', error)
-      Toast.show({ icon: 'fail', content: error.message || '创建失败' })
-    }
-  }
 
   const handleDeleteTask = async (taskId: string) => {
     Dialog.confirm({
@@ -1337,28 +1316,27 @@ const AdminDashboard = () => {
         onSuccess={() => refreshAll()}
       />
 
-      {/* Add Task Modal */}
-      <Dialog
-        visible={showAddTaskModal}
-        title={`新增任务 - ${selectedProject?.name || ''}`}
-        content={
-          <Form form={addTaskForm} layout='horizontal' onFinish={handleAddTask} footer={null}>
-            <Form.Item name='stage_name' label='任务名称' rules={[{ required: true, message: '请输入任务名称' }]}>
-              <Input placeholder="如：前期规划与选址" />
-            </Form.Item>
-            <Form.Item name='assignees' label='执行人'>
-              <Selector
-                multiple
-                options={users.map(u => ({ label: u.name || u.username, value: u.id }))}
-              />
-            </Form.Item>
-          </Form>
-        }
-        actions={[
-          { key: 'cancel', text: '取消', onClick: () => setShowAddTaskModal(false) },
-          { key: 'confirm', text: '创建任务', bold: true, onClick: () => addTaskForm.submit() },
-        ]}
-      />
+      {/* Batch Task Editor */}
+      {selectedProject && (
+        <BatchTaskEditor
+          visible={showAddTaskModal}
+          onClose={() => {
+            setShowAddTaskModal(false)
+            if (selectedProject) handleSelectProject(selectedProject)
+            refreshAll()
+          }}
+          projectId={selectedProject.id}
+          projectMembers={[]}
+          allUsers={users.map(u => ({ id: u.id, name: u.name, username: u.username, department: u.department }))}
+          existingTasks={projectTasks.map(t => ({
+            id: t.id,
+            stage_name: t.stage_name,
+            assignees: t.assignees || [],
+            start_date: (t as any).start_date || '',
+            deadline: (t as any).deadline || ''
+          }))}
+        />
+      )}
     </div>
   )
 }

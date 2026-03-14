@@ -99,8 +99,12 @@ const TaskDetail = () => {
     }
   }
 
+  // 被分配人也可以标记完成
+  const isAssignee = task?.assignees?.includes(currentUser?.id)
+  const canComplete = isManager || isAssignee
+
   const handleComplete = () => {
-    if (!isManager || !task) return
+    if (!canComplete || !task) return
     Dialog.confirm({
       title: '确认完成',
       content: '确认当前节点任务已全部完成？',
@@ -544,8 +548,8 @@ const TaskDetail = () => {
               </Button>
             )}
 
-            {/* 完成按钮 — 仅经理可用（员工不能标记完成） */}
-            {isManager && (
+            {/* 完成按钮 — 经理或被分配人可用 */}
+            {canComplete && (
               <Button
                 className="premium-button" block shape='rounded'
                 style={{
@@ -567,8 +571,8 @@ const TaskDetail = () => {
               </Button>
             )}
 
-            {/* 员工视角：只读状态标签 */}
-            {!isManager && task.status !== 'blocked' && (
+            {/* 员工视角：只读状态标签（非经理且非被分配人） */}
+            {!canComplete && task.status !== 'blocked' && (
               <div style={{
                 flex: 1, height: 56, borderRadius: 28,
                 background: task.status === 'completed' ? 'var(--success-gradient)' : 'linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)',
@@ -578,7 +582,7 @@ const TaskDetail = () => {
                 {task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '待开始'}
               </div>
             )}
-            {!isManager && task.status === 'blocked' && (
+            {!canComplete && task.status === 'blocked' && (
               <div style={{
                 flex: 1, height: 56, borderRadius: 28,
                 background: 'linear-gradient(135deg, #fecaca 0%, #fca5a5 100%)',

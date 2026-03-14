@@ -6,10 +6,7 @@ import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutlin
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTasks, useProjects } from '../lib/api'
 
-// 30 个默认头像 (使用 DiceBear API)
-const DEFAULT_AVATARS = Array.from({ length: 30 }, (_, i) =>
-  `https://api.dicebear.com/7.x/avataaars/svg?seed=avatar${i + 1}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`
-)
+import { AVATAR_OPTIONS } from '../lib/avatarOptions'
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -390,13 +387,13 @@ export default function Profile() {
               </div>
 
               {/* Default Avatars Grid */}
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 12 }}>或选择默认头像</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 12 }}>选择预设头像</div>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
+                gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: 12
               }}>
-                {DEFAULT_AVATARS.map((url, i) => (
+                {AVATAR_OPTIONS.map((url, i) => (
                   <div
                     key={i}
                     onClick={() => setSelectedAvatar(url)}

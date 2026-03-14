@@ -30,6 +30,7 @@ import {
     type Task
 } from '../../lib/api'
 import { useHandoffDraftStore, useBlockerDraftStore } from '../../lib/store'
+import { pb } from '../../lib/pocketbase'
 import './TaskDetailDrawer.css'
 
 interface TaskDetailDrawerProps {
@@ -88,6 +89,19 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 data: { status: 'in_progress' },
             })
             Toast.show({ content: '任务已开始', icon: 'success' })
+            onUpdate?.()
+        } catch {
+            Toast.show({ content: '操作失败', icon: 'fail' })
+        }
+    }
+
+    const handleUnblock = async (newStatus: 'in_progress' | 'completed') => {
+        try {
+            await updateTask.mutateAsync({
+                id: currentTask.id,
+                data: { status: newStatus, blocker: null } as any,
+            })
+            Toast.show({ content: newStatus === 'completed' ? '已标记完成' : '已恢复进行中', icon: 'success' })
             onUpdate?.()
         } catch {
             Toast.show({ content: '操作失败', icon: 'fail' })
@@ -273,7 +287,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
                         <Divider />
 
-                        {/* 操作按钮 — 经理可操作全部，员工只能上报卡点 */}
+                        {/* 操作按钮 — 经理可操作全部，被分配人可完成和上报卡点 */}
                         <div className="action-buttons">
                             {currentTask.status === 'pending' && isManagerRole() && (
                                 <Button
@@ -288,7 +302,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
                             {currentTask.status === 'in_progress' && (
                                 <>
-                                    {isManagerRole() && (
+                                    {(isManagerRole() || (!!pb.authStore.model?.id && currentTask.assignees?.includes(pb.authStore.model.id))) && (
                                         <Button
                                             color="success"
                                             block
@@ -309,13 +323,26 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                             )}
 
                             {currentTask.status === 'blocked' && isManagerRole() && (
-                                <Button
-                                    color="primary"
-                                    block
-                                    onClick={handleStartTask}
-                                >
-                                    恢复进行
-                                </Button>
+                                <>
+                                    <Button
+                                        color="success"
+                                        block
+                                        onClick={() => handleUnblock('completed')}
+                                        loading={updateTask.isPending}
+                                    >
+                                        标记为已完成
+                                    </Button>
+                                    <Button
+                                        color="primary"
+                                        block
+                                        fill="outline"
+                                        onClick={() => handleUnblock('in_progress')}
+                                        loading={updateTask.isPending}
+                                        style={{ marginTop: 8 }}
+                                    >
+                                        恢复为进行中
+                                    </Button>
+                                </>
                             )}
                         </div>
                     </div>

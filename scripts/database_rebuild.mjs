@@ -62,6 +62,12 @@ const USERS = [
     { username: 'sun_safe', name: '孙安检员', role: 'employee', dept: '工程部', position: '安全管理员' },
     { username: 'wu_design', name: '吴设计师', role: 'employee', dept: '工程部', position: '设计师' },
     { username: 'huang_sup', name: '黄监理', role: 'employee', dept: '工程部', position: '监理工程师' },
+    // 无部门员工（2025-03 新增）
+    { username: 'hua_feng', name: '华峰', role: 'manager', dept: '', position: '' },
+    { username: 'liang_ruming', name: '梁汝铭', role: 'employee', dept: '', position: '' },
+    { username: 'peng_zhen', name: '彭镇', role: 'employee', dept: '', position: '' },
+    { username: 'wu_qilong', name: '吴奇龙', role: 'employee', dept: '', position: '' },
+    { username: 'wu_zhangsen', name: '吴彰森', role: 'manager', dept: '', position: '' },
 ];
 
 // ============ 项目数据 ============
@@ -582,8 +588,8 @@ async function createUsers() {
             const userData = {
                 name: u.name,
                 role: u.role,
-                department: u.dept,
-                position: u.position,
+                ...(u.dept ? { department: u.dept } : {}),
+                position: u.position || '',
                 flower_count: randomInt(5, 80),
                 is_active: true,
             };
@@ -612,6 +618,57 @@ async function createUsers() {
     
     console.log(`\n   ✅ 用户处理完成: ${userIds.filter(Boolean).length}/${USERS.length}\n`);
     return userIds;
+}
+
+const FEMALE_CHARS = '芳萍欣娟丽艳敏玲琴红梅燕霞芬琳娜婷慧颖静雪璐瑶蕾薇妍菲晶露淑英秀珍玉凤云莲香兰菊翠桂娥妹娣娇';
+function inferGender(name) {
+    if (!name || typeof name !== 'string') return 'male';
+    const n = String(name).replace(/\s*\([^)]*\)/g, '').trim();
+    return FEMALE_CHARS.includes(n.slice(-1)) ? 'female' : 'male';
+}
+
+async function addAvatarsForNewUsers() {
+    const style = (process.env.AVATAR_STYLE || 'cartoon').toLowerCase();
+    console.log(`👤 ========== 为无头像用户添加头像（${style === 'cartoon' ? '专业卡通' : '文字全名'}）==========\n`);
+    const getAvatarUrl = (seed, gender) => {
+        if (style === 'text') {
+            const colors = ['2563eb', '475569', '1e40af', '334155'];
+            const color = colors[Math.abs(String(seed).split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % colors.length];
+            const len = Math.min(4, Math.max(2, seed.length));
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(seed)}&length=${len}&size=256&background=${color}&color=fff&bold=true&rounded=true&uppercase=false&format=svg`;
+        }
+        const isFemale = gender === 'female';
+        const hair = isFemale ? 'long,bobCut,pigtails,curly,bobBangs,curlyBun,straightBun' : 'buzzcut,shortCombover,fade,bald,balding';
+        const params = new URLSearchParams({ seed, hair, radius: '50', backgroundType: 'solid', eyes: 'open,glasses,happy', mouth: 'smile,smirk', body: 'rounded', clothingColor: '456dff,475569', facialHairProbability: isFemale ? '0' : '35', backgroundColor: 'e8eef5,f1f5f9' });
+        return `https://api.dicebear.com/7.x/personas/svg?${params}`;
+    };
+    try {
+        const users = await pb.collection('users').getFullList();
+        let updatedCount = 0;
+        for (const user of users) {
+            if (!user.avatar) {
+                try {
+                    const seed = (user.name || user.username).replace(/\s*\([^)]*\)/g, '').trim() || user.username;
+                    const gender = inferGender(user.name || user.username);
+                    const avatarUrl = getAvatarUrl(seed, gender);
+                    const avatarRes = await fetch(avatarUrl);
+                    if (!avatarRes.ok) continue;
+                    const svgContent = await avatarRes.text();
+                    const formData = new FormData();
+                    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+                    formData.append('avatar', blob, `${user.username}_avatar.svg`);
+                    await pb.collection('users').update(user.id, formData);
+                    console.log(`   ✅ ${user.name || user.username} 头像已添加`);
+                    updatedCount++;
+                } catch (e) {
+                    console.log(`   ⚠️ ${user.name || user.username} 头像添加失败: ${e.message}`);
+                }
+            }
+        }
+        console.log(`\n   ✅ 头像更新完成: ${updatedCount}/${users.length}\n`);
+    } catch (e) {
+        console.error(`   ❌ 添加头像失败: ${e.message}\n`);
+    }
 }
 
 async function createProjectsAndTasks(userIds) {
@@ -938,6 +995,9 @@ async function main() {
     
     // 5. 创建用户
     const userIds = await createUsers();
+    
+    // 5.5 为无头像用户添加头像
+    await addAvatarsForNewUsers();
     
     // 6. 创建项目和任务
     const tasks = await createProjectsAndTasks(userIds);

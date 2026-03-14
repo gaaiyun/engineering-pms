@@ -1,4 +1,4 @@
-import { TabBar, Badge } from 'antd-mobile'
+import { TabBar, Badge, Toast } from 'antd-mobile'
 import {
   UnorderedListOutline,
   UserOutline,
@@ -20,6 +20,27 @@ export default function Home() {
   const navigate = useNavigate()
   const userId = pb.authStore.model?.id || ''
   const { data: unreadCount = 0 } = useUnreadNotificationCount(userId)
+  const prevUnreadRef = useRef(0)
+
+  // 新消息到达时弹 Toast + 浏览器推送
+  useEffect(() => {
+    if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
+      const newCount = unreadCount - prevUnreadRef.current
+      Toast.show({ content: `收到 ${newCount} 条新消息`, position: 'top', duration: 3000 })
+      // 浏览器桌面通知
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('工程结算管理', { body: `您有 ${newCount} 条新消息`, icon: '/favicon.ico' })
+      }
+    }
+    prevUnreadRef.current = unreadCount
+  }, [unreadCount])
+
+  // 首次请求浏览器通知权限
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
 
   const role = pb.authStore.model?.role?.toLowerCase()
   const isManager = role === 'manager' || role === 'admin'
@@ -104,7 +125,7 @@ export default function Home() {
             <div style={{ fontWeight: 800, fontSize: 22, color: '#0F172A', letterSpacing: '-0.5px' }}>
               工程结算
             </div>
-            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, letterSpacing: '1px' }}>ENTERPRISE</div>
+            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, letterSpacing: '1px' }}>工程管理系统</div>
           </div>
 
           {/* Nav Items */}
@@ -141,10 +162,10 @@ export default function Home() {
               <div style={{ position: 'relative' }}>
                 <IoNotificationsOutline size={20} />
                 {unreadCount > 0 && (
-                  <div style={{
-                    position: 'absolute', top: -2, right: -2, width: 8, height: 8,
-                    background: '#DC2626', borderRadius: '50%', border: '2px solid #fff'
-                  }} />
+                  <Badge
+                    content={unreadCount > 99 ? '99+' : unreadCount}
+                    style={{ position: 'absolute', top: -6, right: -10, '--color': '#DC2626', border: '2px solid #fff', fontSize: 10 }}
+                  />
                 )}
               </div>
               <span style={{ fontSize: 14 }}>消息通知</span>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Form, Input, Button, Toast, Selector } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
+import { AVATAR_OPTIONS } from '../lib/avatarOptions'
 import { motion } from 'framer-motion'
 import { 
   IoPersonOutline, 
@@ -19,6 +20,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [form] = Form.useForm()
   const [step, setStep] = useState(1) // 分步注册
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
 
   const departments = [
     { label: '工程部', value: '工程部' },
@@ -36,15 +38,43 @@ const Register = () => {
 
     setLoading(true)
     try {
-      await pb.collection('users').create({
-        username: values.email.split('@')[0] + '_' + Math.random().toString(36).substring(2, 7),
+      // 用户名：邮箱前缀，去掉随机后缀
+      const baseUsername = values.email.split('@')[0]
+      let username = baseUsername
+      // 若用户名已存在则追加数字（循环确保唯一）
+      try {
+        let suffix = 0
+        while (true) {
+          const tryName = suffix === 0 ? baseUsername : `${baseUsername}${suffix}`
+          const existing = await pb.collection('users').getList(1, 1, { filter: `username="${tryName}"` })
+          if (existing.totalItems === 0) { username = tryName; break }
+          suffix++
+        }
+      } catch {}
+
+      const record = await pb.collection('users').create({
+        username,
         email: values.email,
         password: values.password,
         passwordConfirm: values.confirmPassword,
         name: values.nickname,
         department: values.department?.[0] || '工程部',
         role: 'employee',
+        is_active: true,
       })
+
+      const avatarUrl = values.avatar || selectedAvatar
+      if (avatarUrl && record?.id) {
+        try {
+          const res = await fetch(avatarUrl)
+          if (res.ok) {
+            const blob = await res.blob()
+            const fd = new FormData()
+            fd.append('avatar', blob, 'avatar.svg')
+            await pb.collection('users').update(record.id, fd)
+          }
+        } catch {}
+      }
 
       await pb.collection('users').authWithPassword(values.email, values.password)
 
@@ -271,6 +301,30 @@ const Register = () => {
                       '--checked-text-color': '#fff'
                     }}
                   />
+                </Form.Item>
+              </motion.div>
+
+              <motion.div variants={itemVariants}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>选择头像</div>
+                <Form.Item name='avatar'>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {AVATAR_OPTIONS.map((url, i) => (
+                      <div
+                        key={i}
+                        onClick={() => { setSelectedAvatar(url); form.setFieldValue('avatar', url) }}
+                        style={{
+                          aspectRatio: 1,
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          border: (form.getFieldValue('avatar') === url || selectedAvatar === url) ? '3px solid #10B981' : '2px solid #e2e8f0',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ))}
+                  </div>
                 </Form.Item>
               </motion.div>
 
