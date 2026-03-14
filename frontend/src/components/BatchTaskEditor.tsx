@@ -3,8 +3,8 @@
  * 支持动态增删行，一键保存
  */
 import React, { useState, useMemo, useEffect } from 'react'
-import { Button, Input, Toast, Popup, SearchBar } from 'antd-mobile'
-import { IoAddCircleOutline, IoTrashOutline, IoCheckmarkCircle, IoPersonOutline } from 'react-icons/io5'
+import { Button, Input, Toast, Popup, SearchBar, DatePicker } from 'antd-mobile'
+import { IoAddCircleOutline, IoTrashOutline, IoCheckmarkCircle, IoPersonOutline, IoCalendarOutline } from 'react-icons/io5'
 import { useBatchSaveTasks, type BatchTaskItem } from '../lib/api'
 import { pb } from '../lib/pocketbase'
 import dayjs from 'dayjs'
@@ -65,6 +65,7 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
 
   const [pickerRow, setPickerRow] = useState<number | null>(null)
   const [searchText, setSearchText] = useState('')
+  const [datePicker, setDatePicker] = useState<{ visible: boolean; rowIdx: number; field: 'start_date' | 'deadline' } | null>(null)
 
   // 只显示项目成员（如果有），否则显示全部
   const availableUsers = useMemo(() => {
@@ -159,13 +160,27 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
                   : <><IoPersonOutline size={14} /> 选择</>}
               </div>
             </div>
-            <div style={{ flex: 2 }}>
-              <input type="date" value={row.start_date} onChange={e => updateRow(idx, 'start_date', e.target.value)}
-                style={{ width: '100%', padding: '8px 6px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, color: '#334155' }} />
+            <div style={{ flex: 2 }} onClick={() => setDatePicker({ visible: true, rowIdx: idx, field: 'start_date' })}>
+              <div style={{
+                padding: '8px 8px', background: row.start_date ? '#f0fdf4' : '#f8fafc',
+                borderRadius: 8, border: `1px solid ${row.start_date ? '#86efac' : '#e2e8f0'}`,
+                fontSize: 12, color: row.start_date ? '#15803d' : '#94a3b8', cursor: 'pointer',
+                minHeight: 36, display: 'flex', alignItems: 'center', gap: 4
+              }}>
+                <IoCalendarOutline size={13} />
+                {row.start_date || '选择'}
+              </div>
             </div>
-            <div style={{ flex: 2 }}>
-              <input type="date" value={row.deadline} onChange={e => updateRow(idx, 'deadline', e.target.value)}
-                style={{ width: '100%', padding: '8px 6px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, color: '#334155' }} />
+            <div style={{ flex: 2 }} onClick={() => setDatePicker({ visible: true, rowIdx: idx, field: 'deadline' })}>
+              <div style={{
+                padding: '8px 8px', background: row.deadline ? '#fff7ed' : '#f8fafc',
+                borderRadius: 8, border: `1px solid ${row.deadline ? '#fdba74' : '#e2e8f0'}`,
+                fontSize: 12, color: row.deadline ? '#c2410c' : '#94a3b8', cursor: 'pointer',
+                minHeight: 36, display: 'flex', alignItems: 'center', gap: 4
+              }}>
+                <IoCalendarOutline size={13} />
+                {row.deadline || '选择'}
+              </div>
             </div>
             <div style={{ width: 32 }}>
               {rows.length > 1 && (
@@ -188,6 +203,20 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
           <IoCheckmarkCircle size={18} style={{ marginRight: 6 }} /> 保存全部 ({rows.filter(r => r.stage_name.trim()).length} 个任务)
         </Button>
       </div>
+
+      {/* 日期选择弹窗 */}
+      <DatePicker
+        visible={datePicker?.visible ?? false}
+        onClose={() => setDatePicker(null)}
+        onConfirm={(val) => {
+          if (datePicker) {
+            updateRow(datePicker.rowIdx, datePicker.field, dayjs(val).format('YYYY-MM-DD'))
+          }
+          setDatePicker(null)
+        }}
+        value={datePicker ? (rows[datePicker.rowIdx]?.[datePicker.field] ? new Date(rows[datePicker.rowIdx][datePicker.field]) : new Date()) : new Date()}
+        title={datePicker?.field === 'start_date' ? '选择开始时间' : '选择截止时间'}
+      />
 
       {/* 人员选择弹窗 */}
       <Popup visible={pickerRow !== null} onMaskClick={() => setPickerRow(null)}
