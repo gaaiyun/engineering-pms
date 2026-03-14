@@ -26,10 +26,29 @@ export default function Home() {
   useEffect(() => {
     if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
       const newCount = unreadCount - prevUnreadRef.current
-      Toast.show({ content: `收到 ${newCount} 条新消息`, position: 'top', duration: 3000 })
+      // 醒目的顶部横幅通知
+      Toast.show({
+        content: `📬 收到 ${newCount} 条新消息`,
+        position: 'top',
+        duration: 4000,
+        maskStyle: { background: 'transparent' },
+        style: {
+          background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+          color: '#fff',
+          fontWeight: 600,
+          fontSize: 15,
+          borderRadius: 12,
+          padding: '12px 20px',
+          boxShadow: '0 8px 24px rgba(37,99,235,0.35)',
+        },
+      })
       // 浏览器桌面通知
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('工程结算管理', { body: `您有 ${newCount} 条新消息`, icon: '/favicon.ico' })
+      }
+      // 震动反馈（移动端）
+      if ('vibrate' in navigator) {
+        navigator.vibrate([100, 50, 100])
       }
     }
     prevUnreadRef.current = unreadCount

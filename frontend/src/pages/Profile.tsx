@@ -6,7 +6,7 @@ import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutlin
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTasks, useProjects } from '../lib/api'
 
-import { AVATAR_OPTIONS } from '../lib/avatarOptions'
+import { AVATAR_STYLE_GROUPS } from '../lib/avatarOptions'
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -54,6 +54,7 @@ export default function Profile() {
     if (user?.name) setEditName(user.name)
   }, [user?.name])
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
+  const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
   const [saving, setSaving] = useState(false)
 
   const handleLogout = () => {
@@ -388,14 +389,33 @@ export default function Profile() {
 
               {/* Default Avatars Grid */}
               <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 12 }}>选择预设头像</div>
+              {/* Style Tabs */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                {AVATAR_STYLE_GROUPS.map((g, idx) => (
+                  <div
+                    key={g.key}
+                    onClick={() => setAvatarStyleIdx(idx)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: avatarStyleIdx === idx ? 'var(--accent-color, #3b82f6)' : '#f1f5f9',
+                      color: avatarStyleIdx === idx ? '#fff' : '#64748b',
+                      transition: 'all 0.2s'
+                    }}
+                  >{g.label}</div>
+                ))}
+              </div>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: 12
               }}>
-                {AVATAR_OPTIONS.map((url, i) => (
+                {AVATAR_STYLE_GROUPS[avatarStyleIdx].avatars.map((url, i) => (
                   <div
-                    key={i}
+                    key={url}
                     onClick={() => setSelectedAvatar(url)}
                     style={{
                       width: '100%',

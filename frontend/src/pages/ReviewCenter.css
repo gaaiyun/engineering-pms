@@ -42,6 +42,10 @@
   border-left-color: #10b981;
   opacity: 0.85;
 }
+.audit-card.rejected {
+  border-left-color: #ef4444;
+  opacity: 0.85;
+}
 
 .audit-card-header {
   display: flex;
@@ -151,6 +155,12 @@
 .audit-status-done {
   font-size: 12px;
   color: #10b981;
+  font-weight: 600;
+}
+
+.audit-status-rejected {
+  font-size: 12px;
+  color: #ef4444;
   font-weight: 600;
 }
 

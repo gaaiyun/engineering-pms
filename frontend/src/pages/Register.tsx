@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Form, Input, Button, Toast, Selector } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
-import { AVATAR_OPTIONS } from '../lib/avatarOptions'
+import { AVATAR_STYLE_GROUPS } from '../lib/avatarOptions'
 import { motion } from 'framer-motion'
 import { 
   IoPersonOutline, 
@@ -21,6 +21,7 @@ const Register = () => {
   const [form] = Form.useForm()
   const [step, setStep] = useState(1) // 分步注册
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
+  const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
 
   const departments = [
     { label: '工程部', value: '工程部' },
@@ -306,11 +307,30 @@ const Register = () => {
 
               <motion.div variants={itemVariants}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>选择头像</div>
+                {/* Style Tabs */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  {AVATAR_STYLE_GROUPS.map((g, idx) => (
+                    <div
+                      key={g.key}
+                      onClick={() => setAvatarStyleIdx(idx)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 20,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: avatarStyleIdx === idx ? '#10B981' : '#f1f5f9',
+                        color: avatarStyleIdx === idx ? '#fff' : '#64748b',
+                        transition: 'all 0.2s'
+                      }}
+                    >{g.label}</div>
+                  ))}
+                </div>
                 <Form.Item name='avatar'>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                    {AVATAR_OPTIONS.map((url, i) => (
+                    {AVATAR_STYLE_GROUPS[avatarStyleIdx].avatars.map((url) => (
                       <div
-                        key={i}
+                        key={url}
                         onClick={() => { setSelectedAvatar(url); form.setFieldValue('avatar', url) }}
                         style={{
                           aspectRatio: 1,

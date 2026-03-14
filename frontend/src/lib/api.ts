@@ -99,7 +99,7 @@ export interface AuditLog extends RecordModel {
     before_data?: Record<string, unknown>
     after_data?: Record<string, unknown>
     note?: string
-    review_status?: 'unread' | 'read' | 'approved'
+    review_status?: 'unread' | 'read' | 'approved' | 'rejected'
     reviewed_by?: string
     expand?: {
         operator?: User
@@ -1231,7 +1231,7 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
             if (filters?.action_type) parts.push(`action_type="${filters.action_type}"`)
             if (filters?.review_status) {
               if (filters.review_status === 'unread') {
-                parts.push(`(review_status != "read" && review_status != "approved")`)
+                parts.push(`(review_status != "read" && review_status != "approved" && review_status != "rejected")`)
               } else {
                 parts.push(`review_status="${filters.review_status}"`)
               }
@@ -1258,7 +1258,7 @@ export function useUnreadAuditCount() {
         enabled: pb.authStore.isValid,
         queryFn: async () => {
             const result = await pb.collection('audit_logs').getList(1, 1, {
-                filter: 'review_status != "read" && review_status != "approved"',
+                filter: 'review_status != "read" && review_status != "approved" && review_status != "rejected"',
             })
             return result.totalItems
         },
@@ -1271,10 +1271,11 @@ export function useUpdateAuditLogStatus() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async ({ id, review_status }: { id: string; review_status: 'read' | 'approved' }) => {
+        mutationFn: async ({ id, review_status, reject_note }: { id: string; review_status: 'read' | 'approved' | 'rejected'; reject_note?: string }) => {
             return await pb.collection('audit_logs').update(id, {
                 review_status,
                 reviewed_by: pb.authStore.model?.id,
+                ...(reject_note ? { reject_note } : {}),
             })
         },
         onSuccess: () => {
