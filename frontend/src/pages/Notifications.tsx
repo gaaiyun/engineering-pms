@@ -52,7 +52,7 @@ export default function Notifications() {
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications
     if (activeTab === 'unread') return notifications.filter(n => !n.is_read)
-    if (activeTab === 'task') return notifications.filter(n => n.type?.startsWith('task') || n.type === 'step_updated' || n.type === 'overdue')
+    if (activeTab === 'task') return notifications.filter(n => n.type?.startsWith('task') || n.type === 'step_updated' || n.type === 'overdue' || n.type === 'audit_rejected')
     if (activeTab === 'handoff') return notifications.filter(n => n.type?.startsWith('handoff'))
     if (activeTab === 'blocker') return notifications.filter(n => n.type?.startsWith('blocker') || n.type === 'escalation')
     if (activeTab === 'project') return notifications.filter(n => n.type?.startsWith('project'))
@@ -130,6 +130,7 @@ export default function Notifications() {
     if (type.startsWith('blocker') || type === 'escalation') return <IoAlertCircle size={24} color="#F97316" />
     if (type.startsWith('handoff')) return <IoInformationCircle size={24} color="#8B5CF6" />
     if (type === 'overdue') return <IoAlertCircle size={24} color="#B91C1C" />
+    if (type === 'audit_rejected') return <IoAlertCircle size={24} color="#DC2626" />
     if (type === 'flower') return <IoCheckmarkCircle size={24} color="#059669" />
     if (type === 'comment_mention') return <IoInformationCircle size={24} color="#10B981" />
     return <IoInformationCircle size={24} color="#64748B" />
@@ -142,6 +143,7 @@ export default function Notifications() {
     if (type.startsWith('handoff')) return '交接'
     if (type === 'step_updated') return '进度'
     if (type === 'overdue') return '逾期'
+    if (type === 'audit_rejected') return '审计驳回'
     if (type === 'flower') return '奖励'
     if (type === 'comment_mention') return '提及'
     return '系统'

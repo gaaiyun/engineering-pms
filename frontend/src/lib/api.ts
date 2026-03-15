@@ -1272,15 +1272,72 @@ export function useUpdateAuditLogStatus() {
 
     return useMutation({
         mutationFn: async ({ id, review_status, reject_note }: { id: string; review_status: 'read' | 'approved' | 'rejected'; reject_note?: string }) => {
-            return await pb.collection('audit_logs').update(id, {
+            // 先读取审计日志详情
+            const auditLog = await pb.collection('audit_logs').getOne(id)
+
+            // 拒绝 mark_complete 时，回滚任务状态
+            if (review_status === 'rejected' && auditLog.action_type === 'mark_complete' && auditLog.task) {
+                try {
+                    const task = await pb.collection('tasks').getOne(auditLog.task)
+                    if (task.status === 'completed') {
+                        // 判断是否逾期：有截止日期且已过期 → overdue，否则 → in_progress
+                        const isOverdue = task.deadline && new Date(task.deadline) < new Date()
+                        await pb.collection('tasks').update(auditLog.task, {
+                            status: isOverdue ? 'overdue' : 'in_progress',
+                            completed_at: null,
+                        })
+                    }
+                } catch (e) { console.warn('回滚任务状态失败', e) }
+            }
+
+            // 拒绝 update_task 时，回滚到 before_data
+            if (review_status === 'rejected' && auditLog.action_type === 'update_task' && auditLog.task && auditLog.before_data) {
+                try {
+                    const rollbackData: Record<string, unknown> = {}
+                    const before = auditLog.before_data as Record<string, unknown>
+                    const after = auditLog.after_data as Record<string, unknown>
+                    // 只回滚实际被修改的字段
+                    for (const key of Object.keys(after || {})) {
+                        if (key in before) rollbackData[key] = before[key]
+                    }
+                    if (Object.keys(rollbackData).length > 0) {
+                        await pb.collection('tasks').update(auditLog.task, rollbackData)
+                    }
+                } catch (e) { console.warn('回滚任务变更失败', e) }
+            }
+
+            // 更新审计日志状态
+            const result = await pb.collection('audit_logs').update(id, {
                 review_status,
                 reviewed_by: pb.authStore.model?.id,
                 ...(reject_note ? { reject_note } : {}),
             })
+
+            // 拒绝时通知操作人
+            if (review_status === 'rejected' && auditLog.operator) {
+                const reviewerName = pb.authStore.model?.name || pb.authStore.model?.username || '管理员'
+                const actionLabel = auditLog.action_type === 'mark_complete' ? '任务完成' : auditLog.action_type === 'update_task' ? '任务修改' : '操作'
+                try {
+                    await pb.collection('notifications').create({
+                        user: auditLog.operator,
+                        type: 'audit_rejected',
+                        title: `${actionLabel}被拒绝`,
+                        content: `${reviewerName} 拒绝了您的${actionLabel}${reject_note ? '，原因：' + reject_note : ''}`,
+                        is_read: false,
+                        link_type: auditLog.task ? 'task' : 'project',
+                        link_id: auditLog.task || auditLog.project || '',
+                    })
+                } catch (e) { console.warn('发送拒绝通知失败', e) }
+            }
+
+            return result
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
             queryClient.invalidateQueries({ queryKey: ['audit_logs', 'unread_count'] })
+            queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+            queryClient.invalidateQueries({ queryKey: ['visible_tasks'] })
+            queryClient.invalidateQueries({ queryKey: queryKeys.projects })
         },
     })
 }

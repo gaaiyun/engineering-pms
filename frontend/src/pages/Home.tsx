@@ -31,16 +31,6 @@ export default function Home() {
         content: `📬 收到 ${newCount} 条新消息`,
         position: 'top',
         duration: 4000,
-        maskStyle: { background: 'transparent' },
-        style: {
-          background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-          color: '#fff',
-          fontWeight: 600,
-          fontSize: 15,
-          borderRadius: 12,
-          padding: '12px 20px',
-          boxShadow: '0 8px 24px rgba(37,99,235,0.35)',
-        },
       })
       // 浏览器桌面通知
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -71,8 +61,10 @@ export default function Home() {
   const { data: notifications = [] } = useNotifications(userId)
   const { data: myProjects = [] } = useProjects()
 
-  // 员工的当前任务（进行中和待办）
-  const currentTasks = myTasks.filter(t => t.status === 'in_progress' || t.status === 'pending').slice(0, 5)
+  // 员工的当前任务（进行中、待办、卡点、逾期）
+  const currentTasks = myTasks.filter(t => 
+    t.status === 'in_progress' || t.status === 'pending' || t.status === 'blocked' || t.status === 'overdue'
+  ).slice(0, 5)
   // 最近未读消息
   const recentNotifications = notifications.filter(n => !n.is_read).slice(0, 5)
 
@@ -209,9 +201,9 @@ export default function Home() {
             const keys = tabs.map(t => t.key)
             const idx = keys.indexOf(activeKey)
             if (diff > 0 && idx < keys.length - 1) {
-              setActiveKey(keys[idx + 1])
+              handleTabChange(keys[idx + 1])
             } else if (diff < 0 && idx > 0) {
-              setActiveKey(keys[idx - 1])
+              handleTabChange(keys[idx - 1])
             }
           }
           touchStartRef.current = null
@@ -295,10 +287,12 @@ export default function Home() {
                               <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>{task.stage_name}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#64748b' }}>
                                 <span style={{
-                                  padding: '2px 8px', borderRadius: 4, background: task.status === 'in_progress' ? '#dbeafe' : '#f1f5f9',
-                                  color: task.status === 'in_progress' ? '#2563eb' : '#64748b', fontWeight: 600
+                                  padding: '2px 8px', borderRadius: 4,
+                                  background: task.status === 'in_progress' ? '#dbeafe' : task.status === 'blocked' ? '#fee2e2' : task.status === 'overdue' ? '#fff7ed' : '#f1f5f9',
+                                  color: task.status === 'in_progress' ? '#2563eb' : task.status === 'blocked' ? '#dc2626' : task.status === 'overdue' ? '#ea580c' : '#64748b',
+                                  fontWeight: 600
                                 }}>
-                                  {task.status === 'in_progress' ? '进行中' : task.status === 'pending' ? '待办' : '处理中'}
+                                  {task.status === 'in_progress' ? '进行中' : task.status === 'pending' ? '待办' : task.status === 'blocked' ? '卡点' : task.status === 'overdue' ? '逾期' : task.status}
                                 </span>
                                 {task.deadline && (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

@@ -232,6 +232,8 @@ export default function Tasks() {
     if (status === 'blocked') return <Tag color="danger" style={{ fontSize: 10, borderRadius: 6 }}>卡点</Tag>
     if (status === 'in_progress') return <Tag color="primary" style={{ fontSize: 10, borderRadius: 6 }}>进行中</Tag>
     if (status === 'pending') return <Tag color="default" style={{ fontSize: 10, borderRadius: 6 }}>待开始</Tag>
+    if (status === 'overdue') return <Tag color="warning" style={{ fontSize: 10, borderRadius: 6 }}>逾期</Tag>
+    if (status === 'completed') return <Tag color="success" style={{ fontSize: 10, borderRadius: 6 }}>已完成</Tag>
     return <Tag style={{ fontSize: 10, borderRadius: 6 }}>{status}</Tag>
   }
 
