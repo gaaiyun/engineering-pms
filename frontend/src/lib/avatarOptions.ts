@@ -1,67 +1,84 @@
 /**
- * 预设头像选项 - 5 组风格，每组 16 个，共 80 个
+ * 预设头像选项 - 5 组专业风格，每组 20 个，共 100 个
  * 使用 DiceBear v9.x API（免费、无需认证）
  *
  * 风格说明：
- *  1. notionists-neutral  — Notion 风格简笔画，干净专业
- *  2. lorelei-neutral     — 优雅线条人像，偏文艺
- *  3. adventurer-neutral  — 扁平插画人像，活泼但不失正式
- *  4. open-peeps          — 手绘线稿风，流行且百搭
- *  5. avataaars-neutral   — 经典卡通人像，辨识度高
+ *  1. initials      — 字母头像，企业级风格（类似 Slack/Teams）
+ *  2. micah          — 现代简约人像，干净专业
+ *  3. bottts-neutral — 科技机器人风格，现代感强
+ *  4. glass          — 玻璃质感抽象图案，高端大气
+ *  5. shapes         — 几何图案，简洁专业
  */
 
 const BASE = 'https://api.dicebear.com/9.x'
 
-// 柔和背景色
-const BG = ['b6e3f4', 'c0aede', 'd1d4f9', 'ffd5dc', 'ffdfbf', 'e8f5e9', 'fff3e0', 'f3e5f5']
+// 专业配色方案
+const PRO_BG = [
+  '0ea5e9', '6366f1', '8b5cf6', 'ec4899', 'f97316',
+  '14b8a6', '3b82f6', 'a855f7', 'ef4444', '22c55e',
+  '0891b2', '7c3aed', 'e11d48', 'f59e0b', '06b6d4',
+  '2563eb', '9333ea', 'dc2626', '16a34a', 'ea580c'
+]
 
-function url(style: string, seed: string, idx: number) {
-  return `${BASE}/${style}/svg?seed=${seed}&backgroundColor=${BG[idx % BG.length]}&radius=50`
+function url(style: string, seed: string, idx: number, extra = '') {
+  return `${BASE}/${style}/svg?seed=${seed}&backgroundColor=${PRO_BG[idx % PRO_BG.length]}&radius=50${extra}`
 }
 
-// ---- 风格 1: Notionists Neutral（Notion 简笔画）----
-const NOTIONISTS_SEEDS = [
-  'engineer1', 'manager2', 'designer3', 'analyst4', 'leader5', 'planner6', 'builder7', 'inspector8',
-  'architect9', 'director10', 'consultant11', 'supervisor12', 'coordinator13', 'specialist14', 'technician15', 'operator16'
+// ---- 风格 1: Initials（字母头像 - 最专业）----
+const INITIALS_SEEDS = [
+  'ZhangWei', 'LiMing', 'WangFang', 'LiuYang', 'ChenXi',
+  'ZhaoLei', 'SunQian', 'ZhouJie', 'HuangPeng', 'WuDan',
+  'XuJun', 'LinHai', 'YangMing', 'HeJia', 'GuoFei',
+  'MaLin', 'DengChao', 'XieNa', 'HanMei', 'TangYun'
 ]
-export const STYLE_NOTIONISTS = NOTIONISTS_SEEDS.map((s, i) => url('notionists-neutral', s, i))
+export const STYLE_INITIALS = INITIALS_SEEDS.map((s, i) =>
+  url('initials', s, i, '&fontSize=40&fontWeight=600')
+)
 
-// ---- 风格 2: Lorelei Neutral（优雅线条）----
-const LORELEI_SEEDS = [
-  'zhangwei', 'liming', 'wangfang', 'liuyang', 'chenxi', 'zhaolei', 'sunqian', 'zhoujie',
-  'huangmin', 'wugang', 'xujing', 'linhai', 'heyun', 'guofei', 'malin', 'songyi'
+// ---- 风格 2: Micah（现代简约人像）----
+const MICAH_SEEDS = [
+  'pm_alice', 'pm_bob', 'pm_carol', 'pm_david', 'pm_emma',
+  'pm_frank', 'pm_grace', 'pm_henry', 'pm_iris', 'pm_jack',
+  'pm_kate', 'pm_leo', 'pm_mia', 'pm_noah', 'pm_olivia',
+  'pm_peter', 'pm_quinn', 'pm_rose', 'pm_sam', 'pm_tina'
 ]
-export const STYLE_LORELEI = LORELEI_SEEDS.map((s, i) => url('lorelei-neutral', s, i))
+export const STYLE_MICAH = MICAH_SEEDS.map((s, i) => url('micah', s, i))
 
-// ---- 风格 3: Adventurer Neutral（扁平插画）----
-const ADV_SEEDS = [
-  'project_a', 'project_b', 'project_c', 'project_d', 'project_e', 'project_f', 'project_g', 'project_h',
-  'project_i', 'project_j', 'project_k', 'project_l', 'project_m', 'project_n', 'project_o', 'project_p'
+// ---- 风格 3: Bottts Neutral（科技风格）----
+const BOTTTS_SEEDS = [
+  'tech_alpha', 'tech_beta', 'tech_gamma', 'tech_delta', 'tech_epsilon',
+  'tech_zeta', 'tech_eta', 'tech_theta', 'tech_iota', 'tech_kappa',
+  'tech_lambda', 'tech_mu', 'tech_nu', 'tech_xi', 'tech_omicron',
+  'tech_pi', 'tech_rho', 'tech_sigma', 'tech_tau', 'tech_upsilon'
 ]
-export const STYLE_ADVENTURER = ADV_SEEDS.map((s, i) => url('adventurer-neutral', s, i))
+export const STYLE_BOTTTS = BOTTTS_SEEDS.map((s, i) => url('bottts-neutral', s, i))
 
-// ---- 风格 4: Open Peeps（手绘线稿）----
-const PEEPS_SEEDS = [
-  'zhugong1', 'jianli2', 'caiwu3', 'jishu4', 'anquan5', 'sheji6', 'zongjian7', 'xiangmu8',
-  'yewu9', 'renshi10', 'xingzheng11', 'falv12', 'shichang13', 'yunying14', 'ceshi15', 'kaifa16'
+// ---- 风格 4: Glass（玻璃质感）----
+const GLASS_SEEDS = [
+  'glass_ruby', 'glass_sapphire', 'glass_emerald', 'glass_amber', 'glass_topaz',
+  'glass_pearl', 'glass_opal', 'glass_jade', 'glass_onyx', 'glass_coral',
+  'glass_ivory', 'glass_azure', 'glass_crimson', 'glass_violet', 'glass_indigo',
+  'glass_teal', 'glass_bronze', 'glass_silver', 'glass_gold', 'glass_platinum'
 ]
-export const STYLE_OPEN_PEEPS = PEEPS_SEEDS.map((s, i) => url('open-peeps', s, i))
+export const STYLE_GLASS = GLASS_SEEDS.map((s, i) => url('glass', s, i))
 
-// ---- 风格 5: Avataaars Neutral（经典卡通）----
-const AVATAAARS_SEEDS = [
-  'zhangsan', 'lisi', 'wangwu', 'zhaoliu', 'qianqi', 'sunba', 'zhoujiu', 'wushi',
-  'zhengyi', 'fengjun', 'chenhao', 'yangkai', 'xumeng', 'dongxue', 'caorui', 'weilan'
+// ---- 风格 5: Shapes（几何图案）----
+const SHAPES_SEEDS = [
+  'geo_circle', 'geo_square', 'geo_triangle', 'geo_diamond', 'geo_hexagon',
+  'geo_star', 'geo_cross', 'geo_arrow', 'geo_wave', 'geo_spiral',
+  'geo_grid', 'geo_dot', 'geo_line', 'geo_arc', 'geo_ring',
+  'geo_prism', 'geo_cube', 'geo_sphere', 'geo_cone', 'geo_pyramid'
 ]
-export const STYLE_AVATAAARS = AVATAAARS_SEEDS.map((s, i) => url('avataaars-neutral', s, i))
+export const STYLE_SHAPES = SHAPES_SEEDS.map((s, i) => url('shapes', s, i))
 
 /** 所有风格分组 */
 export const AVATAR_STYLE_GROUPS = [
-  { key: 'notionists', label: '简约线条', avatars: STYLE_NOTIONISTS },
-  { key: 'lorelei', label: '优雅人像', avatars: STYLE_LORELEI },
-  { key: 'adventurer', label: '扁平插画', avatars: STYLE_ADVENTURER },
-  { key: 'openpeeps', label: '手绘线稿', avatars: STYLE_OPEN_PEEPS },
-  { key: 'avataaars', label: '经典卡通', avatars: STYLE_AVATAAARS },
+  { key: 'initials', label: '字母头像', avatars: STYLE_INITIALS },
+  { key: 'micah', label: '现代人像', avatars: STYLE_MICAH },
+  { key: 'bottts', label: '科技风格', avatars: STYLE_BOTTTS },
+  { key: 'glass', label: '玻璃质感', avatars: STYLE_GLASS },
+  { key: 'shapes', label: '几何图案', avatars: STYLE_SHAPES },
 ] as const
 
-/** 向后兼容：默认导出全部 80 个头像（扁平数组） */
+/** 向后兼容：默认导出全部 100 个头像（扁平数组） */
 export const AVATAR_OPTIONS = AVATAR_STYLE_GROUPS.flatMap(g => g.avatars)

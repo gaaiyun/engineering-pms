@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading } from 'antd-mobile'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
 import { pb } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount } from '../../lib/api'
@@ -27,7 +27,8 @@ import {
 import AIConsole from './AIConsole'
 import BatchProjectCreator from '../../components/BatchProjectCreator'
 import BatchTaskEditor from '../../components/BatchTaskEditor'
-import Profile from '../Profile'
+import { AVATAR_STYLE_GROUPS } from '../../lib/avatarOptions'
+import { IoCameraOutline, IoClose } from 'react-icons/io5'
 
 interface User {
   id: string
@@ -114,6 +115,15 @@ const AdminDashboard = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [userForm] = Form.useForm()
   const [addUserForm] = Form.useForm()
+
+  // Profile 编辑状态
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [editName, setEditName] = useState(authUser?.name || '')
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false)
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
+  const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -323,6 +333,54 @@ const AdminDashboard = () => {
     }
   }
 
+
+  // ---- Profile 编辑 ----
+  const handleProfileSave = async () => {
+    if (!authUser) return
+    setProfileSaving(true)
+    try {
+      const formData = new FormData()
+      formData.append('name', editName)
+      if (selectedAvatar && selectedAvatar.startsWith('http')) {
+        const response = await fetch(selectedAvatar)
+        if (!response.ok) throw new Error('头像下载失败')
+        const blob = await response.blob()
+        formData.append('avatar', blob, 'avatar.svg')
+      }
+      await pb.collection('users').update(authUser.id, formData)
+      await pb.collection('users').authRefresh()
+      Toast.show({ icon: 'success', content: '保存成功' })
+      setIsEditingProfile(false)
+      setShowAvatarPicker(false)
+      setSelectedAvatar(null)
+      refreshAll()
+    } catch (error: any) {
+      Toast.show({ icon: 'fail', content: error.message || '保存失败' })
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  const handleProfileFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !authUser) return
+    setProfileSaving(true)
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+      await pb.collection('users').update(authUser.id, formData)
+      await pb.collection('users').authRefresh()
+      Toast.show({ icon: 'success', content: '头像已更新' })
+      setShowAvatarPicker(false)
+      refreshAll()
+    } catch (error: any) {
+      Toast.show({ icon: 'fail', content: error.message || '上传失败' })
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  const currentAvatarUrl = authUser?.avatar ? pb.files.getUrl(authUser, authUser.avatar) : ''
 
   const handleDeleteTask = async (taskId: string) => {
     Dialog.confirm({
@@ -1070,8 +1128,223 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Profile View — 复用 Profile 组件（含头像编辑） */}
-        {activeKey === 'profile' && <Profile />}
+        {/* Profile View */}
+        {activeKey === 'profile' && (
+          <div className="page" style={{ padding: '24px 20px' }}>
+            {/* Edit Toggle */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              {!isEditingProfile ? (
+                <Button size="small" fill="none" style={{ color: '#3b82f6', fontWeight: 600 }} onClick={() => { setIsEditingProfile(true); setEditName(authUser?.name || '') }}>编辑资料</Button>
+              ) : (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button size="small" fill="none" style={{ color: '#94a3b8' }} onClick={() => { setIsEditingProfile(false); setSelectedAvatar(null); setEditName(authUser?.name || '') }}>取消</Button>
+                  <Button size="small" color="primary" loading={profileSaving} style={{ borderRadius: 8 }} onClick={handleProfileSave}>保存</Button>
+                </div>
+              )}
+            </div>
+            {/* Profile Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                borderRadius: 24,
+                padding: 28,
+                marginBottom: 24,
+                color: 'white'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                <div style={{ position: 'relative' }}>
+                  <Avatar
+                    src={selectedAvatar || currentAvatarUrl}
+                    style={{ '--size': '72px', '--border-radius': '20px', background: '#334155' }}
+                  />
+                  {isEditingProfile && (
+                    <div onClick={() => setShowAvatarPicker(true)} style={{
+                      position: 'absolute', bottom: -4, right: -4,
+                      width: 28, height: 28, borderRadius: '50%',
+                      background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', border: '2px solid #0f172a'
+                    }}>
+                      <IoCameraOutline size={14} color="white" />
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  {isEditingProfile ? (
+                    <input
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      placeholder="输入姓名"
+                      style={{
+                        fontSize: 20, fontWeight: 800, color: 'white', background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '6px 12px',
+                        width: '100%', outline: 'none'
+                      }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>{authUser?.name || '管理员'}</div>
+                  )}
+                  <div style={{ fontSize: 14, color: '#94a3b8', marginTop: 4 }}>{authUser?.email}</div>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                    background: 'rgba(59, 130, 246, 0.3)', padding: '4px 10px',
+                    borderRadius: 6, marginTop: 8, display: 'inline-block'
+                  }}>
+                    {authUser?.role?.toUpperCase() || 'MANAGER'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 800 }}>{projects.length}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>管理项目</div>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 800 }}>{users.length}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>团队成员</div>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 800 }}>{activeTasks.filter(t => t.status === 'completed').length}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>完成任务</div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Quick Actions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              style={{
+                background: 'white',
+                borderRadius: 20,
+                padding: 8,
+                marginBottom: 24,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div
+                onClick={() => navigate('/notifications')}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, cursor: 'pointer', borderRadius: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IoNotificationsOutline size={20} color="#dc2626" />
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>消息通知</span>
+                </div>
+                <IoChevronForwardOutline size={18} color="#94a3b8" />
+              </div>
+
+              <div
+                onClick={() => setActiveKey('users' as any)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, cursor: 'pointer', borderRadius: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IoPeopleOutline size={20} color="#2563eb" />
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>用户管理</span>
+                </div>
+                <IoChevronForwardOutline size={18} color="#94a3b8" />
+              </div>
+
+              <div
+                onClick={() => navigate('/review-center')}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, cursor: 'pointer', borderRadius: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IoCheckmarkCircleOutline size={20} color="#16a34a" />
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>审核中心</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {unreadAuditCount > 0 && (
+                    <span style={{ background: '#ef4444', color: 'white', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
+                      {unreadAuditCount}
+                    </span>
+                  )}
+                  <IoChevronForwardOutline size={18} color="#94a3b8" />
+                </div>
+              </div>
+
+              <div
+                onClick={() => navigate('/settings')}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, cursor: 'pointer', borderRadius: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IoSettingsOutline size={20} color="#64748b" />
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>系统设置</span>
+                </div>
+                <IoChevronForwardOutline size={18} color="#94a3b8" />
+              </div>
+
+              <div
+                onClick={() => navigate('/admin/import')}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, cursor: 'pointer', borderRadius: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IoCloudUploadOutline size={20} color="#3b82f6" />
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#1e293b' }}>数据导入</span>
+                </div>
+                <IoChevronForwardOutline size={18} color="#94a3b8" />
+              </div>
+            </motion.div>
+
+            {/* Logout */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Button
+                block
+                onClick={() => {
+                  pb.authStore.clear()
+                  localStorage.removeItem('rememberMe')
+                  sessionStorage.removeItem('pocketbase_auth')
+                  navigate('/login', { replace: true })
+                }}
+                style={{
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  border: 'none',
+                  borderRadius: 16,
+                  height: 52,
+                  fontWeight: 600,
+                  fontSize: 15
+                }}
+              >
+                <IoLogOutOutline size={20} style={{ marginRight: 8 }} />
+                退出登录
+              </Button>
+            </motion.div>
+          </div>
+        )}
         </>)}
       </div>
 
@@ -1159,6 +1432,76 @@ const AdminDashboard = () => {
           }))}
         />
       )}
+
+      {/* Avatar Picker Popup */}
+      <Popup
+        visible={showAvatarPicker}
+        onMaskClick={() => setShowAvatarPicker(false)}
+        bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70dvh', overflow: 'auto' }}
+      >
+        <div style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b' }}>选择头像</div>
+            <IoClose size={24} color="#94a3b8" style={{ cursor: 'pointer' }} onClick={() => setShowAvatarPicker(false)} />
+          </div>
+
+          {/* 上传自定义头像 */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: 16, background: '#f8fafc', borderRadius: 12, border: '2px dashed #cbd5e1',
+              textAlign: 'center', cursor: 'pointer', marginBottom: 20
+            }}
+          >
+            <IoCameraOutline size={24} color="#64748b" />
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>上传自定义头像</div>
+          </div>
+          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfileFileUpload} />
+
+          {/* 风格切换 */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
+            {AVATAR_STYLE_GROUPS.map((group, idx) => (
+              <div
+                key={group.label}
+                onClick={() => setAvatarStyleIdx(idx)}
+                style={{
+                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+                  background: avatarStyleIdx === idx ? '#0f172a' : '#f1f5f9',
+                  color: avatarStyleIdx === idx ? 'white' : '#64748b', cursor: 'pointer'
+                }}
+              >
+                {group.label}
+              </div>
+            ))}
+          </div>
+
+          {/* 头像网格 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            {AVATAR_STYLE_GROUPS[avatarStyleIdx]?.avatars.map((url, i) => (
+              <div
+                key={i}
+                onClick={() => setSelectedAvatar(url)}
+                style={{
+                  borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+                  border: selectedAvatar === url ? '3px solid #3b82f6' : '3px solid transparent',
+                  transition: 'border 0.2s'
+                }}
+              >
+                <img src={url} alt="" style={{ width: '100%', height: 'auto', display: 'block', background: '#f1f5f9' }} />
+              </div>
+            ))}
+          </div>
+
+          <Button
+            block
+            color="primary"
+            style={{ marginTop: 20, borderRadius: 12, height: 48, fontWeight: 600 }}
+            onClick={() => setShowAvatarPicker(false)}
+          >
+            确定选择
+          </Button>
+        </div>
+      </Popup>
     </div>
   )
 }

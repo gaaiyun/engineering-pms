@@ -14,7 +14,7 @@ import MyTasks from './pages/MyTasks'
 import SettingsPage from './pages/SettingsPage'
 import Notifications from './pages/Notifications'
 import ReviewCenter from './pages/ReviewCenter'
-import ManagerDashboard from './pages/ManagerDashboard'
+// ManagerDashboard 已统一到 AdminDashboard
 import { pb } from './lib/pocketbase'
 
 // 简单的路由保护组件
@@ -94,12 +94,12 @@ function App() {
           }
         />
 
-        {/* 经理工作台 */}
+        {/* 经理工作台 - 统一使用 AdminDashboard（manager + admin 均可访问） */}
         <Route
           path="/manager"
           element={
             <ManagerRoute>
-              <ManagerDashboard />
+              <AdminDashboard />
             </ManagerRoute>
           }
         />
