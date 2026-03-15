@@ -1,5 +1,5 @@
 /**
- * 预设头像选项 - 5 组风格，每组 8 个，共 40 个
+ * 预设头像选项 - 5 组风格，每组 16 个，共 80 个
  * 使用 DiceBear v9.x API（免费、无需认证）
  *
  * 风格说明：
@@ -20,23 +20,38 @@ function url(style: string, seed: string, idx: number) {
 }
 
 // ---- 风格 1: Notionists Neutral（Notion 简笔画）----
-const NOTIONISTS_SEEDS = ['engineer1', 'manager2', 'designer3', 'analyst4', 'leader5', 'planner6', 'builder7', 'inspector8']
+const NOTIONISTS_SEEDS = [
+  'engineer1', 'manager2', 'designer3', 'analyst4', 'leader5', 'planner6', 'builder7', 'inspector8',
+  'architect9', 'director10', 'consultant11', 'supervisor12', 'coordinator13', 'specialist14', 'technician15', 'operator16'
+]
 export const STYLE_NOTIONISTS = NOTIONISTS_SEEDS.map((s, i) => url('notionists-neutral', s, i))
 
 // ---- 风格 2: Lorelei Neutral（优雅线条）----
-const LORELEI_SEEDS = ['zhangwei', 'liming', 'wangfang', 'liuyang', 'chenxi', 'zhaolei', 'sunqian', 'zhoujie']
+const LORELEI_SEEDS = [
+  'zhangwei', 'liming', 'wangfang', 'liuyang', 'chenxi', 'zhaolei', 'sunqian', 'zhoujie',
+  'huangmin', 'wugang', 'xujing', 'linhai', 'heyun', 'guofei', 'malin', 'songyi'
+]
 export const STYLE_LORELEI = LORELEI_SEEDS.map((s, i) => url('lorelei-neutral', s, i))
 
 // ---- 风格 3: Adventurer Neutral（扁平插画）----
-const ADV_SEEDS = ['project_a', 'project_b', 'project_c', 'project_d', 'project_e', 'project_f', 'project_g', 'project_h']
+const ADV_SEEDS = [
+  'project_a', 'project_b', 'project_c', 'project_d', 'project_e', 'project_f', 'project_g', 'project_h',
+  'project_i', 'project_j', 'project_k', 'project_l', 'project_m', 'project_n', 'project_o', 'project_p'
+]
 export const STYLE_ADVENTURER = ADV_SEEDS.map((s, i) => url('adventurer-neutral', s, i))
 
 // ---- 风格 4: Open Peeps（手绘线稿）----
-const PEEPS_SEEDS = ['zhugong1', 'jianli2', 'caiwu3', 'jishu4', 'anquan5', 'sheji6', 'zongjian7', 'xiangmu8']
+const PEEPS_SEEDS = [
+  'zhugong1', 'jianli2', 'caiwu3', 'jishu4', 'anquan5', 'sheji6', 'zongjian7', 'xiangmu8',
+  'yewu9', 'renshi10', 'xingzheng11', 'falv12', 'shichang13', 'yunying14', 'ceshi15', 'kaifa16'
+]
 export const STYLE_OPEN_PEEPS = PEEPS_SEEDS.map((s, i) => url('open-peeps', s, i))
 
 // ---- 风格 5: Avataaars Neutral（经典卡通）----
-const AVATAAARS_SEEDS = ['zhangsan', 'lisi', 'wangwu', 'zhaoliu', 'qianqi', 'sunba', 'zhoujiu', 'wushi']
+const AVATAAARS_SEEDS = [
+  'zhangsan', 'lisi', 'wangwu', 'zhaoliu', 'qianqi', 'sunba', 'zhoujiu', 'wushi',
+  'zhengyi', 'fengjun', 'chenhao', 'yangkai', 'xumeng', 'dongxue', 'caorui', 'weilan'
+]
 export const STYLE_AVATAAARS = AVATAAARS_SEEDS.map((s, i) => url('avataaars-neutral', s, i))
 
 /** 所有风格分组 */
@@ -48,5 +63,5 @@ export const AVATAR_STYLE_GROUPS = [
   { key: 'avataaars', label: '经典卡通', avatars: STYLE_AVATAAARS },
 ] as const
 
-/** 向后兼容：默认导出全部 40 个头像（扁平数组） */
+/** 向后兼容：默认导出全部 80 个头像（扁平数组） */
 export const AVATAR_OPTIONS = AVATAR_STYLE_GROUPS.flatMap(g => g.avatars)
