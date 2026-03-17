@@ -767,7 +767,6 @@ export function useMarkTaskBlocked() {
                     const rollbackTask = await pb.collection('tasks').getOne<Task>(rollbackToTaskId)
                     // 通知回退目标任务的负责人
                     if (rollbackTask.assignees?.length) {
-                        const userName = pb.authStore.model?.name || pb.authStore.model?.username
                         for (const uid of rollbackTask.assignees) {
                             await pb.collection('notifications').create({
                                 user: uid,
