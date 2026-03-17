@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react'
 import { Avatar, Input, Toast, Button } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { useNavigate } from 'react-router-dom'
-import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutline, IoChevronForward, IoCameraOutline, IoClose } from 'react-icons/io5'
+import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutline, IoChevronForward, IoCameraOutline, IoClose, IoPeopleOutline } from 'react-icons/io5'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTasks, useProjects } from '../lib/api'
 
@@ -289,6 +289,17 @@ export default function Profile() {
             </div>
             <IoChevronForward color="#CBD5E1" />
           </div>
+          {(user?.role === 'admin' || user?.role === 'manager') && (
+            <div className="profile-row" onClick={() => navigate('/admin?tab=users')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
+                  <IoPeopleOutline size={18} />
+                </div>
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>用户管理</span>
+              </div>
+              <IoChevronForward color="#CBD5E1" />
+            </div>
+          )}
         </motion.div>
 
         <motion.div variants={itemVariants} style={{ marginTop: 40, textAlign: 'center' }}>

@@ -207,33 +207,38 @@ export default function ProjectTimeline() {
         return startA - startB
       })
 
-      const processed: TaskLayout[] = []
+      // Pre-compute adjusted date ranges (same logic as getTaskStyle)
+      const getRange = (t: Task) => {
+        const s = dayjs(t.start_date || t.created)
+        let e = t.deadline ? dayjs(t.deadline) : s.add(1, 'day')
+        if (e.diff(s, 'day', true) < 0.5) e = s.add(1, 'day')
+        return { s, e }
+      }
+
+      const processed: { task: TaskLayout, s: dayjs.Dayjs, e: dayjs.Dayjs }[] = []
       let maxRow = 0
 
       sorted.forEach(task => {
-        const start = dayjs(task.start_date || task.created)
-        let end = task.deadline ? dayjs(task.deadline) : start.add(1, 'day')
-        if (end.diff(start, 'day') < 1) end = start.add(1, 'day')
+        const { s, e } = getRange(task)
 
-        // Find first available visual row
+        // Find first available visual row (no overlap)
         let currentRow = 0
         while (true) {
-          // Check collision with existing tasks in this row
           const collision = processed.find(p =>
-            p.visualRow === currentRow &&
-            dayjs(p.start_date || p.created).isBefore(end) &&
-            (p.deadline ? dayjs(p.deadline) : dayjs(p.start_date || p.created).add(1, 'day')).isAfter(start)
+            p.task.visualRow === currentRow &&
+            p.s.isBefore(e) &&
+            p.e.isAfter(s)
           )
           if (!collision) break
           currentRow++
         }
 
         task.visualRow = currentRow
-        processed.push(task)
+        processed.push({ task, s, e })
         if (currentRow > maxRow) maxRow = currentRow
       })
 
-      return { tasks: processed, maxRow }
+      return { tasks: sorted, maxRow }
     }
 
     // 4. Finalize Groups

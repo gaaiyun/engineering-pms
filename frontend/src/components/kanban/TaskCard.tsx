@@ -12,6 +12,7 @@ interface TaskCardProps {
     task: Task
     onClick?: () => void
     isDragging?: boolean
+    sequenceNumber?: number
 }
 
 const priorityColors = {
@@ -26,7 +27,7 @@ const priorityLabels: Record<string, string> = {
     low: '低',
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, sequenceNumber }) => {
     const {
         attributes,
         listeners,
@@ -68,10 +69,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging })
             style={style}
             {...attributes}
             {...listeners}
-            className={`task-card ${isDragging || isSortableDragging ? 'dragging' : ''} ${isOverdue ? 'overdue' : ''} ${isBlocked ? 'blocked' : ''} ${isMilestone ? 'milestone' : ''}`}
+            className={`task-card ${isDragging || isSortableDragging ? 'dragging' : ''} ${isOverdue ? 'overdue' : ''} ${isBlocked ? 'blocked' : ''} ${isMilestone ? 'milestone' : ''} ${task.status === 'in_progress' ? 'task-active-glow' : ''}`}
             onClick={onClick}
+            data-task-active={task.status === 'in_progress' ? 'true' : undefined}
         >
             <div className="task-card-header">
+                {sequenceNumber != null && (
+                    <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 22, height: 22, borderRadius: '50%', fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        background: task.status === 'in_progress' ? '#3b82f6' : task.status === 'completed' ? '#22c55e' : '#e2e8f0',
+                        color: (task.status === 'in_progress' || task.status === 'completed') ? '#fff' : '#64748b',
+                        marginRight: 6,
+                    }}>
+                        {sequenceNumber}
+                    </span>
+                )}
                 <span className="task-title">{task.stage_name}</span>
                 {task.priority && (
                     <Tag

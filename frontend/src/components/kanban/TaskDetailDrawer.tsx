@@ -26,6 +26,7 @@ import {
     useCreateComment,
     useTaskAuditLogs,
     useUsers,
+    useTasks,
     isManagerRole,
     type Task
 } from '../../lib/api'
@@ -69,6 +70,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     const { data: comments = [] } = useComments(task.id)
     const { data: auditLogs = [] } = useTaskAuditLogs(task.id)
     const { data: users = [] } = useUsers()
+    const { data: siblingTasks = [] } = useTasks(task.project)
 
     const updateTask = useUpdateTask()
     const markComplete = useMarkTaskComplete()
@@ -159,8 +161,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     need_help_from: values.needHelpFrom || [],
                     expected_resolve: values.expectedResolve,
                 },
+                rollbackToTaskId: Array.isArray(values.rollbackToTaskId) ? values.rollbackToTaskId[0] : values.rollbackToTaskId || undefined,
             })
-            Toast.show({ content: '卡点已上报', icon: 'success' })
+            Toast.show({ content: values.rollbackToTaskId ? '卡点已上报，已回退到指定步骤' : '卡点已上报', icon: 'success' })
             setShowBlockerForm(false)
             onUpdate?.()
         } catch {
@@ -450,6 +453,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 content={
                     <BlockerForm
                         users={users}
+                        siblingTasks={siblingTasks}
+                        currentTaskId={currentTask.id}
                         onSubmit={handleSubmitBlocker}
                         loading={markBlocked.isPending}
                     />
@@ -522,11 +527,21 @@ const HandoffForm: React.FC<{
 // 卡点表单组件
 const BlockerForm: React.FC<{
     users: any[]
+    siblingTasks: Task[]
+    currentTaskId: string
     onSubmit: (values: any) => void
     loading: boolean
-}> = ({ users, onSubmit, loading }) => {
+}> = ({ users, siblingTasks, currentTaskId, onSubmit, loading }) => {
     const [form] = Form.useForm()
     const [showDatePicker, setShowDatePicker] = useState(false)
+
+    // 过滤出当前任务之前的已完成/进行中的任务作为可回退目标
+    const rollbackOptions = siblingTasks
+        .filter(t => t.id !== currentTaskId && (t.status === 'completed' || t.status === 'in_progress'))
+        .map(t => ({
+            label: t.stage_name,
+            value: t.id,
+        }))
 
     return (
         <Form
@@ -546,6 +561,15 @@ const BlockerForm: React.FC<{
             >
                 <TextArea placeholder="请详细描述卡点原因" rows={3} />
             </Form.Item>
+
+            {rollbackOptions.length > 0 && (
+                <Form.Item name="rollbackToTaskId" label="回退到步骤（可选）">
+                    <Selector
+                        options={rollbackOptions}
+                        style={{ '--padding': '4px 12px' } as any}
+                    />
+                </Form.Item>
+            )}
 
             <Form.Item name="needHelpFrom" label="需要谁协助">
                 <Selector

@@ -15,6 +15,8 @@ interface KanbanColumnProps {
     color: string
     tasks: Task[]
     onTaskClick?: (task: Task) => void
+    /** 全局序号偏移量，用于跨列连续编号 */
+    indexOffset?: number
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -23,8 +25,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
     color,
     tasks,
     onTaskClick,
+    indexOffset = 0,
 }) => {
     const { isOver, setNodeRef } = useDroppable({ id })
+    const contentRef = React.useRef<HTMLDivElement>(null)
+
+    // 自动滚动到第一个进行中的任务
+    React.useEffect(() => {
+        if (!contentRef.current) return
+        const el = contentRef.current.querySelector('[data-task-active="true"]') as HTMLElement
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, [tasks])
 
     return (
         <div
@@ -38,17 +49,18 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
                 <span className="column-count">{tasks.length}</span>
             </div>
 
-            <div className="column-content">
+            <div className="column-content" ref={contentRef}>
                 <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     {tasks.length === 0 ? (
                         <div className="column-empty">
                             <span className="empty-text">暂无任务</span>
                         </div>
                     ) : (
-                        tasks.map((task) => (
+                        tasks.map((task, idx) => (
                             <TaskCard
                                 key={task.id}
                                 task={task}
+                                sequenceNumber={indexOffset + idx + 1}
                                 onClick={() => onTaskClick?.(task)}
                             />
                         ))

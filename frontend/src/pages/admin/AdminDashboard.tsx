@@ -284,7 +284,7 @@ const AdminDashboard = () => {
   const handleAddUser = async (values: any) => {
     try {
       await pb.collection('users').create({
-        username: values.email.split('@')[0] + '_' + Math.random().toString(36).slice(2, 6),
+        username: values.username.trim(),
         email: values.email,
         password: values.password,
         passwordConfirm: values.password,
@@ -1388,6 +1388,7 @@ const AdminDashboard = () => {
         title="新增用户"
         content={
           <Form form={addUserForm} layout='horizontal' onFinish={handleAddUser} footer={null}>
+            <Form.Item name='username' label='用户名' rules={[{ required: true, message: '请输入登录用户名' }, { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]{2,20}$/, message: '2-20位，支持中英文、数字、下划线' }]}><Input placeholder='登录时使用的用户名' /></Form.Item>
             <Form.Item name='name' label='姓名' rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item name='email' label='邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input /></Form.Item>
             <Form.Item name='password' label='密码' rules={[{ required: true, min: 8, message: '密码至少8位' }]}><Input type='password' /></Form.Item>

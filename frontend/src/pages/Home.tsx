@@ -4,7 +4,7 @@ import {
   UserOutline,
   SetOutline,
 } from 'antd-mobile-icons'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline, IoChevronForwardOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import Tasks from './Tasks'
@@ -12,6 +12,7 @@ import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUnreadNotificationCount, useTasks, useVisibleTasks, useNotifications, useProjects } from '../lib/api'
+import { playNotificationSound, warmUpAudio } from '../lib/notificationSound'
 import dayjs from 'dayjs'
 
 export default function Home() {
@@ -22,24 +23,35 @@ export default function Home() {
   const { data: unreadCount = 0 } = useUnreadNotificationCount(userId)
   const prevUnreadRef = useRef(0)
 
-  // 新消息到达时弹 Toast + 浏览器推送
+  // 新消息到达时弹 Toast + 浏览器推送 + 提示音
   useEffect(() => {
     if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
       const newCount = unreadCount - prevUnreadRef.current
-      // 醒目的顶部横幅通知
+      // 🔔 播放提示音
+      playNotificationSound()
+      // 醒目的顶部横幅通知（红色背景，更长时间）
       Toast.show({
-        content: `📬 收到 ${newCount} 条新消息`,
+        content: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15 }}>
+            <span style={{ fontSize: 20 }}>🔔</span>
+            <span>收到 {newCount} 条新消息</span>
+          </div>
+        ),
         position: 'top',
-        duration: 4000,
+        duration: 6000,
+        maskStyle: { background: 'transparent' },
       })
       // 浏览器桌面通知
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('工程结算管理', { body: `您有 ${newCount} 条新消息`, icon: '/favicon.ico' })
+        new Notification('工程结算管理', { body: `您有 ${newCount} 条新消息`, icon: '/favicon.ico', tag: 'new-msg' })
       }
       // 震动反馈（移动端）
       if ('vibrate' in navigator) {
-        navigator.vibrate([100, 50, 100])
+        navigator.vibrate([200, 100, 200, 100, 200])
       }
+      // 触发全局边缘闪烁动画
+      document.body.classList.add('notify-flash')
+      setTimeout(() => document.body.classList.remove('notify-flash'), 2000)
     }
     prevUnreadRef.current = unreadCount
   }, [unreadCount])
@@ -48,6 +60,18 @@ export default function Home() {
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
+    }
+    // 预热音频上下文（需要用户交互后才能播放）
+    const handleInteraction = () => {
+      warmUpAudio()
+      window.removeEventListener('click', handleInteraction)
+      window.removeEventListener('touchstart', handleInteraction)
+    }
+    window.addEventListener('click', handleInteraction)
+    window.addEventListener('touchstart', handleInteraction)
+    return () => {
+      window.removeEventListener('click', handleInteraction)
+      window.removeEventListener('touchstart', handleInteraction)
     }
   }, [])
 
@@ -171,7 +195,7 @@ export default function Home() {
               style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', color: '#475569' }}
             >
               <div style={{ position: 'relative' }}>
-                <IoNotificationsOutline size={20} />
+                <IoNotificationsOutline size={20} className={unreadCount > 0 ? 'bell-shake' : ''} />
                 {unreadCount > 0 && (
                   <Badge
                     content={unreadCount > 99 ? '99+' : unreadCount}
@@ -230,7 +254,7 @@ export default function Home() {
               onClick={() => navigate('/notifications')}
               style={{ position: 'relative', cursor: 'pointer', padding: 8, background: '#fff', borderRadius: '50%', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}
             >
-              <IoNotificationsOutline size={20} color="#1E293B" />
+              <IoNotificationsOutline size={20} color="#1E293B" className={unreadCount > 0 ? 'bell-shake' : ''} />
               {unreadCount > 0 && (
                 <Badge
                   content={unreadCount > 99 ? '99+' : unreadCount}

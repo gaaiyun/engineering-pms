@@ -734,7 +734,8 @@ export function useMarkTaskBlocked() {
     return useMutation({
         mutationFn: async ({
             taskId,
-            blocker
+            blocker,
+            rollbackToTaskId,
         }: {
             taskId: string
             blocker: {
@@ -742,15 +743,45 @@ export function useMarkTaskBlocked() {
                 reason_detail: string
                 need_help_from: string[]
                 expected_resolve: string
+                rollback_to?: string
             }
+            rollbackToTaskId?: string
         }) => {
             const task = await pb.collection('tasks').getOne<Task>(taskId)
 
             // 更新任务状态和卡点信息
+            const blockerData = { ...blocker }
+            if (rollbackToTaskId) blockerData.rollback_to = rollbackToTaskId
             await pb.collection('tasks').update(taskId, {
                 status: 'blocked',
-                blocker,
+                blocker: blockerData,
             })
+
+            // 如果指定了回退目标，将目标任务重置为进行中
+            if (rollbackToTaskId) {
+                try {
+                    await pb.collection('tasks').update(rollbackToTaskId, {
+                        status: 'in_progress',
+                        completed_at: null,
+                    })
+                    const rollbackTask = await pb.collection('tasks').getOne<Task>(rollbackToTaskId)
+                    // 通知回退目标任务的负责人
+                    if (rollbackTask.assignees?.length) {
+                        const userName = pb.authStore.model?.name || pb.authStore.model?.username
+                        for (const uid of rollbackTask.assignees) {
+                            await pb.collection('notifications').create({
+                                user: uid,
+                                type: 'task_rollback',
+                                title: '任务被回退，需要重新处理',
+                                content: `「${task.stage_name}」遇到卡点，「${rollbackTask.stage_name}」需要重新处理。原因：${blocker.reason_detail}`,
+                                link_type: 'task',
+                                link_id: rollbackToTaskId,
+                                is_read: false,
+                            }).catch(console.error)
+                        }
+                    }
+                } catch (e) { console.warn('回退目标任务失败', e) }
+            }
 
             // 记录审计日志
             await pb.collection('audit_logs').create({
@@ -758,15 +789,16 @@ export function useMarkTaskBlocked() {
                 task: taskId,
                 action_type: 'mark_blocked',
                 operator: pb.authStore.model?.id,
-                after_data: blocker,
+                after_data: { ...blockerData, rollback_to_task: rollbackToTaskId },
             }).catch(console.error)
 
             // 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
+            const rollbackNote = rollbackToTaskId ? '（已回退到前序步骤）' : ''
             notifyProjectMembers(
                 task.project,
                 '卡点上报',
-                `${userName} 上报了「${task.stage_name}」的卡点：${blocker.reason_detail}`,
+                `${userName} 上报了「${task.stage_name}」的卡点${rollbackNote}：${blocker.reason_detail}`,
                 'blocker',
                 pb.authStore.model?.id,
                 taskId,
