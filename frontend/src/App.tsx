@@ -56,6 +56,46 @@ const DefaultRedirect = () => {
 
 import { App as CapacitorApp } from '@capacitor/app'
 
+/** 全屏通知闪烁 overlay — 监听 notify-flash 自定义事件 */
+function NotifyFlashOverlay() {
+  const ref = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const handler = () => {
+      const el = ref.current
+      if (!el) return
+      el.classList.remove('notify-flash-overlay')
+      // force reflow to restart animation
+      void el.offsetWidth
+      el.classList.add('notify-flash-overlay')
+    }
+    // 动画结束后自动移除 class，避免残留
+    const onAnimEnd = () => {
+      ref.current?.classList.remove('notify-flash-overlay')
+    }
+    window.addEventListener('notify-flash', handler)
+    const el = ref.current
+    el?.addEventListener('animationend', onAnimEnd)
+    return () => {
+      window.removeEventListener('notify-flash', handler)
+      el?.removeEventListener('animationend', onAnimEnd)
+    }
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        pointerEvents: 'none',
+        borderRadius: 0,
+      }}
+    />
+  )
+}
+
 function App() {
   // Handle Hardware Back Button (Android)
   React.useEffect(() => {
@@ -71,6 +111,7 @@ function App() {
 
   return (
     <Router>
+      <NotifyFlashOverlay />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

@@ -13,6 +13,7 @@ import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUnreadNotificationCount, useTasks, useVisibleTasks, useNotifications, useProjects } from '../lib/api'
 import { playNotificationSound, warmUpAudio } from '../lib/notificationSound'
+import { requestNativeNotificationPermission, scheduleNewMessageNotification } from '../lib/nativeNotifications'
 import dayjs from 'dayjs'
 
 export default function Home() {
@@ -23,12 +24,14 @@ export default function Home() {
   const { data: unreadCount = 0 } = useUnreadNotificationCount(userId)
   const prevUnreadRef = useRef(0)
 
-  // 新消息到达时弹 Toast + 浏览器推送 + 提示音
+  // 新消息到达时弹 Toast + 浏览器推送 + 提示音 + 系统通知
   useEffect(() => {
     if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
       const newCount = unreadCount - prevUnreadRef.current
-      // 🔔 播放提示音
+      // 播放提示音（Web Audio 兜底）
       playNotificationSound()
+      // 系统原生通知（Capacitor App 内走系统通知栏 + 系统声音）
+      scheduleNewMessageNotification(newCount)
       // 醒目的顶部横幅通知（红色背景，更长时间）
       Toast.show({
         content: (
@@ -49,18 +52,19 @@ export default function Home() {
       if ('vibrate' in navigator) {
         navigator.vibrate([200, 100, 200, 100, 200])
       }
-      // 触发全局边缘闪烁动画
-      document.body.classList.add('notify-flash')
-      setTimeout(() => document.body.classList.remove('notify-flash'), 2000)
+      // 触发全局边缘闪烁动画（通过自定义事件，由 App.tsx overlay 监听）
+      window.dispatchEvent(new CustomEvent('notify-flash'))
     }
     prevUnreadRef.current = unreadCount
   }, [unreadCount])
 
-  // 首次请求浏览器通知权限
+  // 首次请求浏览器通知权限 + 原生通知权限
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
+    // 请求原生通知权限（Capacitor App）
+    requestNativeNotificationPermission()
     // 预热音频上下文（需要用户交互后才能播放）
     const handleInteraction = () => {
       warmUpAudio()
