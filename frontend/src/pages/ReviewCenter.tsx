@@ -96,14 +96,14 @@ const ReviewCenter: React.FC = () => {
     try {
       await updateStatus.mutateAsync({ id, review_status: 'read' })
       Toast.show({ content: '已标记阅读', icon: 'success' })
-    } catch (e: any) { Toast.show({ content: e?.message || '标记阅读失败', icon: 'fail' }) }
+    } catch (e: any) { Toast.show({ content: e?.response?.data?.message || e?.message || '标记阅读失败', icon: 'fail' }) }
   }
 
   const handleMarkApproved = async (id: string) => {
     try {
       await updateStatus.mutateAsync({ id, review_status: 'approved' })
       Toast.show({ content: '已通过', icon: 'success' })
-    } catch (e: any) { Toast.show({ content: e?.message || '审批失败', icon: 'fail' }) }
+    } catch (e: any) { Toast.show({ content: e?.response?.data?.message || e?.message || '审批失败', icon: 'fail' }) }
   }
 
   const handleRejectAudit = async () => {
@@ -115,7 +115,10 @@ const ReviewCenter: React.FC = () => {
       Toast.show({ content: '已拒绝', icon: 'success' })
       setRejectingAuditId(null)
       setAuditRejectNote('')
-    } catch (e: any) { Toast.show({ content: e?.message || '拒绝失败', icon: 'fail' }) }
+    } catch (e: any) {
+      console.error('审核拒绝失败', e?.response?.data || e)
+      Toast.show({ content: e?.response?.data?.message || e?.message || '拒绝失败', icon: 'fail' })
+    }
   }
 
   const handleApproveHandoff = (handoff: Handoff) => {
@@ -126,7 +129,10 @@ const ReviewCenter: React.FC = () => {
         try {
           await approveHandoff.mutateAsync({ id: handoff.id })
           Toast.show({ content: '审核通过', icon: 'success' })
-        } catch (e: any) { Toast.show({ content: e?.message || '审核失败', icon: 'fail' }) }
+        } catch (e: any) {
+          console.error('审核通过失败', e?.response?.data || e)
+          Toast.show({ content: e?.response?.data?.message || e?.message || '审核失败', icon: 'fail' })
+        }
       },
     })
   }
@@ -139,7 +145,10 @@ const ReviewCenter: React.FC = () => {
       await rejectHandoff.mutateAsync({ id: rejectingId, reviewNote: rejectNote })
       Toast.show({ content: '已驳回', icon: 'success' })
       setRejectingId(null)
-    } catch (e: any) { Toast.show({ content: e?.message || '驳回失败', icon: 'fail' }) }
+    } catch (e: any) {
+      console.error('驳回失败', e?.response?.data || e)
+      Toast.show({ content: e?.response?.data?.message || e?.message || '驳回失败', icon: 'fail' })
+    }
   }
 
   const formatChange = (log: any) => {

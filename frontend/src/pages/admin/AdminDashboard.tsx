@@ -323,13 +323,13 @@ const AdminDashboard = () => {
     try {
       const tasksRes = await pb.collection('tasks').getFullList<Task>({
         filter: `project = "${project.id}"`,
-        sort: '-created',
-        expand: 'assignees,creator'
+        sort: 'sequence,created',
+        expand: 'assignees'
       })
       setProjectTasks(tasksRes)
-    } catch (error) {
-      console.error('load project tasks failed', error)
-      Toast.show({ icon: 'fail', content: '加载任务失败' })
+    } catch (error: any) {
+      console.error('load project tasks failed', error?.response?.data || error)
+      Toast.show({ icon: 'fail', content: error?.response?.data?.message || '加载任务失败' })
     }
   }
 

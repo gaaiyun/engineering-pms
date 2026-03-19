@@ -366,6 +366,22 @@ export function useCreateTask() {
                     'task_update', pb.authStore.model?.id, result.id,
                 ).catch(() => {})
             }
+            // 给每个 assignee 发定向通知
+            const assignees = data.assignees || []
+            const operatorId = pb.authStore.model?.id
+            const operatorName = pb.authStore.model?.name || pb.authStore.model?.username
+            for (const uid of assignees) {
+                if (uid === operatorId) continue
+                pb.collection('notifications').create({
+                    user: uid,
+                    type: 'task_assigned',
+                    title: '你有新任务',
+                    content: `${operatorName} 给你分配了任务「${data.stage_name}」`,
+                    link_type: 'task',
+                    link_id: result.id,
+                    is_read: false,
+                }).catch(() => {})
+            }
             return result
         },
         onSuccess: (data) => {
@@ -1181,6 +1197,23 @@ export function useBatchSaveTasks() {
                 'task_update',
                 currentUser?.id,
             ).catch(() => {})
+            // 给每个新任务的 assignee 发定向通知
+            const operatorName = currentUser?.name || currentUser?.username
+            for (const t of tasks) {
+                if (t.id) continue // 已有任务（更新）不重复通知
+                for (const uid of (t.assignees || [])) {
+                    if (uid === currentUser?.id) continue
+                    pb.collection('notifications').create({
+                        user: uid,
+                        type: 'task_assigned',
+                        title: '你有新任务',
+                        content: `${operatorName} 给你分配了任务「${t.stage_name}」`,
+                        link_type: 'task',
+                        link_id: '', // 批量创建时无法精确对应
+                        is_read: false,
+                    }).catch(() => {})
+                }
+            }
             return results
         },
         onSuccess: () => {
@@ -1338,11 +1371,18 @@ export function useUpdateAuditLogStatus() {
             }
 
             // 更新审计日志状态
-            const result = await pb.collection('audit_logs').update(id, {
-                review_status,
-                reviewed_by: pb.authStore.model?.id,
-                ...(reject_note ? { reject_note } : {}),
-            })
+            let result
+            try {
+                result = await pb.collection('audit_logs').update(id, {
+                    review_status,
+                    reviewed_by: pb.authStore.model?.id,
+                    ...(reject_note ? { reject_note } : {}),
+                })
+            } catch (updateErr: any) {
+                console.error('更新审计日志失败', updateErr?.response || updateErr)
+                const msg = updateErr?.response?.message || updateErr?.message || '更新审计日志失败'
+                throw new Error(msg)
+            }
 
             // 拒绝时通知操作人
             if (review_status === 'rejected' && auditLog.operator) {
