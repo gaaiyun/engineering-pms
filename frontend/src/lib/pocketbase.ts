@@ -36,6 +36,43 @@ export const PB_URL = getPocketBaseUrl()
 
 export const pb = new PocketBase(PB_URL)
 
+/**
+ * 统一解析 PocketBase JS SDK 抛出的错误文案。
+ * `ClientResponseError` 的响应体在 `err.response`（与 `err.data` 同义），主消息为 `response.message`。
+ */
+export function getPocketBaseErrorMessage(err: unknown, fallback = '操作失败'): string {
+  if (err == null) return fallback
+
+  const e = err as {
+    message?: string
+    response?: Record<string, unknown>
+    data?: Record<string, unknown>
+  }
+
+  const body = (e.response && typeof e.response === 'object' ? e.response : null)
+    ?? (e.data && typeof e.data === 'object' ? e.data : null)
+
+  const top = body && typeof body.message === 'string' ? body.message.trim() : ''
+  if (top) return top
+
+  if (typeof e.message === 'string' && e.message.trim()) return e.message.trim()
+
+  // 字段级校验：{ data: { field: { message } } }
+  const nested = body?.data
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const parts: string[] = []
+    for (const [key, val] of Object.entries(nested as Record<string, unknown>)) {
+      if (val && typeof val === 'object' && 'message' in val) {
+        const m = (val as { message?: unknown }).message
+        if (typeof m === 'string' && m.trim()) parts.push(`${key}: ${m.trim()}`)
+      }
+    }
+    if (parts.length) return parts.join('；')
+  }
+
+  return fallback
+}
+
 // 未勾选"记住登录"时，关闭浏览器后清除 token
 if (typeof window !== 'undefined') {
   const remembered = localStorage.getItem('rememberMe') === '1'

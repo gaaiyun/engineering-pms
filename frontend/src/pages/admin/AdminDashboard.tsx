@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
-import { pb } from '../../lib/pocketbase'
+import { pb, getPocketBaseErrorMessage } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount } from '../../lib/api'
 import { queryKeys } from '../../lib/queryClient'
@@ -275,9 +275,9 @@ const AdminDashboard = () => {
       Toast.show({ icon: 'success', content: '用户已更新' })
       setShowUserModal(false)
       refreshAll()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('update user failed', error)
-      Toast.show({ icon: 'fail', content: error.message || '更新失败' })
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '更新失败') })
     }
   }
 
@@ -296,9 +296,9 @@ const AdminDashboard = () => {
       setShowAddUserModal(false)
       addUserForm.resetFields()
       refreshAll()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('add user failed', error)
-      Toast.show({ icon: 'fail', content: error.message || '创建失败' })
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '创建失败') })
     }
   }
 
@@ -309,9 +309,9 @@ const AdminDashboard = () => {
       await pb.collection('projects').update(project.id, { status: newStatus })
       Toast.show({ icon: 'success', content: '项目状态已更新' })
       refreshAll()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('update project failed', error)
-      Toast.show({ icon: 'fail', content: error.message || '更新失败' })
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '更新失败') })
     }
   }
 
@@ -320,16 +320,47 @@ const AdminDashboard = () => {
 
   const handleSelectProject = async (project: Project) => {
     setSelectedProject(project)
+    const filter = `project = "${project.id}"`
+    const primarySort = 'sequence,created'
     try {
       const tasksRes = await pb.collection('tasks').getFullList<Task>({
-        filter: `project = "${project.id}"`,
-        sort: 'sequence,created',
-        expand: 'assignees'
+        filter,
+        sort: primarySort,
+        expand: 'assignees',
       })
       setProjectTasks(tasksRes)
-    } catch (error: any) {
-      console.error('load project tasks failed', error?.response?.data || error)
-      Toast.show({ icon: 'fail', content: error?.response?.data?.message || '加载任务失败' })
+    } catch (error: unknown) {
+      console.error('load project tasks failed (expand)', error)
+      try {
+        const tasksRes = await pb.collection('tasks').getFullList<Task>({
+          filter,
+          sort: primarySort,
+        })
+        setProjectTasks(tasksRes)
+        Toast.show({
+          icon: 'fail',
+          content: '任务列表已更新（部分负责人信息暂时无法展开，可忽略）',
+        })
+      } catch (err2: unknown) {
+        console.error('load project tasks failed (no expand)', err2)
+        try {
+          const tasksRes = await pb.collection('tasks').getFullList<Task>({
+            filter,
+            sort: '-created',
+          })
+          setProjectTasks(tasksRes)
+          Toast.show({
+            icon: 'fail',
+            content: '已按创建时间加载任务（排序已降级）',
+          })
+        } catch (err3: unknown) {
+          console.error('load project tasks failed (fallback sort)', err3)
+          Toast.show({
+            icon: 'fail',
+            content: getPocketBaseErrorMessage(err3, '加载任务失败'),
+          })
+        }
+      }
     }
   }
 
@@ -354,8 +385,8 @@ const AdminDashboard = () => {
       setShowAvatarPicker(false)
       setSelectedAvatar(null)
       refreshAll()
-    } catch (error: any) {
-      Toast.show({ icon: 'fail', content: error.message || '保存失败' })
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '保存失败') })
     } finally {
       setProfileSaving(false)
     }
@@ -373,8 +404,8 @@ const AdminDashboard = () => {
       Toast.show({ icon: 'success', content: '头像已更新' })
       setShowAvatarPicker(false)
       refreshAll()
-    } catch (error: any) {
-      Toast.show({ icon: 'fail', content: error.message || '上传失败' })
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '上传失败') })
     } finally {
       setProfileSaving(false)
     }
@@ -391,11 +422,13 @@ const AdminDashboard = () => {
       onConfirm: async () => {
         try {
           await pb.collection('tasks').delete(taskId)
+          setProjectTasks((prev) => prev.filter((t) => t.id !== taskId))
           Toast.show({ icon: 'success', content: '已删除' })
-          if (selectedProject) handleSelectProject(selectedProject)
+          if (selectedProject) await handleSelectProject(selectedProject)
           refreshAll()
-        } catch (error: any) {
-          Toast.show({ icon: 'fail', content: error.message || '删除失败' })
+        } catch (error: unknown) {
+          Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '删除失败') })
+          if (selectedProject) await handleSelectProject(selectedProject)
         }
       }
     })
@@ -1416,9 +1449,9 @@ const AdminDashboard = () => {
       {selectedProject && (
         <BatchTaskEditor
           visible={showAddTaskModal}
-          onClose={() => {
+          onClose={async () => {
             setShowAddTaskModal(false)
-            if (selectedProject) handleSelectProject(selectedProject)
+            if (selectedProject) await handleSelectProject(selectedProject)
             refreshAll()
           }}
           projectId={selectedProject.id}

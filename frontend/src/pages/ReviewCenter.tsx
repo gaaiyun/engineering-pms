@@ -11,7 +11,7 @@ import {
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
   type Handoff, type User
 } from '../lib/api'
-import { pb } from '../lib/pocketbase'
+import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
@@ -96,14 +96,18 @@ const ReviewCenter: React.FC = () => {
     try {
       await updateStatus.mutateAsync({ id, review_status: 'read' })
       Toast.show({ content: '已标记阅读', icon: 'success' })
-    } catch (e: any) { Toast.show({ content: e?.response?.data?.message || e?.message || '标记阅读失败', icon: 'fail' }) }
+    } catch (e: unknown) {
+      Toast.show({ content: getPocketBaseErrorMessage(e, '标记阅读失败'), icon: 'fail' })
+    }
   }
 
   const handleMarkApproved = async (id: string) => {
     try {
       await updateStatus.mutateAsync({ id, review_status: 'approved' })
       Toast.show({ content: '已通过', icon: 'success' })
-    } catch (e: any) { Toast.show({ content: e?.response?.data?.message || e?.message || '审批失败', icon: 'fail' }) }
+    } catch (e: unknown) {
+      Toast.show({ content: getPocketBaseErrorMessage(e, '审批失败'), icon: 'fail' })
+    }
   }
 
   const handleRejectAudit = async () => {
@@ -115,9 +119,9 @@ const ReviewCenter: React.FC = () => {
       Toast.show({ content: '已拒绝', icon: 'success' })
       setRejectingAuditId(null)
       setAuditRejectNote('')
-    } catch (e: any) {
-      console.error('审核拒绝失败', e?.response?.data || e)
-      Toast.show({ content: e?.response?.data?.message || e?.message || '拒绝失败', icon: 'fail' })
+    } catch (e: unknown) {
+      console.error('审核拒绝失败', e)
+      Toast.show({ content: getPocketBaseErrorMessage(e, '拒绝失败'), icon: 'fail' })
     }
   }
 
@@ -129,9 +133,9 @@ const ReviewCenter: React.FC = () => {
         try {
           await approveHandoff.mutateAsync({ id: handoff.id })
           Toast.show({ content: '审核通过', icon: 'success' })
-        } catch (e: any) {
-          console.error('审核通过失败', e?.response?.data || e)
-          Toast.show({ content: e?.response?.data?.message || e?.message || '审核失败', icon: 'fail' })
+        } catch (e: unknown) {
+          console.error('审核通过失败', e)
+          Toast.show({ content: getPocketBaseErrorMessage(e, '审核失败'), icon: 'fail' })
         }
       },
     })
@@ -145,9 +149,9 @@ const ReviewCenter: React.FC = () => {
       await rejectHandoff.mutateAsync({ id: rejectingId, reviewNote: rejectNote })
       Toast.show({ content: '已驳回', icon: 'success' })
       setRejectingId(null)
-    } catch (e: any) {
-      console.error('驳回失败', e?.response?.data || e)
-      Toast.show({ content: e?.response?.data?.message || e?.message || '驳回失败', icon: 'fail' })
+    } catch (e: unknown) {
+      console.error('驳回失败', e)
+      Toast.show({ content: getPocketBaseErrorMessage(e, '驳回失败'), icon: 'fail' })
     }
   }
 
@@ -282,10 +286,10 @@ const ReviewCenter: React.FC = () => {
                           </>
                         )}
                         {status === 'approved' && (
-                          <span className="audit-status-done">✅ 已通过</span>
+                          <span className="audit-status-done">已通过</span>
                         )}
                         {status === 'rejected' && (
-                          <span className="audit-status-rejected">❌ 已拒绝{log.reject_note ? `：${log.reject_note}` : ''}</span>
+                          <span className="audit-status-rejected">已拒绝{log.reject_note ? `：${log.reject_note}` : ''}</span>
                         )}
                       </div>
                     </div>
@@ -356,7 +360,7 @@ const ReviewCenter: React.FC = () => {
         content={<TextArea placeholder="请输入拒绝原因（必填）" value={auditRejectNote} onChange={setAuditRejectNote} rows={3} />}
         actions={[
           { key: 'cancel', text: '取消', onClick: () => setRejectingAuditId(null) },
-          { key: 'confirm', text: '确认拒绝', danger: true, onClick: handleRejectAudit },
+          { key: 'confirm', text: '确认拒绝', danger: true, onClick: () => { void handleRejectAudit() } },
         ]}
         onClose={() => setRejectingAuditId(null)}
       />
@@ -366,7 +370,7 @@ const ReviewCenter: React.FC = () => {
         content={<TextArea placeholder="请输入驳回原因（必填）" value={rejectNote} onChange={setRejectNote} rows={3} />}
         actions={[
           { key: 'cancel', text: '取消', onClick: () => setRejectingId(null) },
-          { key: 'confirm', text: '确认驳回', danger: true, onClick: confirmReject },
+          { key: 'confirm', text: '确认驳回', danger: true, onClick: () => { void confirmReject() } },
         ]}
         onClose={() => setRejectingId(null)}
       />
