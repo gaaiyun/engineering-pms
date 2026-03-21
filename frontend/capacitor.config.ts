@@ -14,6 +14,9 @@ const config: CapacitorConfig = {
       // 不指定 sound，Android 使用系统默认通知音
       iconColor: '#2563EB',
     },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
   },
 };
 

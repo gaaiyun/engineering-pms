@@ -41,4 +41,11 @@ cd frontend/android
 
 ## 与 PocketBase 迁移
 
-Web/App 功能依赖服务端 schema；部署新前端前请在 PocketBase 服务器执行迁移（含 `audit_logs` 的 `rejected` / `reject_note`），否则「变更审计」拒绝等操作仍可能在服务端失败。
+Web/App 功能依赖服务端 schema；部署新前端前请在 PocketBase 服务器执行迁移，至少包含：
+
+- `audit_logs`：`review_status` 含 `rejected`、`reject_note` 字段（如 `1772400000_*.js`）
+- `notifications.type` 含 `audit_rejected`（如 `1772500000_*.js`，否则拒绝复核后给操作人的通知可能创建失败）
+
+否则「审核拒绝」或消息链路仍可能在服务端失败。
+
+**生产库（如 127.0.0.1）如何执行这两步**：见 [pocketbase-apply-migrations-production.md](./pocketbase-apply-migrations-production.md)。

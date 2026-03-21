@@ -12,8 +12,8 @@ import {
 } from 'antd-mobile'
 import dayjs from 'dayjs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { pb } from '../lib/pocketbase'
+import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
+import { notifyManagersAboutTaskProgress, type TaskStatus, useCreateTask } from '../lib/api'
 import {
   IoArrowBackOutline,
   IoCheckmarkCircle,
@@ -61,7 +61,7 @@ const STAGE_TEMPLATES = [
 ]
 
 // 任务状态
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string; color: string; icon?: string }> = [
   { value: 'pending', label: '待开始', color: '#94A3B8', icon: '' },
   { value: 'in_progress', label: '进行中', color: '#3B82F6' },
   { value: 'blocked', label: '遇到卡点', color: '#EF4444' },
@@ -70,7 +70,7 @@ const STATUS_OPTIONS = [
 
 export default function TaskCreate() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const createTask = useCreateTask()
 
   // 权限校验：仅经理/管理员可创建任务
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function TaskCreate() {
   
   // 表单数据
   const [stageName, setStageName] = useState('')
-  const [taskStatus, setTaskStatus] = useState('in_progress')
+  const [taskStatus, setTaskStatus] = useState<TaskStatus>('in_progress')
   const [progressNote, setProgressNote] = useState('') // 本次更新说明
   const [blockerReason, setBlockerReason] = useState('') // 卡点原因
   
@@ -182,7 +182,6 @@ export default function TaskCreate() {
 
     setLoading(true)
     try {
-      // 1. 创建当前任务
       const taskData: Record<string, any> = {
         project: selectedProject,
         stage_name: stageName,
@@ -198,14 +197,14 @@ export default function TaskCreate() {
         taskData.blocker = { reason_type: 'other', reason_detail: blockerReason, need_help_from: [], expected_resolve: '' }
       }
 
-      const createdTask = await pb.collection('tasks').create(taskData)
+      const createdTask = await createTask.mutateAsync(taskData)
 
-      // 2. 如果有下一步，创建下一步任务并通知负责人
+      // 如果有下一步，沿用统一任务创建链路，避免页面层自己写通知记录
       if (hasNextStep && nextStepName?.trim() && nextStepAssignees.length > 0) {
         const nextTaskData = {
           project: selectedProject,
           stage_name: nextStepName,
-          status: 'pending',
+          status: 'pending' as const,
           predecessor_tasks: [createdTask.id],
           start_date: new Date().toISOString(),
           assignees: nextStepAssignees,
@@ -213,55 +212,28 @@ export default function TaskCreate() {
           sequence: Date.now() + 1,
         }
 
-        const nextTask = await pb.collection('tasks').create(nextTaskData)
-
-        for (const userId of nextStepAssignees) {
-          try {
-            await pb.collection('notifications').create({
-              user: userId,
-              type: 'task_assigned',
-              title: '您有新任务',
-              content: `${currentUser?.name || currentUser?.username} 将「${nextStepName}」任务分配给了您`,
-              link_type: 'task',
-              link_id: nextTask.id,
-              is_read: false,
-            })
-          } catch (e) {
-            console.warn('通知创建失败', e)
-          }
-        }
+        await createTask.mutateAsync(nextTaskData)
       }
 
-      // 4. 如果需要通知经理
+      // 如果需要通知经理，使用统一通知 helper，页面不再直接创建 notifications 记录
       if (notifyManager) {
-        try {
-          // 找到经理用户
-          const managers = users.filter(u => u.role === 'manager' || u.role === 'admin')
-          for (const manager of managers) {
-            if (manager.id !== currentUser?.id) {
-              await pb.collection('notifications').create({
-                user: manager.id,
-                type: 'progress_update',
-                title: '进度更新',
-                content: `${currentUser?.name || currentUser?.username} 更新了「${stageName}」的进度: ${STATUS_OPTIONS.find(s => s.value === taskStatus)?.label}`,
-                link_type: 'task',
-                link_id: createdTask.id,
-                is_read: false,
-              })
-            }
-          }
-        } catch (e) {
-          console.warn('经理通知创建失败', e)
-        }
+        const managerIds = users
+          .filter(u => u.role === 'manager' || u.role === 'admin')
+          .map((manager) => manager.id)
+        await notifyManagersAboutTaskProgress({
+          managerIds,
+          taskId: createdTask.id,
+          stageName,
+          statusLabel: STATUS_OPTIONS.find(s => s.value === taskStatus)?.label || taskStatus,
+          excludeUserId: currentUser?.id,
+        })
       }
 
       Toast.show({ icon: 'success', content: '提交成功！' })
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate(-1)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('提交失败', e)
-      Toast.show({ icon: 'fail', content: '保存失败: ' + (e.message || '未知错误') })
+      Toast.show({ icon: 'fail', content: '保存失败: ' + getPocketBaseErrorMessage(e, '未知错误') })
     } finally {
       setLoading(false)
     }

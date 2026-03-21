@@ -21,12 +21,22 @@ export default function Home() {
   const touchStartRef = useRef<number | null>(null)
   const navigate = useNavigate()
   const userId = pb.authStore.model?.id || ''
-  const { data: unreadCount = 0 } = useUnreadNotificationCount(userId)
-  const prevUnreadRef = useRef(0)
+  const { data: unreadCount = 0, isFetched: unreadFetched } = useUnreadNotificationCount(userId)
+  const prevUnreadRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    prevUnreadRef.current = null
+  }, [userId])
 
   // 新消息到达时弹 Toast + 浏览器推送 + 提示音 + 系统通知
+  // 注意：不能用「上一值 !== 0」判断，否则从未读 0→1 时永远不提醒（员工最常见场景）
   useEffect(() => {
-    if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
+    if (!unreadFetched || !userId) return
+    if (prevUnreadRef.current === null) {
+      prevUnreadRef.current = unreadCount
+      return
+    }
+    if (unreadCount > prevUnreadRef.current) {
       const newCount = unreadCount - prevUnreadRef.current
       // 播放提示音（Web Audio 兜底）
       playNotificationSound()
@@ -36,7 +46,7 @@ export default function Home() {
       Toast.show({
         content: (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15 }}>
-            <span style={{ fontSize: 20 }}>🔔</span>
+            <IoNotificationsOutline size={20} color="#fff" aria-hidden />
             <span>收到 {newCount} 条新消息</span>
           </div>
         ),
@@ -56,7 +66,7 @@ export default function Home() {
       window.dispatchEvent(new CustomEvent('notify-flash'))
     }
     prevUnreadRef.current = unreadCount
-  }, [unreadCount])
+  }, [unreadCount, unreadFetched, userId])
 
   // 首次请求浏览器通知权限 + 原生通知权限
   useEffect(() => {

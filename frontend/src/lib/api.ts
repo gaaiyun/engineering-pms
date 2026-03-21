@@ -2,8 +2,8 @@
  * PocketBase API Hooks
  * 使用 TanStack Query 封装所有数据请求
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { pb } from './pocketbase'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { pb, getPocketBaseErrorMessage } from './pocketbase'
 import { queryKeys } from './queryClient'
 import type { RecordModel } from 'pocketbase'
 
@@ -149,6 +149,157 @@ export const isManagerRole = () => {
 }
 // 别名：兼容页面中 import { isManager } 的写法
 export const isManager = isManagerRole
+
+type NotificationCreateInput = {
+    user: string
+    type: string
+    title: string
+    content: string
+    link_type?: string
+    link_id?: string
+    is_read?: boolean
+    read_at?: string
+}
+
+type CreateTaskSideEffectOptions = {
+    createAuditLog?: boolean
+    notifyProjectAudience?: boolean
+    notifyAssignees?: boolean
+    projectNotificationTitle?: string
+    projectNotificationContent?: string
+    projectNotificationType?: string
+    assigneeNotificationTitle?: string
+    assigneeNotificationContent?: string
+}
+
+function getCurrentActorName() {
+    return pb.authStore.model?.name || pb.authStore.model?.username || '系统'
+}
+
+function uniqueUserIds(ids: Array<string | null | undefined>) {
+    return [...new Set(ids.filter((id): id is string => !!id))]
+}
+
+export function getAddedAssigneeIds(before: string[] = [], after: string[] = []) {
+    const prev = new Set(before.filter(Boolean))
+    return uniqueUserIds(after).filter((id) => !prev.has(id))
+}
+
+async function createNotificationRecord(input: NotificationCreateInput) {
+    try {
+        await pb.collection('notifications').create({
+            ...input,
+            is_read: input.is_read ?? false,
+        })
+        return true
+    } catch (error) {
+        console.warn('通知创建失败', {
+            user: input.user,
+            type: input.type,
+            title: input.title,
+            error: getPocketBaseErrorMessage(error),
+        })
+        return false
+    }
+}
+
+export function invalidateNotificationQueries(queryClient: QueryClient, userIds: string[] = []) {
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    for (const userId of uniqueUserIds(userIds)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount(userId) })
+    }
+}
+
+export async function notifyTaskAssignees(params: {
+    assigneeIds: string[]
+    taskId: string
+    stageName: string
+    title?: string
+    content?: string
+    excludeUserId?: string
+}) {
+    const title = params.title || '你有新任务'
+    const content = params.content || `${getCurrentActorName()} 给你分配了任务「${params.stageName}」`
+
+    for (const uid of uniqueUserIds(params.assigneeIds)) {
+        if (uid === params.excludeUserId) continue
+        await createNotificationRecord({
+            user: uid,
+            type: 'task_assigned',
+            title,
+            content,
+            link_type: 'task',
+            link_id: params.taskId,
+        })
+    }
+}
+
+export async function notifyManagersAboutTaskProgress(params: {
+    managerIds: string[]
+    taskId: string
+    stageName: string
+    statusLabel: string
+    excludeUserId?: string
+}) {
+    const actorName = getCurrentActorName()
+    for (const uid of uniqueUserIds(params.managerIds)) {
+        if (uid === params.excludeUserId) continue
+        await createNotificationRecord({
+            user: uid,
+            type: 'progress_update',
+            title: '进度更新',
+            content: `${actorName} 更新了「${params.stageName}」的进度: ${params.statusLabel}`,
+            link_type: 'task',
+            link_id: params.taskId,
+        })
+    }
+}
+
+export async function createTaskWithSideEffects(
+    data: Partial<Task>,
+    options: CreateTaskSideEffectOptions = {},
+) {
+    const result = await pb.collection('tasks').create<Task>(data)
+    const assignees = uniqueUserIds(data.assignees || [])
+    const currentUserId = pb.authStore.model?.id
+
+    if (options.createAuditLog !== false) {
+        await pb.collection('audit_logs').create({
+            project: data.project,
+            task: result.id,
+            action_type: 'create_task',
+            operator: currentUserId,
+            after_data: { stage_name: data.stage_name, assignees: data.assignees },
+        }).catch((error) => {
+            console.warn('创建任务审计失败', getPocketBaseErrorMessage(error))
+        })
+    }
+
+    if (options.notifyProjectAudience !== false && data.project) {
+        await notifyProjectMembers(
+            data.project,
+            options.projectNotificationTitle || '新任务创建',
+            options.projectNotificationContent || `${getCurrentActorName()} 创建了任务「${data.stage_name}」`,
+            options.projectNotificationType || 'task_update',
+            currentUserId,
+            result.id,
+        ).catch(() => {})
+    }
+
+    if (options.notifyAssignees !== false) {
+        await notifyTaskAssignees({
+            assigneeIds: assignees,
+            taskId: result.id,
+            stageName: data.stage_name || '未命名任务',
+            title: options.assigneeNotificationTitle,
+            content: options.assigneeNotificationContent,
+            excludeUserId: currentUserId,
+        })
+    }
+
+    return result
+}
 
 // ========== 项目 Hooks ==========
 export function useProjects() {
@@ -348,50 +499,16 @@ export function useCreateTask() {
 
     return useMutation({
         mutationFn: async (data: Partial<Task>) => {
-            const result = await pb.collection('tasks').create<Task>(data)
-            // 审计日志
-            await pb.collection('audit_logs').create({
-                project: data.project,
-                task: result.id,
-                action_type: 'create_task',
-                operator: pb.authStore.model?.id,
-                after_data: { stage_name: data.stage_name, assignees: data.assignees },
-            }).catch(() => {})
-            // 通知项目全员
-            if (data.project) {
-                const userName = pb.authStore.model?.name || pb.authStore.model?.username
-                notifyProjectMembers(
-                    data.project, '新任务创建',
-                    `${userName} 创建了任务「${data.stage_name}」`,
-                    'task_update', pb.authStore.model?.id, result.id,
-                ).catch(() => {})
-            }
-            // 给每个 assignee 发定向通知
-            const assignees = data.assignees || []
-            const operatorId = pb.authStore.model?.id
-            const operatorName = pb.authStore.model?.name || pb.authStore.model?.username
-            for (const uid of assignees) {
-                if (uid === operatorId) continue
-                pb.collection('notifications').create({
-                    user: uid,
-                    type: 'task_assigned',
-                    title: '你有新任务',
-                    content: `${operatorName} 给你分配了任务「${data.stage_name}」`,
-                    link_type: 'task',
-                    link_id: result.id,
-                    is_read: false,
-                }).catch(() => {})
-            }
-            return result
+            return createTaskWithSideEffects(data)
         },
-        onSuccess: (data) => {
+        onSuccess: (data, variables) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
             if (data.project) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(data.project) })
                 queryClient.invalidateQueries({ queryKey: queryKeys.project(data.project) })
             }
+            invalidateNotificationQueries(queryClient, variables.assignees || [])
         },
     })
 }
@@ -450,8 +567,8 @@ export function useApproveHandoff() {
             // 获取 handoff 详情
             const handoff = await pb.collection('handoffs').getOne<Handoff>(id)
 
-            // 创建新任务
-            const newTask = await pb.collection('tasks').create<Task>({
+            // 创建新任务，并给新执行人发送统一的 task_assigned 通知
+            const newTask = await createTaskWithSideEffects({
                 project: handoff.project,
                 stage_name: handoff.proposed_title,
                 next_steps: handoff.proposed_description,
@@ -461,6 +578,8 @@ export function useApproveHandoff() {
                 status: 'pending',
                 sequence: Date.now(),
                 predecessor_tasks: [handoff.from_task],
+            }, {
+                createAuditLog: false,
             })
 
             // 更新 handoff 状态
@@ -484,25 +603,24 @@ export function useApproveHandoff() {
             // 通知提交人
             const reviewer = pb.authStore.model
             if (handoff.submitter && handoff.submitter !== reviewer?.id) {
-                await pb.collection('notifications').create({
+                await createNotificationRecord({
                     user: handoff.submitter,
                     title: '交接审核通过',
                     content: `${reviewer?.name || reviewer?.username} 批准了您的交接提报「${handoff.proposed_title}」`,
                     type: 'task_update',
                     link_type: 'task',
                     link_id: newTask.id,
-                    is_read: false,
-                }).catch(() => {})
+                })
             }
 
             return newTask
         },
-        onSuccess: () => {
+        onSuccess: (newTask) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            invalidateNotificationQueries(queryClient, newTask.assignees || [])
         },
     })
 }
@@ -532,21 +650,20 @@ export function useRejectHandoff() {
             // 通知提交人
             const reviewer = pb.authStore.model
             if (handoff.submitter && handoff.submitter !== reviewer?.id) {
-                await pb.collection('notifications').create({
+                await createNotificationRecord({
                     user: handoff.submitter,
                     title: '交接审核驳回',
                     content: `${reviewer?.name || reviewer?.username} 驳回了您的交接提报「${handoff.proposed_title}」，原因：${reviewNote}`,
                     type: 'task_update',
                     link_type: 'task',
                     link_id: handoff.from_task,
-                    is_read: false,
-                }).catch(() => {})
+                })
             }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            invalidateNotificationQueries(queryClient)
         },
     })
 }
@@ -784,15 +901,14 @@ export function useMarkTaskBlocked() {
                     // 通知回退目标任务的负责人
                     if (rollbackTask.assignees?.length) {
                         for (const uid of rollbackTask.assignees) {
-                            await pb.collection('notifications').create({
+                            await createNotificationRecord({
                                 user: uid,
                                 type: 'task_rollback',
                                 title: '任务被回退，需要重新处理',
                                 content: `「${task.stage_name}」遇到卡点，「${rollbackTask.stage_name}」需要重新处理。原因：${blocker.reason_detail}`,
                                 link_type: 'task',
                                 link_id: rollbackToTaskId,
-                                is_read: false,
-                            }).catch(console.error)
+                            })
                         }
                     }
                 } catch (e) { console.warn('回退目标任务失败', e) }
@@ -821,22 +937,21 @@ export function useMarkTaskBlocked() {
 
             // 创建通知给需要帮助的人
             for (const userId of blocker.need_help_from) {
-                await pb.collection('notifications').create({
+                await createNotificationRecord({
                     user: userId,
                     type: 'blocker_reported',
                     title: '有任务遇到卡点需要您协助',
                     content: blocker.reason_detail,
                     link_type: 'task',
                     link_id: taskId,
-                    is_read: false,
-                }).catch(console.error)
+                })
             }
         },
         onSuccess: (_, { taskId }) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            invalidateNotificationQueries(queryClient)
         },
     })
 }
@@ -895,25 +1010,29 @@ export function useQuickCreateProject() {
             // 2. 批量创建任务
             const createdTasks = []
             for (const task of data.tasks) {
-                const created = await pb.collection('tasks').create({
+                const created = await createTaskWithSideEffects({
                     project: project.id,
                     stage_name: task.stage_name,
-                    status: 'pending',
+                    status: 'pending' as TaskStatus,
                     assignees: task.assignees,
                     deadline: task.deadline,
-                    priority: task.priority,
+                    priority: task.priority as Task['priority'],
                     sequence: task.sequence,
-                    created_by: pb.authStore.model?.id
+                    created_by: pb.authStore.model?.id,
+                }, {
+                    createAuditLog: false,
+                    notifyProjectAudience: false,
                 })
                 createdTasks.push(created)
             }
             
             return { project, tasks: createdTasks }
         },
-        onSuccess: () => {
+        onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            const assigneeIds = variables.tasks.flatMap((task) => task.assignees || [])
+            invalidateNotificationQueries(queryClient, assigneeIds)
         }
     })
 }
@@ -1118,26 +1237,21 @@ export async function notifyProjectMembers(
         const project = await pb.collection('projects').getOne(projectId)
         const members: string[] = project.members || []
         const managerId = project.manager
-        const allIds = [...new Set([...members, managerId].filter(Boolean))]
+        const allIds = uniqueUserIds([...members, managerId])
 
         for (const uid of allIds) {
             if (uid === excludeUserId) continue
-            try {
-                await pb.collection('notifications').create({
-                    user: uid,
-                    type,
-                    title,
-                    content,
-                    link_type: relatedTask ? 'task' : 'project',
-                    link_id: relatedTask || projectId,
-                    is_read: false,
-                })
-            } catch (e) {
-                console.warn('通知创建失败', uid, e)
-            }
+            await createNotificationRecord({
+                user: uid,
+                type,
+                title,
+                content,
+                link_type: relatedTask ? 'task' : 'project',
+                link_id: relatedTask || projectId,
+            })
         }
     } catch (e) {
-        console.warn('notifyProjectMembers failed', e)
+        console.warn('notifyProjectMembers failed', getPocketBaseErrorMessage(e))
     }
 }
 
@@ -1156,29 +1270,44 @@ export function useBatchSaveTasks() {
 
     return useMutation({
         mutationFn: async ({ projectId, tasks }: { projectId: string; tasks: BatchTaskItem[] }) => {
-            const results = []
+            const results: unknown[] = []
+            const reassignedTasks: { stageName: string; taskId: string; newAssigneeIds: string[] }[] = []
             for (const t of tasks) {
                 if (!t.stage_name?.trim()) continue
                 const data = {
                     project: projectId,
                     stage_name: t.stage_name,
                     assignees: t.assignees,
-                    deadline: t.deadline || null,
+                    deadline: t.deadline || undefined,
                     start_date: t.start_date || new Date().toISOString(),
-                    status: 'pending',
+                    status: 'pending' as TaskStatus,
                     created_by: currentUser?.id,
                     sequence: Date.now(),
                 }
                 if (t.id) {
+                    const previous = await pb.collection('tasks').getOne<Task>(t.id, {
+                        fields: 'id,assignees',
+                    }).catch(() => null)
                     const r = await pb.collection('tasks').update(t.id, {
                         stage_name: t.stage_name,
                         assignees: t.assignees,
                         start_date: t.start_date || null,
                         deadline: t.deadline || null,
                     })
+                    const addedAssigneeIds = getAddedAssigneeIds(previous?.assignees || [], t.assignees || [])
+                    if (addedAssigneeIds.length > 0) {
+                        reassignedTasks.push({
+                            stageName: t.stage_name,
+                            taskId: t.id,
+                            newAssigneeIds: addedAssigneeIds,
+                        })
+                    }
                     results.push(r)
                 } else {
-                    const r = await pb.collection('tasks').create(data)
+                    const r = await createTaskWithSideEffects(data, {
+                        createAuditLog: false,
+                        notifyProjectAudience: false,
+                    })
                     results.push(r)
                 }
             }
@@ -1189,7 +1318,8 @@ export function useBatchSaveTasks() {
                 operator: currentUser?.id,
                 after_data: { count: results.length },
             }).catch(() => {})
-            // 通知项目全员
+
+            // 通知项目成员与经理（执行人由下面对象循环单独通知，避免重复推送）
             await notifyProjectMembers(
                 projectId,
                 '任务批量更新',
@@ -1197,29 +1327,25 @@ export function useBatchSaveTasks() {
                 'task_update',
                 currentUser?.id,
             ).catch(() => {})
-            // 给每个新任务的 assignee 发定向通知
-            const operatorName = currentUser?.name || currentUser?.username
-            for (const t of tasks) {
-                if (t.id) continue // 已有任务（更新）不重复通知
-                for (const uid of (t.assignees || [])) {
-                    if (uid === currentUser?.id) continue
-                    pb.collection('notifications').create({
-                        user: uid,
-                        type: 'task_assigned',
-                        title: '你有新任务',
-                        content: `${operatorName} 给你分配了任务「${t.stage_name}」`,
-                        link_type: 'task',
-                        link_id: '', // 批量创建时无法精确对应
-                        is_read: false,
-                    }).catch(() => {})
-                }
+
+            // 新建任务已在 createTaskWithSideEffects 内完成执行人通知；这里只补发“已有任务新增执行人”
+            for (const task of reassignedTasks) {
+                await notifyTaskAssignees({
+                    assigneeIds: task.newAssigneeIds,
+                    taskId: task.taskId,
+                    stageName: task.stageName,
+                    title: '你被加入了任务',
+                    content: `${getCurrentActorName()} 将你加入了任务「${task.stageName}」`,
+                    excludeUserId: currentUser?.id,
+                })
             }
             return results
         },
-        onSuccess: () => {
+        onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            const assigneeIds = variables.tasks.flatMap((task) => task.assignees || [])
+            invalidateNotificationQueries(queryClient, assigneeIds)
         },
     })
 }
@@ -1378,27 +1504,23 @@ export function useUpdateAuditLogStatus() {
                     reviewed_by: pb.authStore.model?.id,
                     ...(reject_note ? { reject_note } : {}),
                 })
-            } catch (updateErr: any) {
-                console.error('更新审计日志失败', updateErr?.response || updateErr)
-                const msg = updateErr?.response?.message || updateErr?.message || '更新审计日志失败'
-                throw new Error(msg)
+            } catch (updateErr: unknown) {
+                console.error('更新审计日志失败', updateErr)
+                throw new Error(getPocketBaseErrorMessage(updateErr, '更新审计日志失败'))
             }
 
             // 拒绝时通知操作人
             if (review_status === 'rejected' && auditLog.operator) {
                 const reviewerName = pb.authStore.model?.name || pb.authStore.model?.username || '管理员'
                 const actionLabel = auditLog.action_type === 'mark_complete' ? '任务完成' : auditLog.action_type === 'update_task' ? '任务修改' : '操作'
-                try {
-                    await pb.collection('notifications').create({
-                        user: auditLog.operator,
-                        type: 'audit_rejected',
-                        title: `${actionLabel}被拒绝`,
-                        content: `${reviewerName} 拒绝了您的${actionLabel}${reject_note ? '，原因：' + reject_note : ''}`,
-                        is_read: false,
-                        link_type: auditLog.task ? 'task' : 'project',
-                        link_id: auditLog.task || auditLog.project || '',
-                    })
-                } catch (e) { console.warn('发送拒绝通知失败', e) }
+                await createNotificationRecord({
+                    user: auditLog.operator,
+                    type: 'audit_rejected',
+                    title: `${actionLabel}被拒绝`,
+                    content: `${reviewerName} 拒绝了您的${actionLabel}${reject_note ? '，原因：' + reject_note : ''}`,
+                    link_type: auditLog.task ? 'task' : 'project',
+                    link_id: auditLog.task || auditLog.project || '',
+                })
             }
 
             return result
@@ -1409,6 +1531,8 @@ export function useUpdateAuditLogStatus() {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: ['visible_tasks'] })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            const uid = pb.authStore.model?.id
+            invalidateNotificationQueries(queryClient, uid ? [uid] : [])
         },
     })
 }

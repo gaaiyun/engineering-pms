@@ -10,6 +10,7 @@ import { ConfigProvider } from 'antd-mobile'
 import zhCN from 'antd-mobile/es/locales/zh-CN'
 import { queryClient } from './lib/queryClient'
 import { subscribeToChanges, unsubscribeAll, pb } from './lib/pocketbase'
+import { syncPushRegistrationForCurrentUser } from './lib/pushNotifications'
 
 // 初始化实时订阅：PB 数据变更 → 自动刷新前端缓存
 function initRealtime() {
@@ -24,11 +25,15 @@ function initRealtime() {
 // 登录状态变化时重新订阅
 pb.authStore.onChange(() => {
   unsubscribeAll()
-  if (pb.authStore.isValid) setTimeout(initRealtime, 500)
+  if (pb.authStore.isValid) {
+    setTimeout(initRealtime, 500)
+    setTimeout(() => { void syncPushRegistrationForCurrentUser() }, 900)
+  }
 })
 
 // 首次加载
 setTimeout(initRealtime, 1000)
+setTimeout(() => { void syncPushRegistrationForCurrentUser() }, 1400)
 
 
 class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {

@@ -12,8 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Toast, Dialog, Tabs } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
-import { useNotifications as useNotificationsQuery } from '../lib/api'
-import { queryKeys } from '../lib/queryClient'
+import { invalidateNotificationQueries, useNotifications as useNotificationsQuery } from '../lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // 使用与 api.ts 一致的接口定义
@@ -43,7 +42,7 @@ export default function Notifications() {
     subscribed = true
     pb.collection('notifications').subscribe('*', (e) => {
       if (e.record.user === userId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
+        invalidateNotificationQueries(queryClient, [userId])
       }
     })
     return () => { if (subscribed) pb.collection('notifications').unsubscribe('*') }
@@ -67,7 +66,7 @@ export default function Notifications() {
     if (notif.is_read) return
     try {
       await pb.collection('notifications').update(notif.id, { is_read: true })
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
+      invalidateNotificationQueries(queryClient, [userId])
     } catch (e) {
       console.error(e)
     }
@@ -84,7 +83,7 @@ export default function Notifications() {
       await Promise.all(unread.map(n => 
         pb.collection('notifications').update(n.id, { is_read: true })
       ))
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
+      invalidateNotificationQueries(queryClient, [userId])
       Toast.show({ content: `已全部标为已读`, icon: 'success' })
     } catch (e) {
       console.error(e)
@@ -102,7 +101,7 @@ export default function Notifications() {
     if (result) {
       try {
         await pb.collection('notifications').delete(notif.id)
-        queryClient.invalidateQueries({ queryKey: queryKeys.notifications(userId) })
+        invalidateNotificationQueries(queryClient, [userId])
         Toast.show({ content: '已删除', icon: 'success' })
       } catch {
         Toast.show({ content: '删除失败', icon: 'fail' })

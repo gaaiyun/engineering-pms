@@ -11,7 +11,7 @@ vi.mock('./pocketbase', () => ({
   },
 }))
 
-import { isManagerRole } from './api'
+import { getAddedAssigneeIds, isManagerRole } from './api'
 
 describe('isManagerRole', () => {
   beforeEach(() => {
@@ -36,5 +36,19 @@ describe('isManagerRole', () => {
   it('当 model 为 null 时返回 false', () => {
     mockAuthStore.model = null
     expect(isManagerRole()).toBe(false)
+  })
+})
+
+describe('getAddedAssigneeIds', () => {
+  it('返回新增的执行人 id', () => {
+    expect(getAddedAssigneeIds(['u1', 'u2'], ['u2', 'u3', 'u4'])).toEqual(['u3', 'u4'])
+  })
+
+  it('忽略重复与空值', () => {
+    expect(getAddedAssigneeIds(['u1'], ['u1', 'u2', 'u2', '' as any, undefined as any])).toEqual(['u2'])
+  })
+
+  it('没有新增时返回空数组', () => {
+    expect(getAddedAssigneeIds(['u1', 'u2'], ['u2', 'u1'])).toEqual([])
   })
 })

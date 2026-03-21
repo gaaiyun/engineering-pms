@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutline, IoChevronForward, IoCameraOutline, IoClose, IoPeopleOutline } from 'react-icons/io5'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTasks, useProjects } from '../lib/api'
+import { deactivateCurrentDevicePushRegistration } from '../lib/pushNotifications'
 
 import { AVATAR_STYLE_GROUPS } from '../lib/avatarOptions'
 
@@ -57,7 +58,8 @@ export default function Profile() {
   const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
   const [saving, setSaving] = useState(false)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await deactivateCurrentDevicePushRegistration()
     pb.authStore.clear()
     localStorage.removeItem('rememberMe')
     sessionStorage.removeItem('pocketbase_auth')

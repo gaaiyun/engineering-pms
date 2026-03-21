@@ -2,12 +2,33 @@
  * 原生系统通知封装
  * 在 Capacitor 原生 App 中使用 LocalNotifications 插件
  * 实现系统通知栏弹窗 + 系统提示音
+ *
+ * 注意：
+ * - 这里负责的是“前台已启动 App 的本地提醒桥接”
+ * - 它不是后台真推送实现，不覆盖 App 被系统杀掉后的通知下发
  */
 
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
 let permissionGranted = false
+
+const ANDROID_CHANNEL_ID = 'engineering_pms_default'
+
+async function ensureAndroidChannel(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    await LocalNotifications.createChannel({
+      id: ANDROID_CHANNEL_ID,
+      name: '工程结算管理',
+      description: '任务与消息提醒',
+      importance: 5,
+      vibration: true,
+    })
+  } catch (e) {
+    console.warn('创建通知渠道失败（可忽略）', e)
+  }
+}
 
 /**
  * 请求本地通知权限（仅原生平台）
@@ -17,6 +38,7 @@ export async function requestNativeNotificationPermission(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false
 
   try {
+    await ensureAndroidChannel()
     const status = await LocalNotifications.checkPermissions()
     if (status.display === 'granted') {
       permissionGranted = true
@@ -45,13 +67,14 @@ export async function scheduleNewMessageNotification(count: number): Promise<voi
   }
 
   try {
+    await ensureAndroidChannel()
     await LocalNotifications.schedule({
       notifications: [
         {
           id: Date.now() % 2147483647, // Android 要求 32 位 int
           title: '工程结算管理',
           body: `您有 ${count} 条新消息`,
-          // sound / smallIcon / largeIcon 不指定，使用系统默认通知音和应用图标
+          channelId: ANDROID_CHANNEL_ID,
         },
       ],
     })

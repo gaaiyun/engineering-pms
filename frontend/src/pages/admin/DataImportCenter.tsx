@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { NavBar, Tabs, TextArea, Button, Toast, ProgressBar, Tag } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
-import { pb } from '../../lib/pocketbase'
-import { useUsers, useProjects } from '../../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { pb, getPocketBaseErrorMessage } from '../../lib/pocketbase'
+import { createTaskWithSideEffects, invalidateNotificationQueries, notifyProjectMembers, type Task, type TaskStatus, useUsers, useProjects } from '../../lib/api'
 import { IoCloudUploadOutline, IoCheckmarkCircle, IoCloseCircle, IoDocumentTextOutline } from 'react-icons/io5'
 
 type ImportStatus = 'idle' | 'previewing' | 'importing' | 'done'
@@ -317,11 +318,12 @@ interface TaskRow {
   assigneeNames: string[]
   assigneeIds: string[]
   deadline: string
-  status: string
-  priority: string
+  status: TaskStatus
+  priority: NonNullable<Task['priority']>
 }
 
 function TaskImportTab() {
+  const queryClient = useQueryClient()
   const { data: users = [] } = useUsers()
   const { data: projects = [] } = useProjects()
   const [text, setText] = useState('')
@@ -349,8 +351,8 @@ function TaskImportTab() {
           assigneeNames: (r.assignees || []) as string[],
           assigneeIds: assignees.map((a: any) => a.id),
           deadline: r.deadline || '',
-          status: r.status || 'pending',
-          priority: r.priority || 'normal',
+          status: (r.status || 'pending') as TaskStatus,
+          priority: (r.priority || 'normal') as NonNullable<Task['priority']>,
         }
       })
       setRows(validated)
@@ -365,13 +367,14 @@ function TaskImportTab() {
     setProgress(0)
     const ok: number[] = []
     const errors: string[] = []
+    const importedProjectCounts = new Map<string, number>()
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]
       if (!r.projectId) {
         errors.push(`#${i + 1} ${r.stage_name}: 找不到项目 "${r.projectName}"`); continue
       }
       try {
-        await pb.collection('tasks').create({
+        await createTaskWithSideEffects({
           stage_name: r.stage_name,
           project: r.projectId,
           assignees: r.assigneeIds,
@@ -379,13 +382,32 @@ function TaskImportTab() {
           status: r.status,
           priority: r.priority,
           sequence: i + 1,
+        }, {
+          notifyProjectAudience: false,
         })
         ok.push(i)
-      } catch (e: any) {
-        errors.push(`#${i + 1} ${r.stage_name}: ${e?.message || '创建失败'}`)
+        importedProjectCounts.set(r.projectId, (importedProjectCounts.get(r.projectId) || 0) + 1)
+      } catch (e: unknown) {
+        errors.push(`#${i + 1} ${r.stage_name}: ${getPocketBaseErrorMessage(e, '创建失败')}`)
       }
       setProgress(Math.round(((i + 1) / rows.length) * 100))
     }
+
+    const actorId = pb.authStore.model?.id
+    const actorName = pb.authStore.model?.name || pb.authStore.model?.username || '管理员'
+    for (const [projectId, count] of importedProjectCounts.entries()) {
+      await notifyProjectMembers(
+        projectId,
+        '任务导入',
+        `${actorName} 批量导入了 ${count} 个任务`,
+        'task_update',
+        actorId,
+      )
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
+    invalidateNotificationQueries(queryClient)
     setResults({ ok: ok.length, fail: errors.length, errors })
     setStatus('done')
   }
