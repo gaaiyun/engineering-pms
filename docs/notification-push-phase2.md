@@ -97,6 +97,7 @@ App 登出后：
 - 客户端接入 `@capacitor/push-notifications`
 - 登录态建立后自动尝试注册 push token
 - 登出前停用当前设备 token，避免脏设备记录残留
+- 为避免未配 Firebase 时 Android 登录后闪退，真 push 注册默认关闭；只有设置 `VITE_ENABLE_PUSH_REGISTRATION=1` 后才启用
 
 ## 仍需你准备的外部条件
 
@@ -112,3 +113,4 @@ App 登出后：
 - 应用可正常运行
 - Push 注册失败只记录日志
 - 不会影响现有前台本地提醒链路
+- 默认不会触发 `PushNotifications.register()`，从而避免无 `google-services.json` 时的原生崩溃

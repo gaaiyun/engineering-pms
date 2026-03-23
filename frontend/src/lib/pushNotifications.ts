@@ -4,8 +4,10 @@ import { pb, getPocketBaseErrorMessage } from './pocketbase'
 
 const DEVICE_TOKENS_COLLECTION = 'device_tokens'
 const DEVICE_ID_STORAGE_KEY = 'push_device_id'
+const PUSH_REGISTRATION_ENABLED = (import.meta.env.VITE_ENABLE_PUSH_REGISTRATION || '').trim() === '1'
 
 let listenersBound = false
+let pushDisabledWarned = false
 
 function isNativePushSupported() {
   return Capacitor.isNativePlatform()
@@ -111,6 +113,16 @@ function bindPushListeners() {
 
 export async function syncPushRegistrationForCurrentUser() {
   if (!isNativePushSupported() || !pb.authStore.isValid || !getCurrentUserId()) return false
+
+  // 没有 Firebase / google-services.json 时，Android 调用 register() 可能直接导致原生进程崩溃。
+  // 因此默认关闭真 push 注册，只有明确配置环境变量后才启用。
+  if (!PUSH_REGISTRATION_ENABLED) {
+    if (!pushDisabledWarned) {
+      console.info('Push 注册已跳过：未启用 VITE_ENABLE_PUSH_REGISTRATION=1')
+      pushDisabledWarned = true
+    }
+    return false
+  }
 
   bindPushListeners()
 
