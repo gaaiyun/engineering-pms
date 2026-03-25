@@ -29,7 +29,7 @@ import BatchProjectCreator from '../../components/BatchProjectCreator'
 import BatchTaskEditor from '../../components/BatchTaskEditor'
 import { AVATAR_STYLE_GROUPS } from '../../lib/avatarOptions'
 import { IoCameraOutline, IoClose } from 'react-icons/io5'
-import { deactivateCurrentDevicePushRegistration } from '../../lib/pushNotifications'
+import { logoutWithDeviceCleanup } from '../../lib/pushNotifications'
 
 interface User {
   id: string
@@ -466,10 +466,7 @@ const AdminDashboard = () => {
                 fill='outline'
                 style={{ borderColor: '#cbd5e1', color: '#64748b', fontSize: 12 }}
                 onClick={async () => {
-                  await deactivateCurrentDevicePushRegistration()
-                  pb.authStore.clear()
-                  localStorage.removeItem('rememberMe')
-                  sessionStorage.removeItem('pocketbase_auth')
+                  await logoutWithDeviceCleanup()
                   navigate('/login', { replace: true })
                 }}
               >
@@ -1359,10 +1356,7 @@ const AdminDashboard = () => {
               <Button
                 block
                 onClick={async () => {
-                  await deactivateCurrentDevicePushRegistration()
-                  pb.authStore.clear()
-                  localStorage.removeItem('rememberMe')
-                  sessionStorage.removeItem('pocketbase_auth')
+                  await logoutWithDeviceCleanup()
                   navigate('/login', { replace: true })
                 }}
                 style={{

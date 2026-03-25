@@ -72,6 +72,7 @@ async function upsertDeviceToken(tokenValue: string) {
 
 export async function deactivateCurrentDevicePushRegistration(userId = getCurrentUserId()) {
   if (!isNativePushSupported() || !userId) return
+  if (!PUSH_REGISTRATION_ENABLED) return
 
   const existing = await findCurrentDeviceTokenRecord(userId)
   if (existing) {
@@ -86,6 +87,18 @@ export async function deactivateCurrentDevicePushRegistration(userId = getCurren
   await PushNotifications.unregister().catch((error) => {
     console.warn('注销 PushNotifications 失败', error)
   })
+}
+
+export async function logoutWithDeviceCleanup() {
+  try {
+    await deactivateCurrentDevicePushRegistration()
+  } catch (error) {
+    console.warn('登出前清理推送状态失败', getPocketBaseErrorMessage(error))
+  }
+
+  pb.authStore.clear()
+  localStorage.removeItem('rememberMe')
+  sessionStorage.removeItem('pocketbase_auth')
 }
 
 function bindPushListeners() {
