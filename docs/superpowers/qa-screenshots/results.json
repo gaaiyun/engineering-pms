@@ -1,0 +1,254 @@
+[
+  {
+    "bp": "desktop",
+    "page": "01_root_redirect",
+    "screenshot": "desktop_01_root_redirect.png",
+    "ok": true,
+    "url_after_root": "http://localhost:5173/login",
+    "h_login_visible": true
+  },
+  {
+    "bp": "desktop",
+    "page": "02a_post_login",
+    "screenshot": "desktop_02a_post_login.png",
+    "ok": true,
+    "url": "http://localhost:5173/admin"
+  },
+  {
+    "bp": "desktop",
+    "page": "02_home_app",
+    "screenshot": "desktop_02_home_app.png",
+    "ok": true,
+    "url": "http://localhost:5173/app",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "03_my_tasks_table",
+    "screenshot": "desktop_03_my_tasks_table.png",
+    "ok": true,
+    "url": "http://localhost:5173/my-tasks",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "04_notifications",
+    "screenshot": "desktop_04_notifications.png",
+    "ok": true,
+    "url": "http://localhost:5173/notifications",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "05_settings",
+    "screenshot": "desktop_05_settings.png",
+    "ok": true,
+    "url": "http://localhost:5173/settings",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "06_admin_dashboard",
+    "screenshot": "desktop_06_admin_dashboard.png",
+    "ok": true,
+    "url": "http://localhost:5173/admin",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "07_review_center",
+    "screenshot": "desktop_07_review_center.png",
+    "ok": true,
+    "url": "http://localhost:5173/review-center",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "08_my_projects",
+    "screenshot": "desktop_08_my_projects.png",
+    "ok": true,
+    "url": "http://localhost:5173/my-projects",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "desktop",
+    "page": "_console_errors_warnings",
+    "count": 1,
+    "sample": "[error] Warning: [Compatible] antd-mobile v5 support React is 16 ~ 18. see https://mobile.ant.design/guide/v5-for-19 for compatible."
+  },
+  {
+    "bp": "tablet",
+    "page": "01_root_redirect",
+    "screenshot": "tablet_01_root_redirect.png",
+    "ok": true,
+    "url_after_root": "http://localhost:5173/login",
+    "h_login_visible": true
+  },
+  {
+    "bp": "tablet",
+    "page": "02a_post_login",
+    "screenshot": "tablet_02a_post_login.png",
+    "ok": true,
+    "url": "http://localhost:5173/admin"
+  },
+  {
+    "bp": "tablet",
+    "page": "02_home_app",
+    "screenshot": "tablet_02_home_app.png",
+    "ok": true,
+    "url": "http://localhost:5173/app",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "03_my_tasks_table",
+    "screenshot": "tablet_03_my_tasks_table.png",
+    "ok": true,
+    "url": "http://localhost:5173/my-tasks",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "04_notifications",
+    "screenshot": "tablet_04_notifications.png",
+    "ok": true,
+    "url": "http://localhost:5173/notifications",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "05_settings",
+    "screenshot": "tablet_05_settings.png",
+    "ok": true,
+    "url": "http://localhost:5173/settings",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "06_admin_dashboard",
+    "screenshot": "tablet_06_admin_dashboard.png",
+    "ok": true,
+    "url": "http://localhost:5173/admin",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "07_review_center",
+    "screenshot": "tablet_07_review_center.png",
+    "ok": true,
+    "url": "http://localhost:5173/review-center",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "08_my_projects",
+    "screenshot": "tablet_08_my_projects.png",
+    "ok": true,
+    "url": "http://localhost:5173/my-projects",
+    "sidebar_visible_desktop": true,
+    "sidebar_absent_mobile": null
+  },
+  {
+    "bp": "tablet",
+    "page": "_console_errors_warnings",
+    "count": 1,
+    "sample": "[error] Warning: [Compatible] antd-mobile v5 support React is 16 ~ 18. see https://mobile.ant.design/guide/v5-for-19 for compatible."
+  },
+  {
+    "bp": "mobile",
+    "page": "01_root_redirect",
+    "screenshot": "mobile_01_root_redirect.png",
+    "ok": true,
+    "url_after_root": "http://localhost:5173/login",
+    "h_login_visible": true
+  },
+  {
+    "bp": "mobile",
+    "page": "02a_post_login",
+    "screenshot": "mobile_02a_post_login.png",
+    "ok": true,
+    "url": "http://localhost:5173/admin"
+  },
+  {
+    "bp": "mobile",
+    "page": "02_home_app",
+    "screenshot": "mobile_02_home_app.png",
+    "ok": true,
+    "url": "http://localhost:5173/app",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "03_my_tasks_table",
+    "screenshot": "mobile_03_my_tasks_table.png",
+    "ok": true,
+    "url": "http://localhost:5173/my-tasks",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "04_notifications",
+    "screenshot": "mobile_04_notifications.png",
+    "ok": true,
+    "url": "http://localhost:5173/notifications",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "05_settings",
+    "screenshot": "mobile_05_settings.png",
+    "ok": true,
+    "url": "http://localhost:5173/settings",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "06_admin_dashboard",
+    "screenshot": "mobile_06_admin_dashboard.png",
+    "ok": true,
+    "url": "http://localhost:5173/admin",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "07_review_center",
+    "screenshot": "mobile_07_review_center.png",
+    "ok": true,
+    "url": "http://localhost:5173/review-center",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "08_my_projects",
+    "screenshot": "mobile_08_my_projects.png",
+    "ok": true,
+    "url": "http://localhost:5173/my-projects",
+    "sidebar_visible_desktop": null,
+    "sidebar_absent_mobile": true
+  },
+  {
+    "bp": "mobile",
+    "page": "_console_errors_warnings",
+    "count": 1,
+    "sample": "[error] Warning: [Compatible] antd-mobile v5 support React is 16 ~ 18. see https://mobile.ant.design/guide/v5-for-19 for compatible."
+  }
+]
