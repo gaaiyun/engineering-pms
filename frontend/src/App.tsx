@@ -17,6 +17,8 @@ import ReviewCenter from './pages/ReviewCenter'
 import { pb } from './lib/pocketbase'
 import { useNotificationAlerts } from './lib/useNotificationAlerts'
 import { AppShell } from './components/layout'
+import { initRealtimeBridge } from './lib/realtimeBridge'
+import { useQueryClient } from '@tanstack/react-query'
 
 // 简单的路由保护组件
 const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
@@ -100,6 +102,16 @@ function GlobalNotificationProvider() {
   return null
 }
 
+/** Android 原生 Realtime 服务桥接 — 仅在 native 平台启用 */
+function RealtimeBridgeProvider() {
+  const queryClient = useQueryClient()
+  React.useEffect(() => {
+    const handle = initRealtimeBridge(queryClient)
+    return () => handle.stop()
+  }, [queryClient])
+  return null
+}
+
 function App() {
   React.useEffect(() => {
     const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
@@ -116,6 +128,7 @@ function App() {
     <Router>
       <NotifyFlashOverlay />
       <GlobalNotificationProvider />
+      <RealtimeBridgeProvider />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

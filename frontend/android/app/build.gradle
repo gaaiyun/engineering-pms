@@ -14,8 +14,8 @@ android {
         applicationId "com.engineering.pms"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 37
-        versionName "2.97"
+        versionCode 38
+        versionName "2.98"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -60,6 +60,12 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // PR 2: Android 原生 SSE 长连 + ForegroundService 保活
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:okhttp-sse:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
 }
 
 apply from: 'capacitor.build.gradle'

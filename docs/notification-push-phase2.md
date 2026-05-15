@@ -1,116 +1,209 @@
-# 通知二期架构说明
+# 通知系统 v3.0 架构（更新于 2026-05-16）
 
-## 一期与二期边界
+> **重大更新（PR 2，2026-05-16）**：本文档已根据"不引入 Firebase / FCM"决策**整体重写**。
+>
+> - 旧版（v2.x）基于 FCM HTTP v1 / APNs 的分发架构 — **已废弃**
+> - 新版（v3.0+）基于 **PocketBase Realtime SSE + Android Foreground Service** — **当前实现**
+>
+> 原 FCM 设计的历史版本可在 git 历史中查看（`git log --diff-filter=D -- docs/notification-push-phase2.md`）。
 
-当前代码中的提醒能力分为两层：
+---
 
-- 一期：PocketBase `notifications` 记录 + 前台已打开 App 的本地提醒
-- 二期：App 在后台、锁屏或被系统清理后，仍能收到真正的系统推送
+## 1. 设计原则
 
-一期已覆盖：
+- **不依赖 Firebase**：避免 google-services.json + Play 审核 + 国内 FCM 不稳的问题
+- **依赖现成基础设施**：PocketBase 自带 Realtime SSE 已经可用，不引入新中间件
+- **优雅降级**：SSE 失败 → 前台轮询补差；前台服务被杀 → 用户感知"被杀了"，下次开 app 自动恢复
+- **三端一致**：Web、Android、iOS（未来）共享同一份"事件即真理"的语义
 
-- 未读角标
-- 通知列表
-- 前台 Toast
-- 振动
-- 红边闪烁
-- `LocalNotifications` 本地提醒桥接
+---
 
-一期**不**覆盖：
+## 2. 整体架构
 
-- 后台/离线推送
-- 厂商通知通道保活
-- APNs / FCM 服务端下发
-
-## 推荐二期架构
-
-```mermaid
-flowchart TD
-NotificationEvent[NotificationEvent]
-NotificationEvent --> PocketBaseRecord[notifications record]
-NotificationEvent --> PushDispatcher[PushDispatcher]
-PushDispatcher --> DeviceTokenRepo[device_tokens]
-PushDispatcher --> FCM[FCM Android]
-PushDispatcher --> APNS[APNs iOS]
-PocketBaseRecord --> ForegroundClient[foreground client]
-ForegroundClient --> LocalNotifyBridge[LocalNotifications bridge]
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  PocketBase（事件源）                       │
+│   notifications 集合 + onRealtimeConnectRequest hook        │
+│   （idleTimeout=30min）                                     │
+└────────────────────┬────────────────────────────────────────┘
+                     │ SSE /api/realtime
+        ┌────────────┴────────────┬─────────────────┐
+        ▼                          ▼                 ▼
+   Web 浏览器               Android 原生         iOS（未来）
+   (foreground)            (前台/后台)
+   pb.realtime.            ┌──────────────────┐
+   subscribe()             │ RealtimeService  │
+                           │ (Foreground SVC) │
+                           │ dataSync type    │
+                           │   ↓ 持有         │
+                           │ PbSseClient      │
+                           │ (OkHttp SSE)     │
+                           │   ↓ 重连 1-30s   │
+                           │   ↓ exponential  │
+                           │      backoff     │
+                           └────────┬─────────┘
+                                    │ LocalBroadcast
+                                    ▼
+                           ┌──────────────────┐
+                           │ RealtimePlugin   │
+                           │ (Capacitor JS 桥)│
+                           └────────┬─────────┘
+                                    │ notifyListeners
+                                    ▼
+                           ┌──────────────────┐
+                           │ realtimeBridge   │
+                           │ + useNotification│
+                           │   Alerts hook    │
+                           └──────────────────┘
 ```
 
-## 服务端建议
+---
 
-新增一个设备令牌集合，例如 `device_tokens`：
+## 3. 客户端实现（Android）
 
-- `user`：relation -> users
-- `platform`：`android | ios | web`
-- `token`：push token
-- `device_name`：可选
-- `last_seen_at`：date
-- `is_active`：bool
+### 3.1 进程内组件
 
-服务端职责：
+| 组件 | 类 | 职责 |
+|---|---|---|
+| Foreground Service | `RealtimeService.java` | dataSync 类型；持有 PbSseClient；监听 ConnectivityManager；NetworkCallback；OOM 友好的持久通知（IMPORTANCE_LOW） |
+| SSE 客户端 | `PbSseClient.java` | OkHttp 4.12 + okhttp-sse；readTimeout=0；指数退避重连 1/2/4/8/16/30s + ±20% jitter；最多 10 次失败后调 onPermanentFailure |
+| Capacitor Plugin | `RealtimePlugin.java` | start / stop / updateToken；订阅 Service 的 LocalBroadcast 转 notifyListeners |
 
-1. 业务操作先创建 `notifications` 记录
-2. 根据 `user` 查 `device_tokens`
-3. 通过 `PushDispatcher` 调 FCM / APNs
-4. 失败时只记录日志，不影响主业务写库
+### 3.2 协议交互（详见 `docs/superpowers/research/2026-05-16-pr2-tech-reference.md` §1）
 
-## 客户端建议
+```
+1) GET /api/realtime
+   Headers: Authorization: <token>, Accept: text/event-stream
+   → 服务端推 PB_CONNECT 事件含 clientId
 
-App 登录后：
+2) POST /api/realtime
+   Body: { clientId, subscriptions: ["notifications/*"] }
+   → 服务端按订阅 push 业务事件
 
-1. 获取推送权限
-2. 获取设备 token
-3. 上报到 `device_tokens`
+3) event: notifications/<id>
+   data: { action: "create"|"update"|"delete", record: {...} }
+```
 
-App 登出后：
+### 3.3 生命周期（JS 端）
 
-1. 注销当前 token 或标记 `is_active = false`
+```typescript
+// realtimeBridge.ts 单例
+- pb.authStore.onChange → 登录态变化：
+  - login    → Realtime.start({ baseUrl, token })
+  - logout   → Realtime.stop()
+  - 续 token → Realtime.updateToken({ token })  (避免重启 Service)
 
-前台职责：
+- 收 notification 事件 → invalidateNotificationQueries(queryClient, [userId])
+  → useNotificationAlerts hook 触发 Toast/振动/声音/红闪/系统通知
+```
 
-- 仍保留 `Home.tsx` 的未读数监听
-- 前台收到同源通知事件时，触发 Toast / 振动 / 红边闪烁
+### 3.4 Android Manifest 权限清单
 
-后台职责：
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-- 只依赖服务端推送
-- 不再把 `LocalNotifications.schedule()` 误当成后台真推送
+<service
+    android:name=".realtime.RealtimeService"
+    android:exported="false"
+    android:foregroundServiceType="dataSync" />
+```
 
-## 落地顺序
+---
 
-1. 先完成当前一期通知链路收敛
-2. 新建设备 token schema 与注册流程
-3. 引入推送分发服务
-4. 将“任务分配 / 审核拒绝 / 卡点协助”等事件统一接入 `PushDispatcher`
-5. 做安卓真机后台验证
+## 4. 服务端配置
 
-## 实现原则
+### 4.1 PocketBase hooks（必需）
 
-- `notifications` 记录是消息事实来源
-- Push 发送是派生行为，不反向驱动业务
-- 前台提醒和后台推送共享同一个领域事件，但各自职责独立
-- 页面层不直接处理推送 token 与通知发送细节
+`backend/pb_hooks/realtime.pb.js`：
 
-## 当前仓库已完成的二期基础
+```javascript
+onRealtimeConnectRequest((e) => {
+  e.idleTimeout = 30 * 60 * 1e9 // 30 minutes in nanoseconds
+})
+```
 
-- 新增 PocketBase 集合迁移：`device_tokens`
-- 客户端接入 `@capacitor/push-notifications`
-- 登录态建立后自动尝试注册 push token
-- 登出前停用当前设备 token，避免脏设备记录残留
-- 为避免未配 Firebase 时 Android 登录后闪退，真 push 注册默认关闭；只有设置 `VITE_ENABLE_PUSH_REGISTRATION=1` 后才启用
+默认 5 分钟 idle 会导致移动端频繁重连。30 分钟是社区推荐的"既不打扰、又不囤 zombie"的值。
 
-## 仍需你准备的外部条件
+### 4.2 反向代理（如有）
 
-仅完成“客户端注册链路”还不能形成后台真推送，Android 端还需要：
+Nginx 配置中 `/api/realtime` 必须独立 location 关闭 buffering 与延长 timeout：
 
-1. Firebase 项目
-2. `google-services.json`
-3. Android 端对应 Firebase 配置
-4. 服务端推送发送器（FCM HTTP v1 或网关）
+```nginx
+location /api/realtime {
+  proxy_pass http://127.0.0.1:8090;
+  proxy_buffering off;          # 必须！否则 SSE 不流式
+  proxy_read_timeout 1h;        # 默认 60s 会切断 SSE
+  proxy_send_timeout 1h;
+}
+```
 
-若未配置 Firebase，当前代码会优雅降级为：
+Caddy / Traefik 用户：在 reverse_proxy 配置中加 `flush_interval -1`。
 
-- 应用可正常运行
-- Push 注册失败只记录日志
-- 不会影响现有前台本地提醒链路
-- 默认不会触发 `PushNotifications.register()`，从而避免无 `google-services.json` 时的原生崩溃
+---
+
+## 5. 边界场景与已知约束
+
+### 5.1 国产 ROM 杀后台
+**没有银弹**。详见 `docs/android-background-keepalive.md`。
+
+- 原生 Android / Pixel：保活率 ~100%
+- 三星：~90%（深度睡眠会断 ~10 分钟）
+- 小米 / 华为 / OPPO / vivo：**必须用户手动加白名单 + 自启动**，否则 1-30 分钟内被冻结
+
+### 5.2 Android 15 dataSync 6 小时上限
+Service 实现了 `onTimeout` 回调：超时后 stopSelf + AlarmManager 15 分钟后唤醒。**用户每次打开 app 会重置计时器**。
+
+### 5.3 Web 端
+Web 浏览器使用 `pb.collection.subscribe`（PB JS SDK），生命周期跟随 tab。关闭 tab 即断开。**不做 Web Worker 后台保活** — 桌面端用户预期是"打开页面才收推送"。
+
+### 5.4 网络抖动
+- OkHttp 内置 `retryOnConnectionFailure(true)`
+- 应用层：监听 `ConnectivityManager.NetworkCallback.onAvailable` → 调 `PbSseClient.reconnectNow()`
+- 兜底：前台时 useNotificationAlerts 走 `useUnreadNotificationCount` 自动每 30s polling（PR 1 已实现）
+
+### 5.5 token 过期
+PB JS SDK 自动 refresh token。`pb.authStore.onChange` 触发后 `realtimeBridge` 调 `Realtime.updateToken` 让 Service 用新 token，不重启长连接。
+
+---
+
+## 6. 验证检查表
+
+实机验证流程（详见 `docs/superpowers/manual-qa/2026-05-16-pr-1-and-pr-3-qa.md` 和 PR 2 即将补充的 qa 文档）：
+
+- [ ] 安装 v2.98 APK，授予通知权限
+- [ ] 登录后打开持久通知"消息接收中"
+- [ ] 锁屏 30 min，让另一账号建任务 → 应收到通知
+- [ ] 飞行模式 10 min → 恢复网络 → 应在 30 秒内补送
+- [ ] 小米/华为真机 + 已加白名单：连续 8h 后台后仍能收
+- [ ] 退出登录 → 持久通知消失、Service 停止
+
+---
+
+## 7. 未来扩展（v3.1+）
+
+- **iOS 适配**：APNs + BGTask Framework（独立 spec，开发量约 PR 2 的 1.5 倍）
+- **通知偏好 UI**：用户可设置"全开 / 仅振动 / 关闭"per 业务类型
+- **离线消息箱**：SSE 断开期间用 IndexedDB 缓存差集
+- **多设备并发**：device_tokens 表已支持，未来分发器可针对每个设备发不同体验（如只在最近活跃设备响铃）
+
+---
+
+## 8. 关键文件索引
+
+| 文件 | 说明 |
+|---|---|
+| `frontend/android/app/src/main/java/com/engineering/pms/realtime/PbSseClient.java` | SSE 客户端 |
+| `frontend/android/app/src/main/java/com/engineering/pms/realtime/RealtimeService.java` | 前台服务 |
+| `frontend/android/app/src/main/java/com/engineering/pms/realtime/RealtimePlugin.java` | Capacitor plugin |
+| `frontend/android/app/src/main/AndroidManifest.xml` | 权限 + service 声明 |
+| `frontend/src/native/realtime.ts` | TS plugin 定义 |
+| `frontend/src/lib/realtimeBridge.ts` | React 集成桥 |
+| `frontend/src/App.tsx` | RealtimeBridgeProvider 挂载点 |
+| `backend/pb_hooks/realtime.pb.js` | idleTimeout=30min |
+| `docs/superpowers/research/2026-05-16-pr2-tech-reference.md` | 调研全文 |
+| `docs/android-background-keepalive.md` | OEM 保活引导 |
