@@ -6,20 +6,36 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite)
 ![PocketBase](https://img.shields.io/badge/PocketBase-0.22-B8DBE4)
+![Version](https://img.shields.io/badge/Version-v2.98-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 功能特性
 
+- **响应式三端布局** *(v2.98 新增)* — 移动端 / 平板 / 桌面自动切换，桌面端 Sidebar+TopBar 三区布局
 - **角色权限体系** — 经理/管理员全权管理，员工受限视图
-- **项目看板** — 拖拽式任务管理（待处理/进行中/卡点/已完成）
+- **项目看板** — 拖拽式任务管理（待处理/进行中/卡点/已完成），桌面端拖拽脉冲呼吸视觉反馈
+- **任务表格视图** *(v2.98 新增)* — 桌面端 TanStack Table 排序 + 多选 + 批量改状态/删除
 - **时间轴/甘特图** — 项目进度可视化，支持移动端横屏
 - **批量任务编辑** — 三列表格一次性设置多个任务
 - **实时数据同步** — PocketBase Realtime SSE 自动刷新
+- **Android 后台通知** *(v2.98 新增)* — 原生前台服务保活，不依赖 Firebase/FCM，国产 ROM 友好
 - **变更审计中心** — 所有变动可追溯，支持已阅/通过复核
 - **全员消息通知** — 项目内任何变动自动通知全体成员
 - **AI 智能分析** — 基于 DeepSeek 的项目诊断与问答
 - **自动备份** — 每 12 小时备份，保留 60 天
 - **移动端适配** — Capacitor 打包 Android APK，PWA 支持
+
+## v3.0 改造（2026-05-16）
+
+v2.96 → v2.98 完整改造概览见 [docs/v3.0-changelog.md](./docs/v3.0-changelog.md)。简版：
+
+- **PR 1**：通知一期收尾，全局 `useNotificationAlerts` hook，前台 Toast/振动/三音调/红闪/系统通知统一链路
+- **PR 2**：Android 原生前台服务 + PocketBase Realtime SSE 长连接，**不依赖 Firebase**
+- **PR 3**：响应式 AppShell 三断点（mobile/tablet/desktop），桌面 Sidebar+TopBar 布局
+- **PR 4**：桌面任务表格视图 + 批量操作（标记完成/删除）
+- **PR 5**：看板桌面体验提升，拖拽脉冲呼吸动画
+
+完整 spec：[docs/superpowers/specs/2026-05-16-pms-notification-and-desktop-design.md](./docs/superpowers/specs/2026-05-16-pms-notification-and-desktop-design.md)
 
 ## 快速开始
 
