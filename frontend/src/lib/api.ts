@@ -1168,6 +1168,39 @@ export function useDeleteTask() {
             if (task.project) {
                 notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', pb.authStore.model?.id).catch(() => {})
             }
+
+            // ⚠️ Bug fix P0-4（Agent C 数据流审计发现）：级联清理关联记录。
+            // PB 端 cascadeDelete=false，仅删 task 会留下 handoffs / notifications /
+            // 下游任务的 predecessor_tasks 引用 → ReviewCenter 出现 expand 失败的
+            // 幽灵记录、通知点击 404、时间轴断链。
+            try {
+                // 1) 关联 handoffs（from_task 或 approved_task 引用此任务）
+                const hs = await pb.collection('handoffs').getFullList({
+                    filter: `from_task="${taskId}" || approved_task="${taskId}"`,
+                    fields: 'id',
+                })
+                await Promise.allSettled(hs.map((h) => pb.collection('handoffs').delete(h.id)))
+
+                // 2) 下游任务的 predecessor_tasks 中清掉此 id
+                const downstream = await pb.collection('tasks').getFullList<Task>({
+                    filter: `predecessor_tasks ~ "${taskId}"`,
+                    fields: 'id,predecessor_tasks',
+                })
+                await Promise.allSettled(downstream.map((d) => {
+                    const next = (d.predecessor_tasks || []).filter((p: string) => p !== taskId)
+                    return pb.collection('tasks').update(d.id, { predecessor_tasks: next })
+                }))
+
+                // 3) link_id=taskId 的 notifications（避免点击 404）
+                const ns = await pb.collection('notifications').getFullList({
+                    filter: `link_type="task" && link_id="${taskId}"`,
+                    fields: 'id',
+                })
+                await Promise.allSettled(ns.map((n) => pb.collection('notifications').delete(n.id)))
+            } catch (e) {
+                console.warn('cascade cleanup for deleted task failed', e)
+            }
+
             await pb.collection('tasks').delete(taskId)
             return task
         },
