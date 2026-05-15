@@ -7,9 +7,13 @@ import dayjs from 'dayjs'
 import { SkeletonList } from '../components/Skeleton'
 import { useMyTasks, useProjects } from '../lib/api'
 import type { Task } from '../lib/api'
+import { useBreakpoint } from '../lib/useBreakpoint'
+import { TasksTableView } from '../components/tasks/TasksTableView'
 
 export default function MyTasks() {
   const navigate = useNavigate()
+  const bp = useBreakpoint()
+  const isDesktop = bp !== 'mobile'
   const userId = pb.authStore.model?.id ?? ''
   const { data: tasks = [], isLoading: tasksLoading, error: tasksError } = useMyTasks(userId)
   const { isLoading: projectsLoading, error: projectsError } = useProjects()
@@ -85,45 +89,50 @@ export default function MyTasks() {
     </div>
   )
 
+  const renderTabContent = (list: Task[], emptyText: string) => {
+    if (isDesktop) {
+      return <TasksTableView tasks={list} />
+    }
+    return (
+      <div style={{ padding: 20, paddingBottom: 80, overflowY: 'auto', height: '100%' }}>
+        {list.length > 0 ? list.map(t => <TaskCard key={t.id} task={t} />) : <EmptyState text={emptyText} />}
+      </div>
+    )
+  }
+
   return (
     <div className="page" style={{ padding: 0, background: 'var(--page-bg)' }}>
-      <div className="glass-header" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ background: 'transparent', border: 'none', padding: 0, color: 'var(--neutral-600)', display: 'flex' }}
-        >
-          <IoArrowBackOutline size={24} />
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 800 }}>我的任务</div>
-      </div>
+      {!isDesktop && (
+        <div className="glass-header" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{ background: 'transparent', border: 'none', padding: 0, color: 'var(--neutral-600)', display: 'flex' }}
+          >
+            <IoArrowBackOutline size={24} />
+          </button>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>我的任务</div>
+        </div>
+      )}
 
-      <div style={{ height: 'calc(100dvh - 60px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: isDesktop ? '100%' : 'calc(100dvh - 60px)', display: 'flex', flexDirection: 'column' }}>
         <Tabs
           defaultActiveKey='in_progress'
           style={{ '--title-font-size': '14px', '--active-title-color': 'var(--primary-color)', '--active-line-color': 'var(--accent-color)' }}
         >
           <Tabs.Tab title={`进行中 (${inProgressTasks.length})`} key='in_progress'>
-            <div style={{ padding: 20, paddingBottom: 80, overflowY: 'auto', height: '100%' }}>
-              {inProgressTasks.length > 0 ? inProgressTasks.map(t => <TaskCard key={t.id} task={t} />) : <EmptyState text="没有进行中的任务" />}
-            </div>
+            {renderTabContent(inProgressTasks, '没有进行中的任务')}
           </Tabs.Tab>
 
           <Tabs.Tab title={`待办 (${todoTasks.length})`} key='pending'>
-            <div style={{ padding: 20, paddingBottom: 80, overflowY: 'auto', height: '100%' }}>
-              {todoTasks.length > 0 ? todoTasks.map(t => <TaskCard key={t.id} task={t} />) : <EmptyState text="没有待办任务" />}
-            </div>
+            {renderTabContent(todoTasks, '没有待办任务')}
           </Tabs.Tab>
 
           <Tabs.Tab title={`逾期 (${overdueTasks.length})`} key='overdue'>
-            <div style={{ padding: 20, paddingBottom: 80, overflowY: 'auto', height: '100%' }}>
-              {overdueTasks.length > 0 ? overdueTasks.map(t => <TaskCard key={t.id} task={t} />) : <EmptyState text="暂无逾期任务" />}
-            </div>
+            {renderTabContent(overdueTasks, '暂无逾期任务')}
           </Tabs.Tab>
 
           <Tabs.Tab title={`已完成`} key='completed'>
-            <div style={{ padding: 20, paddingBottom: 80, overflowY: 'auto', height: '100%' }}>
-              {doneTasks.length > 0 ? doneTasks.map(t => <TaskCard key={t.id} task={t} />) : <EmptyState text="还没有完成的任务" />}
-            </div>
+            {renderTabContent(doneTasks, '还没有完成的任务')}
           </Tabs.Tab>
         </Tabs>
       </div>
