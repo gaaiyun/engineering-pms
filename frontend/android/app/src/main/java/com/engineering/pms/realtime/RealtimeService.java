@@ -141,8 +141,9 @@ public class RealtimeService extends Service implements PbSseClient.Listener {
 
     private void startForegroundCompat() {
         Notification notif = buildOngoingNotification();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // API 34+ 必须传 type
+        // Build.VERSION_CODES.UPSIDE_DOWN_CAKE = 34（compileSdk 33 时常量不存在，用整数字面量）
+        if (Build.VERSION.SDK_INT >= 34) {
+            // API 34+ 必须传 foregroundServiceType
             startForeground(NOTIF_ID_ONGOING, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(NOTIF_ID_ONGOING, notif);
@@ -293,10 +294,18 @@ public class RealtimeService extends Service implements PbSseClient.Listener {
         if (nm != null) nm.notify(NOTIF_ID_BUSINESS_BASE + (businessNotifSerial++ % 100), notif);
     }
 
-    @Override
+    /**
+     * Android 15+ dataSync 6 小时超时回调。
+     *
+     * 注意：onTimeout(int, int) 仅在 API 35+ Service 类中存在。当前 compileSdkVersion=33，
+     * 因此不能用 @Override 注解。当 app 运行在 Android 15 设备上时，系统仍会通过反射调用
+     * 此方法（方法签名匹配），所以业务逻辑有效。
+     *
+     * 如果将来 compileSdkVersion 升到 35+，可以加回 @Override 注解。
+     * 详见 docs/superpowers/research/2026-05-16-pr2-tech-reference.md §2
+     */
     public void onTimeout(int startId, int fgsType) {
-        // Android 15+ dataSync 6 小时超时
-        Log.w(TAG, "service onTimeout, scheduling alarm restart in 15 min");
+        Log.w(TAG, "service onTimeout (Android 15+ dataSync limit), scheduling alarm restart in 15 min");
         scheduleAlarmRestart(15 * 60 * 1000);
         stopSelf();
     }
