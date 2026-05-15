@@ -23,6 +23,7 @@ import { TaskCardOverlay } from './TaskCard'
 import { TaskDetailDrawer } from './TaskDetailDrawer'
 import { useTasks, useUpdateTask, useUpdateTaskSequence, isManagerRole, type Task } from '../../lib/api'
 import { useUIStore } from '../../lib/store'
+import { useBreakpoint } from '../../lib/useBreakpoint'
 import './KanbanBoard.css'
 
 interface KanbanBoardProps {
@@ -47,6 +48,8 @@ const normalizeStatus = (status: string): string => {
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName }) => {
     const navigate = useNavigate()
+    const bp = useBreakpoint()
+    const isDesktop = bp !== 'mobile'
     const { data: tasks = [], isLoading } = useTasks(projectId)
     const updateTask = useUpdateTask()
     const updateSequence = useUpdateTaskSequence()
@@ -191,12 +194,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
 
     return (
         <div className="kanban-container">
-            <NavBar
-                onBack={() => navigate(-1)}
-                className="kanban-navbar"
-            >
-                {projectName || '项目看板'}
-            </NavBar>
+            {!isDesktop && (
+                <NavBar
+                    onBack={() => navigate(-1)}
+                    className="kanban-navbar"
+                >
+                    {projectName || '项目看板'}
+                </NavBar>
+            )}
+            {isDesktop && projectName && (
+                <div className="kanban-desktop-header">
+                    <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+                        {projectName}
+                    </h2>
+                    <span style={{ marginLeft: 8, fontSize: 13, color: '#64748b' }}>项目看板</span>
+                </div>
+            )}
 
             <DndContext
                 sensors={sensors}

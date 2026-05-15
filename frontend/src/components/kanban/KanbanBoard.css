@@ -2,13 +2,23 @@
 .kanban-container {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
+    height: 100%;
+    min-height: 100dvh;
     background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
 }
 
 .kanban-navbar {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* 桌面端 AppShell 内部的项目标题（替代 NavBar） */
+.kanban-desktop-header {
+    padding: 16px 24px;
+    display: flex;
+    align-items: baseline;
+    background: rgba(255, 255, 255, 0.6);
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
