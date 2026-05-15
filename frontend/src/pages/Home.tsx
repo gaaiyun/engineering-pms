@@ -1,19 +1,17 @@
-import { TabBar, Badge, Toast } from 'antd-mobile'
+import { TabBar, Badge } from 'antd-mobile'
 import {
   UnorderedListOutline,
   UserOutline,
   SetOutline,
 } from 'antd-mobile-icons'
 import { useState, useEffect, useRef } from 'react'
-import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline, IoChevronForwardOutline } from 'react-icons/io5'
+import { IoNotificationsOutline, IoCheckmarkCircleOutline, IoTimeOutline, IoChevronForwardOutline, IoWarningOutline, IoFlameOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
 import Tasks from './Tasks'
 import Profile from './Profile'
 import { pb } from '../lib/pocketbase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useUnreadNotificationCount, useTasks, useVisibleTasks, useNotifications, useProjects } from '../lib/api'
-import { playNotificationSound, warmUpAudio } from '../lib/notificationSound'
-import { requestNativeNotificationPermission, scheduleNewMessageNotification } from '../lib/nativeNotifications'
 import dayjs from 'dayjs'
 
 export default function Home() {
@@ -21,73 +19,7 @@ export default function Home() {
   const touchStartRef = useRef<number | null>(null)
   const navigate = useNavigate()
   const userId = pb.authStore.model?.id || ''
-  const { data: unreadCount = 0, isFetched: unreadFetched } = useUnreadNotificationCount(userId)
-  const prevUnreadRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    prevUnreadRef.current = null
-  }, [userId])
-
-  // 新消息到达时弹 Toast + 浏览器推送 + 提示音 + 系统通知
-  // 注意：不能用「上一值 !== 0」判断，否则从未读 0→1 时永远不提醒（员工最常见场景）
-  useEffect(() => {
-    if (!unreadFetched || !userId) return
-    if (prevUnreadRef.current === null) {
-      prevUnreadRef.current = unreadCount
-      return
-    }
-    if (unreadCount > prevUnreadRef.current) {
-      const newCount = unreadCount - prevUnreadRef.current
-      // 播放提示音（Web Audio 兜底）
-      playNotificationSound()
-      // 系统原生通知（Capacitor App 内走系统通知栏 + 系统声音）
-      scheduleNewMessageNotification(newCount)
-      // 醒目的顶部横幅通知（红色背景，更长时间）
-      Toast.show({
-        content: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15 }}>
-            <IoNotificationsOutline size={20} color="#fff" aria-hidden />
-            <span>收到 {newCount} 条新消息</span>
-          </div>
-        ),
-        position: 'top',
-        duration: 6000,
-        maskStyle: { background: 'transparent' },
-      })
-      // 浏览器桌面通知
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('工程结算管理', { body: `您有 ${newCount} 条新消息`, icon: '/favicon.ico', tag: 'new-msg' })
-      }
-      // 震动反馈（移动端）
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200, 100, 200])
-      }
-      // 触发全局边缘闪烁动画（通过自定义事件，由 App.tsx overlay 监听）
-      window.dispatchEvent(new CustomEvent('notify-flash'))
-    }
-    prevUnreadRef.current = unreadCount
-  }, [unreadCount, unreadFetched, userId])
-
-  // 首次请求浏览器通知权限 + 原生通知权限
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-    // 请求原生通知权限（Capacitor App）
-    requestNativeNotificationPermission()
-    // 预热音频上下文（需要用户交互后才能播放）
-    const handleInteraction = () => {
-      warmUpAudio()
-      window.removeEventListener('click', handleInteraction)
-      window.removeEventListener('touchstart', handleInteraction)
-    }
-    window.addEventListener('click', handleInteraction)
-    window.addEventListener('touchstart', handleInteraction)
-    return () => {
-      window.removeEventListener('click', handleInteraction)
-      window.removeEventListener('touchstart', handleInteraction)
-    }
-  }, [])
+  const { data: unreadCount = 0 } = useUnreadNotificationCount(userId)
 
   const role = pb.authStore.model?.role?.toLowerCase()
   const isManager = role === 'manager' || role === 'admin'
@@ -99,12 +31,27 @@ export default function Home() {
   const { data: notifications = [] } = useNotifications(userId)
   const { data: myProjects = [] } = useProjects()
 
-  // 员工的当前任务（进行中、待办、卡点、逾期）
-  const currentTasks = myTasks.filter(t => 
+  const activeTasks = myTasks.filter(t =>
     t.status === 'in_progress' || t.status === 'pending' || t.status === 'blocked' || t.status === 'overdue'
-  ).slice(0, 5)
-  // 最近未读消息
+  )
+  const currentTasks = activeTasks.slice(0, 5)
   const recentNotifications = notifications.filter(n => !n.is_read).slice(0, 5)
+
+  const getDeadlineUrgency = (deadline?: string): 'overdue' | 'urgent' | 'approaching' | 'normal' | 'none' => {
+    if (!deadline) return 'none'
+    const diff = dayjs(deadline).diff(dayjs(), 'day')
+    if (diff < 0) return 'overdue'
+    if (diff <= 1) return 'urgent'
+    if (diff <= 3) return 'approaching'
+    return 'normal'
+  }
+
+  const overdueCount = activeTasks.filter(t => getDeadlineUrgency(t.deadline) === 'overdue').length
+  const urgentCount = activeTasks.filter(t => {
+    const u = getDeadlineUrgency(t.deadline)
+    return u === 'urgent' || u === 'approaching'
+  }).length
+  const completedCount = myTasks.filter(t => t.status === 'completed').length
 
   const tabs = [
     {
@@ -300,10 +247,39 @@ export default function Home() {
             >
               {activeKey === 'tasks' && (
                 isEmployee ? (
-                  // 员工专属首页
                   <div style={{ paddingTop: 20 }}>
                     <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: '#0f172a' }}>我的工作台</h2>
-                    
+
+                    {/* 统计卡片 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24 }}>
+                      <div style={{ background: '#fff', borderRadius: 14, padding: '14px 12px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#2563eb' }}>{activeTasks.length}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 2 }}>进行中</div>
+                      </div>
+                      <div style={{ background: overdueCount > 0 ? '#fef2f2' : '#fff', borderRadius: 14, padding: '14px 12px', textAlign: 'center', border: `1px solid ${overdueCount > 0 ? '#fecaca' : '#e2e8f0'}` }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: overdueCount > 0 ? '#dc2626' : '#94a3b8' }}>{overdueCount}</div>
+                        <div style={{ fontSize: 11, color: overdueCount > 0 ? '#dc2626' : '#64748b', fontWeight: 600, marginTop: 2 }}>已逾期</div>
+                      </div>
+                      <div style={{ background: '#fff', borderRadius: 14, padding: '14px 12px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#059669' }}>{completedCount}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 2 }}>已完成</div>
+                      </div>
+                    </div>
+
+                    {/* 截止日期紧急提醒 */}
+                    {urgentCount > 0 && (
+                      <div style={{
+                        background: 'linear-gradient(135deg, #fff7ed, #fef3c7)', borderRadius: 12,
+                        padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10,
+                        border: '1px solid #fed7aa',
+                      }}>
+                        <IoFlameOutline size={20} color="#ea580c" />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#9a3412' }}>
+                          有 {urgentCount} 个任务即将到期，请尽快处理
+                        </span>
+                      </div>
+                    )}
+
                     {/* 我的任务 */}
                     <div style={{ marginBottom: 32 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -317,30 +293,46 @@ export default function Home() {
                       </div>
                       {currentTasks.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          {currentTasks.map(task => (
-                            <div key={task.id} onClick={() => navigate(`/task/${task.id}`)} style={{
-                              background: '#fff', borderRadius: 12, padding: 16, cursor: 'pointer',
-                              border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                            }}>
-                              <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>{task.stage_name}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#64748b' }}>
-                                <span style={{
-                                  padding: '2px 8px', borderRadius: 4,
-                                  background: task.status === 'in_progress' ? '#dbeafe' : task.status === 'blocked' ? '#fee2e2' : task.status === 'overdue' ? '#fff7ed' : '#f1f5f9',
-                                  color: task.status === 'in_progress' ? '#2563eb' : task.status === 'blocked' ? '#dc2626' : task.status === 'overdue' ? '#ea580c' : '#64748b',
-                                  fontWeight: 600
-                                }}>
-                                  {task.status === 'in_progress' ? '进行中' : task.status === 'pending' ? '待办' : task.status === 'blocked' ? '卡点' : task.status === 'overdue' ? '逾期' : task.status}
-                                </span>
-                                {task.deadline && (
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <IoTimeOutline size={14} />
-                                    {dayjs(task.deadline).format('MM/DD')}
+                          {currentTasks.map(task => {
+                            const urgency = getDeadlineUrgency(task.deadline)
+                            const isDeadlineWarn = urgency === 'overdue' || urgency === 'urgent'
+                            return (
+                              <div key={task.id} onClick={() => navigate(`/task/${task.id}`)} style={{
+                                background: '#fff', borderRadius: 12, padding: 16, cursor: 'pointer',
+                                border: `1px solid ${isDeadlineWarn ? '#fecaca' : '#e2e8f0'}`,
+                                boxShadow: isDeadlineWarn ? '0 2px 8px rgba(239,68,68,0.08)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                borderLeft: task.priority === 'high' ? '4px solid #ef4444' : task.priority === 'low' ? '4px solid #10b981' : undefined,
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                  <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.stage_name}</div>
+                                  {urgency === 'overdue' && <IoWarningOutline size={16} color="#dc2626" style={{ flexShrink: 0, marginLeft: 8 }} />}
+                                  {urgency === 'urgent' && <IoFlameOutline size={16} color="#ea580c" style={{ flexShrink: 0, marginLeft: 8 }} />}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: '#64748b', flexWrap: 'wrap' }}>
+                                  <span style={{
+                                    padding: '2px 8px', borderRadius: 4,
+                                    background: task.status === 'in_progress' ? '#dbeafe' : task.status === 'blocked' ? '#fee2e2' : task.status === 'overdue' ? '#fff7ed' : '#f1f5f9',
+                                    color: task.status === 'in_progress' ? '#2563eb' : task.status === 'blocked' ? '#dc2626' : task.status === 'overdue' ? '#ea580c' : '#64748b',
+                                    fontWeight: 600,
+                                  }}>
+                                    {task.status === 'in_progress' ? '进行中' : task.status === 'pending' ? '待办' : task.status === 'blocked' ? '卡点' : task.status === 'overdue' ? '逾期' : task.status}
                                   </span>
-                                )}
+                                  {task.deadline && (
+                                    <span style={{
+                                      display: 'flex', alignItems: 'center', gap: 4,
+                                      color: urgency === 'overdue' ? '#dc2626' : urgency === 'urgent' ? '#ea580c' : '#64748b',
+                                      fontWeight: isDeadlineWarn ? 700 : 400,
+                                    }}>
+                                      <IoTimeOutline size={14} />
+                                      {urgency === 'overdue' ? `逾期 ${Math.abs(dayjs(task.deadline).diff(dayjs(), 'day'))} 天` :
+                                       urgency === 'urgent' ? '明天到期' :
+                                       dayjs(task.deadline).format('MM/DD')}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       ) : (
                         <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>

@@ -957,39 +957,35 @@ body {
 
 /* === 通知闪烁动画 === */
 @keyframes notify-border-flash {
-  0%, 100% { box-shadow: inset 0 0 0 0 transparent; }
-  10% { box-shadow: inset 0 0 0 4px rgba(239, 68, 68, 0.8); }
-  20% { box-shadow: inset 0 0 0 0 transparent; }
-  35% { box-shadow: inset 0 0 0 4px rgba(239, 68, 68, 0.6); }
-  50% { box-shadow: inset 0 0 0 0 transparent; }
-  65% { box-shadow: inset 0 0 0 3px rgba(239, 68, 68, 0.4); }
-  80% { box-shadow: inset 0 0 0 0 transparent; }
-  90% { box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.2); }
+  0%   { box-shadow: inset 0 0 0 0 transparent; }
+  8%   { box-shadow: inset 0 0 0 4px rgba(239, 68, 68, 0.85), 0 0 24px rgba(239, 68, 68, 0.15); }
+  18%  { box-shadow: inset 0 0 0 0 transparent; }
+  28%  { box-shadow: inset 0 0 0 4px rgba(239, 68, 68, 0.65), 0 0 18px rgba(239, 68, 68, 0.1); }
+  40%  { box-shadow: inset 0 0 0 0 transparent; }
+  52%  { box-shadow: inset 0 0 0 3px rgba(239, 68, 68, 0.45), 0 0 12px rgba(239, 68, 68, 0.08); }
+  65%  { box-shadow: inset 0 0 0 0 transparent; }
+  78%  { box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.25); }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
 }
 
-/* overlay 全屏红闪 — 由 App.tsx NotifyFlashOverlay 使用 */
 .notify-flash-overlay {
-  animation: notify-border-flash 2.5s ease-in-out forwards;
+  animation: notify-border-flash 2.8s ease-in-out forwards;
 }
 
-body.notify-flash {
-  animation: notify-border-flash 2s ease-in-out;
-}
-
-/* 铃铛摇晃动画 */
+/* 铃铛摇晃动画 — 有未读消息时每隔 4s 重播 */
 @keyframes bell-shake {
   0%, 100% { transform: rotate(0deg); }
-  10% { transform: rotate(14deg); }
-  20% { transform: rotate(-12deg); }
-  30% { transform: rotate(10deg); }
-  40% { transform: rotate(-8deg); }
-  50% { transform: rotate(6deg); }
-  60% { transform: rotate(-4deg); }
-  70% { transform: rotate(2deg); }
-  80% { transform: rotate(0deg); }
+  5%  { transform: rotate(14deg); }
+  10% { transform: rotate(-12deg); }
+  15% { transform: rotate(10deg); }
+  20% { transform: rotate(-8deg); }
+  25% { transform: rotate(6deg); }
+  30% { transform: rotate(-4deg); }
+  35% { transform: rotate(2deg); }
+  40%, 100% { transform: rotate(0deg); }
 }
 .bell-shake {
-  animation: bell-shake 0.8s ease-in-out;
+  animation: bell-shake 4s ease-in-out infinite;
   transform-origin: top center;
 }
 

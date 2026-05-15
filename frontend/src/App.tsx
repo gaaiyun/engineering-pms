@@ -14,8 +14,8 @@ import MyTasks from './pages/MyTasks'
 import SettingsPage from './pages/SettingsPage'
 import Notifications from './pages/Notifications'
 import ReviewCenter from './pages/ReviewCenter'
-// ManagerDashboard 已统一到 AdminDashboard
 import { pb } from './lib/pocketbase'
+import { useNotificationAlerts } from './lib/useNotificationAlerts'
 
 // 简单的路由保护组件
 const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
@@ -65,11 +65,9 @@ function NotifyFlashOverlay() {
       const el = ref.current
       if (!el) return
       el.classList.remove('notify-flash-overlay')
-      // force reflow to restart animation
       void el.offsetWidth
       el.classList.add('notify-flash-overlay')
     }
-    // 动画结束后自动移除 class，避免残留
     const onAnimEnd = () => {
       ref.current?.classList.remove('notify-flash-overlay')
     }
@@ -96,8 +94,13 @@ function NotifyFlashOverlay() {
   )
 }
 
+/** 全局通知提醒挂载点 — 需要在 Router 内使用 */
+function GlobalNotificationProvider() {
+  useNotificationAlerts()
+  return null
+}
+
 function App() {
-  // Handle Hardware Back Button (Android)
   React.useEffect(() => {
     const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
       if (canGoBack) {
@@ -112,6 +115,7 @@ function App() {
   return (
     <Router>
       <NotifyFlashOverlay />
+      <GlobalNotificationProvider />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

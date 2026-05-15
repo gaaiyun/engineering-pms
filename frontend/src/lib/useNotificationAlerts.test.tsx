@@ -58,7 +58,7 @@ beforeEach(() => {
   }
   NotificationMock.permission = 'granted'
   NotificationMock.requestPermission = vi.fn().mockResolvedValue('granted')
-  Object.defineProperty(global, 'Notification', {
+  Object.defineProperty(globalThis, 'Notification', {
     writable: true,
     configurable: true,
     value: NotificationMock,

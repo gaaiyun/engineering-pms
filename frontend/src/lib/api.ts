@@ -620,6 +620,7 @@ export function useApproveHandoff() {
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
             invalidateNotificationQueries(queryClient, newTask.assignees || [])
         },
     })
@@ -663,6 +664,7 @@ export function useRejectHandoff() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
             invalidateNotificationQueries(queryClient)
         },
     })
@@ -856,6 +858,7 @@ export function useMarkTaskComplete() {
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
             queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
         },
     })
 }

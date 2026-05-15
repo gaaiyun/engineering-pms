@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
 import { pb, getPocketBaseErrorMessage } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
@@ -230,6 +230,12 @@ const AdminDashboard = () => {
       }
     })
   }, [activeProjects, tasks])
+
+  const getProjectProgress = useCallback((projectId: string) => {
+    const pTasks = tasks.filter(t => t.project === projectId)
+    const completed = pTasks.filter(t => t.status === 'completed').length
+    return pTasks.length > 0 ? Math.round((completed / pTasks.length) * 100) : 0
+  }, [tasks])
 
   // 卡点人员排名
   const blockedRanking = useMemo(() => {
@@ -990,10 +996,10 @@ const AdminDashboard = () => {
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6, fontWeight: 600, color: '#64748b' }}>
                       <span>进度</span>
-                      <span>{project.progress}%</span>
+                      <span>{getProjectProgress(project.id)}%</span>
                     </div>
                     <ProgressBar
-                      percent={project.progress}
+                      percent={getProjectProgress(project.id)}
                       style={{
                         '--track-width': '6px',
                         '--fill-color': 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',
@@ -1123,10 +1129,10 @@ const AdminDashboard = () => {
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6, fontWeight: 600, color: '#64748b' }}>
                       <span>完成进度</span>
-                      <span>{project.progress}%</span>
+                      <span>{getProjectProgress(project.id)}%</span>
                     </div>
                     <ProgressBar
-                      percent={project.progress}
+                      percent={getProjectProgress(project.id)}
                       style={{
                         '--track-width': '8px',
                         '--fill-color': 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',

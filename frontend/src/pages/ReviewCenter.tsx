@@ -3,7 +3,7 @@
  * Tab: 全部 / 待复核 / 已阅读 / 已通过 / 交接审核
  * 卡片式布局，支持搜索、筛选、已阅/通过操作
  */
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,7 +11,7 @@ import {
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
   type Handoff, type User
 } from '../lib/api'
-import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
+import { getPocketBaseErrorMessage } from '../lib/pocketbase'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
@@ -69,23 +69,8 @@ const ReviewCenter: React.FC = () => {
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectNote, setRejectNote] = useState('')
 
-  // SSE 实时订阅审计日志和交接记录
-  useEffect(() => {
-    let mounted = true
-    const unsubs: (() => void)[] = []
-
-    pb.collection('audit_logs').subscribe('*', () => { if (mounted) refetchLogs() })
-      .then(() => { unsubs.push(() => pb.collection('audit_logs').unsubscribe('*')) })
-    pb.collection('handoffs').subscribe('*', () => { if (mounted) refetchHandoffs() })
-      .then(() => { unsubs.push(() => pb.collection('handoffs').unsubscribe('*')) })
-
-    return () => {
-      mounted = false
-      unsubs.forEach(fn => fn())
-      pb.collection('audit_logs').unsubscribe('*').catch(() => {})
-      pb.collection('handoffs').unsubscribe('*').catch(() => {})
-    }
-  }, [refetchLogs, refetchHandoffs])
+  // 全局 realtime (pocketbase.ts subscribeToChanges) 已经覆盖
+  // audit_logs / handoffs 变更会自动 invalidate 对应 query keys
 
   const displayLogs = useMemo(() => {
     if (activeTab === 'handoff') return []

@@ -394,12 +394,25 @@ const TaskDetail = () => {
             )}
           </div>
 
-          {!isEditing && (
-            <div style={{ background: 'var(--neutral-50)', padding: '16px 24px', borderTop: '1px solid var(--neutral-100)', display: 'flex', gap: 24 }}>
+          {!isEditing && (() => {
+            const daysLeft = task.deadline ? dayjs(task.deadline).diff(dayjs(), 'day') : null
+            const isOverdue = daysLeft !== null && daysLeft < 0 && task.status !== 'completed'
+            const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 2 && task.status !== 'completed'
+            return (
+            <div style={{ background: isOverdue ? '#fef2f2' : isUrgent ? '#fffbeb' : 'var(--neutral-50)', padding: '16px 24px', borderTop: `1px solid ${isOverdue ? '#fecaca' : isUrgent ? '#fde68a' : 'var(--neutral-100)'}`, display: 'flex', gap: 24, transition: 'all 0.2s' }}>
               <div>
-                <div style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 700 }}>截止日期</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: 'var(--neutral-700)', fontSize: 13, fontWeight: 600 }}>
-                  <IoCalendarOutline /> {task.deadline ? dayjs(task.deadline).format('MMM DD, YYYY') : '未设置'}
+                <div style={{ fontSize: 10, color: isOverdue ? '#dc2626' : isUrgent ? '#d97706' : 'var(--neutral-400)', fontWeight: 700 }}>
+                  {isOverdue ? '已逾期' : isUrgent ? '即将到期' : '截止日期'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: isOverdue ? '#dc2626' : isUrgent ? '#d97706' : 'var(--neutral-700)', fontSize: 13, fontWeight: 600 }}>
+                  <IoCalendarOutline />
+                  {task.deadline ? (
+                    <>
+                      {dayjs(task.deadline).format('MMM DD, YYYY')}
+                      {isOverdue && <span style={{ fontSize: 11, fontWeight: 700 }}> (逾期 {Math.abs(daysLeft!)} 天)</span>}
+                      {isUrgent && <span style={{ fontSize: 11, fontWeight: 700 }}> (剩余 {daysLeft} 天)</span>}
+                    </>
+                  ) : '未设置'}
                 </div>
               </div>
               <div>
@@ -414,7 +427,8 @@ const TaskDetail = () => {
                 </div>
               </div>
             </div>
-          )}
+            )
+          })()}
         </motion.div>
       </div>
 

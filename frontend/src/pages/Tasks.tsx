@@ -156,15 +156,17 @@ export default function Tasks() {
   const { data: allNotifs = [] } = useNotifications(userId || '')
   const unreadNotifs = useMemo(() => allNotifs.filter((n: any) => !n.is_read).slice(0, 5), [allNotifs])
 
-  const projects = useMemo(() => projectsRaw
-    .filter((p: any) => p.status !== 'archived')
-    .map((p: any) => ({
-      ...p,
-      progress: p.progress !== undefined ? p.progress : 0
-    })), [projectsRaw])
-
   // 获取员工的任务
   const { data: myTasks = [] } = useTasks()
+
+  const projects = useMemo(() => projectsRaw
+    .filter((p: any) => p.status !== 'archived')
+    .map((p: any) => {
+      const pTasks = myTasks.filter((t: Task) => t.project === p.id)
+      const completed = pTasks.filter((t: Task) => t.status === 'completed').length
+      const computedProgress = pTasks.length > 0 ? Math.round((completed / pTasks.length) * 100) : 0
+      return { ...p, progress: computedProgress }
+    }), [projectsRaw, myTasks])
   const isManagerUser = isManager()
   useUsers()
   const taskListRef = useRef<HTMLDivElement>(null)
