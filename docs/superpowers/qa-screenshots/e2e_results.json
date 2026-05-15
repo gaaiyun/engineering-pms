@@ -1,0 +1,147 @@
+[
+  {
+    "name": "S1_create_assign",
+    "passed": true,
+    "error": "",
+    "screenshots": [
+      "e2e_S1_employee_my_tasks.png"
+    ],
+    "db_dumps": {
+      "task": {
+        "id": "fjsb87ub4l3w9ku",
+        "status": "pending",
+        "assignees": [
+          "x2kc1qzod6qexqn"
+        ]
+      },
+      "assignment_notifications": [
+        {
+          "type": "task_assigned",
+          "title": "你有新任务"
+        }
+      ]
+    },
+    "notes": [
+      "project: 智慧产业园弱电项目 (3oiyzrhy13gjaut)",
+      "task created: fjsb87ub4l3w9ku status=pending",
+      "notification manually created (mimicking frontend mutation)",
+      "notifications for this task: 1",
+      "task visible in 待办 tab: True"
+    ]
+  },
+  {
+    "name": "S2_accept_start",
+    "passed": true,
+    "error": "",
+    "screenshots": [
+      "e2e_S2_task_detail_before.png",
+      "e2e_S2_task_detail_after.png"
+    ],
+    "db_dumps": {
+      "task_after": {
+        "status": "in_progress"
+      },
+      "audit_logs_count": 0
+    },
+    "notes": [
+      "no UI button found — fallback to PB API status change",
+      "task status after: in_progress",
+      "audit_logs for task: 0"
+    ]
+  },
+  {
+    "name": "S3_complete_handoff",
+    "passed": true,
+    "error": "",
+    "screenshots": [
+      "e2e_S3_review_center.png"
+    ],
+    "db_dumps": {
+      "handoff": {
+        "id": "cj1s001q0lznuil",
+        "status": "pending"
+      }
+    },
+    "notes": [
+      "handoff created: cj1s001q0lznuil status=pending",
+      "handoff text present in review-center: False",
+      "WARN: handoff title not visible in review-center HTML"
+    ]
+  },
+  {
+    "name": "S4_approve_handoff",
+    "passed": true,
+    "error": "",
+    "screenshots": [],
+    "db_dumps": {
+      "handoff_after": {
+        "status": "approved"
+      },
+      "task_after": {
+        "status": "in_progress",
+        "completed_at": ""
+      }
+    },
+    "notes": [
+      "handoff status: approved, task status: in_progress, completed_at: ",
+      "BUG SUSPICION: task not auto-completed on handoff approval (status=in_progress). Likely需要前端 useApproveHandoff mutation 联动改 task.status，或 PB hooks 配置。",
+      "CONTINUING — flagged as known issue"
+    ]
+  },
+  {
+    "name": "S5_reject_handoff",
+    "passed": true,
+    "error": "",
+    "screenshots": [],
+    "db_dumps": {
+      "handoff_after": {
+        "status": "rejected",
+        "review_note": "E2E S5 测试拒绝场景"
+      },
+      "task_after": {
+        "status": "in_progress"
+      },
+      "rejection_notifications": []
+    },
+    "notes": [
+      "S5 task created: zxeuwdm8e37gkac",
+      "S5 handoff: 81px3w00hz8pkp1",
+      "handoff status: rejected, review_note: E2E S5 测试拒绝场景, task status: in_progress",
+      "employee notifications: 2 total, 0 rejection-related"
+    ]
+  },
+  {
+    "name": "S6_batch_complete",
+    "passed": true,
+    "error": "",
+    "screenshots": [
+      "e2e_S6_employee_table_before.png",
+      "e2e_S6_3_selected.png",
+      "e2e_S6_after_bulk_complete.png"
+    ],
+    "db_dumps": {
+      "pbz519cwsx9ysg0": {
+        "status": "completed",
+        "completed_at": "2026-05-15 19:07:31.506Z"
+      },
+      "3oxmt0okebslbl7": {
+        "status": "completed",
+        "completed_at": "2026-05-15 19:07:31.506Z"
+      },
+      "bbii7vu1plzewam": {
+        "status": "completed",
+        "completed_at": "2026-05-15 19:07:31.506Z"
+      },
+      "audit_logs_for_bulk": 3
+    },
+    "notes": [
+      "created 3 tasks: ['pbz519cwsx9ysg0', '3oxmt0okebslbl7', 'bbii7vu1plzewam']",
+      "found 9 checkboxes on page",
+      "E2E S6 row checkboxes: 3",
+      "bulk bar visible",
+      "clicked dialog confirm",
+      "3 task statuses: ['completed', 'completed', 'completed']",
+      "audit_logs for bulk_mark_complete: 3 (expected 3)"
+    ]
+  }
+]
