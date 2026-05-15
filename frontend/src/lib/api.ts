@@ -590,6 +590,23 @@ export function useApproveHandoff() {
                 approved_task: newTask.id,
             })
 
+            // ⚠️ Bug fix #1（与 useRejectHandoff Bug A 镜像）：
+            // 批准 handoff 意味着接受"前序任务完成"，强制把 from_task.status
+            // 同步为 completed + 写 completed_at。
+            // 必要性：useMarkTaskComplete 通常已经把 from_task 设为 completed，
+            // 但若中途状态被 useUpdateAuditLogStatus 拒绝过 mark_complete 而回滚成
+            // in_progress / 或 from_task 经历过 blocker → 此时还残留 pending handoff，
+            // 批准时必须把 from_task 强制设回 completed，否则会产生 "前序任务进行中
+            // + 下游任务已创建" 的幽灵状态。
+            try {
+                await pb.collection('tasks').update(handoff.from_task, {
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                })
+            } catch (e) {
+                console.warn('sync from_task to completed failed', e)
+            }
+
             // 记录审计日志
             await pb.collection('audit_logs').create({
                 project: handoff.project,
