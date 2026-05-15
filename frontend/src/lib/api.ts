@@ -639,6 +639,19 @@ export function useRejectHandoff() {
 
             const handoff = await pb.collection('handoffs').getOne<Handoff>(id)
 
+            // ⚠️ Bug fix（E2E 测试发现）：回滚 from_task 状态。
+            // 员工标完成时 useMarkTaskComplete 把 task.status 设为 'completed'。
+            // 如果交接被驳回，意味着完成不被认可 — 任务必须回到 in_progress，
+            // 否则会卡在"已完成"列表里，员工不知道要重做。
+            try {
+                await pb.collection('tasks').update(handoff.from_task, {
+                    status: 'in_progress',
+                    completed_at: null,
+                })
+            } catch (e) {
+                console.warn('rollback from_task status failed', e)
+            }
+
             // 记录审计日志
             await pb.collection('audit_logs').create({
                 project: handoff.project,
@@ -655,7 +668,7 @@ export function useRejectHandoff() {
                     user: handoff.submitter,
                     title: '交接审核驳回',
                     content: `${reviewer?.name || reviewer?.username} 驳回了您的交接提报「${handoff.proposed_title}」，原因：${reviewNote}`,
-                    type: 'task_update',
+                    type: 'audit_rejected',
                     link_type: 'task',
                     link_id: handoff.from_task,
                 })
@@ -664,6 +677,7 @@ export function useRejectHandoff() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
+            queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
             invalidateNotificationQueries(queryClient)
         },
