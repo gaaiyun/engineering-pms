@@ -16,6 +16,7 @@ import Notifications from './pages/Notifications'
 import ReviewCenter from './pages/ReviewCenter'
 import { pb } from './lib/pocketbase'
 import { useNotificationAlerts } from './lib/useNotificationAlerts'
+import { AppShell } from './components/layout'
 
 // 简单的路由保护组件
 const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
@@ -25,10 +26,9 @@ const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
 // 管理员路由保护 - 只允许 admin 角色访问
 const AdminRoute = ({ children }: { children: React.ReactElement }) => {
   if (!pb.authStore.isValid) return <Navigate to="/login" />
-  const role = pb.authStore.model?.role?.toLowerCase()
+  const role = (pb.authStore.model as { role?: string } | null)?.role?.toLowerCase()
   // Manager 也是管理员
   if (role !== 'admin' && role !== 'manager') {
-    // 非管理员跳转到普通用户首页
     return <Navigate to="/app" />
   }
   return children
@@ -37,7 +37,7 @@ const AdminRoute = ({ children }: { children: React.ReactElement }) => {
 // 经理路由保护 - 只允许 manager 和 admin 角色访问
 const ManagerRoute = ({ children }: { children: React.ReactElement }) => {
   if (!pb.authStore.isValid) return <Navigate to="/login" />
-  const role = pb.authStore.model?.role?.toLowerCase()
+  const role = (pb.authStore.model as { role?: string } | null)?.role?.toLowerCase()
   if (role !== 'admin' && role !== 'manager') {
     return <Navigate to="/app" />
   }
@@ -47,7 +47,7 @@ const ManagerRoute = ({ children }: { children: React.ReactElement }) => {
 // 智能默认跳转 - 根据角色跳转到对应首页
 const DefaultRedirect = () => {
   if (!pb.authStore.isValid) return <Navigate to="/login" replace />
-  const role = pb.authStore.model?.role?.toLowerCase()
+  const role = (pb.authStore.model as { role?: string } | null)?.role?.toLowerCase()
   if (role === 'admin' || role === 'manager') {
     return <Navigate to="/admin" replace />
   }
@@ -120,123 +120,126 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        <Route
-          path="/admin"
-          element={
-            <AdminRoute>
-              <AdminDashboard />
-            </AdminRoute>
-          }
-        />
+        {/* 受保护路由：桌面/平板 wrap AppShell；mobile AppShell 自己透传 */}
+        <Route element={<AppShell />}>
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
 
-        {/* 数据导入中心 */}
-        <Route
-          path="/admin/import"
-          element={
-            <AdminRoute>
-              <DataImportCenter />
-            </AdminRoute>
-          }
-        />
+          {/* 数据导入中心 */}
+          <Route
+            path="/admin/import"
+            element={
+              <AdminRoute>
+                <DataImportCenter />
+              </AdminRoute>
+            }
+          />
 
-        {/* 经理工作台 - 统一使用 AdminDashboard（manager + admin 均可访问） */}
-        <Route
-          path="/manager"
-          element={
-            <ManagerRoute>
-              <AdminDashboard />
-            </ManagerRoute>
-          }
-        />
+          {/* 经理工作台 - 统一使用 AdminDashboard（manager + admin 均可访问） */}
+          <Route
+            path="/manager"
+            element={
+              <ManagerRoute>
+                <AdminDashboard />
+              </ManagerRoute>
+            }
+          />
 
-        {/* 审核中心 */}
-        <Route
-          path="/review-center"
-          element={
-            <ManagerRoute>
-              <ReviewCenter />
-            </ManagerRoute>
-          }
-        />
+          {/* 审核中心 */}
+          <Route
+            path="/review-center"
+            element={
+              <ManagerRoute>
+                <ReviewCenter />
+              </ManagerRoute>
+            }
+          />
 
-        <Route
-          path="/task/create"
-          element={
-            <ManagerRoute>
-              <TaskCreate />
-            </ManagerRoute>
-          }
-        />
+          <Route
+            path="/task/create"
+            element={
+              <ManagerRoute>
+                <TaskCreate />
+              </ManagerRoute>
+            }
+          />
 
-        <Route
-          path="/project/:id/timeline"
-          element={
-            <PrivateRoute>
-              <ProjectTimeline />
-            </PrivateRoute>
-          }
-        />
+          <Route
+            path="/project/:id/timeline"
+            element={
+              <PrivateRoute>
+                <ProjectTimeline />
+              </PrivateRoute>
+            }
+          />
 
-        {/* 项目看板 */}
-        <Route
-          path="/project/:id/kanban"
-          element={
-            <PrivateRoute>
-              <ProjectKanban />
-            </PrivateRoute>
-          }
-        />
+          {/* 项目看板 */}
+          <Route
+            path="/project/:id/kanban"
+            element={
+              <PrivateRoute>
+                <ProjectKanban />
+              </PrivateRoute>
+            }
+          />
 
-        <Route
-          path="/task/:id"
-          element={
-            <PrivateRoute>
-              <TaskDetail />
-            </PrivateRoute>
-          }
-        />
+          <Route
+            path="/task/:id"
+            element={
+              <PrivateRoute>
+                <TaskDetail />
+              </PrivateRoute>
+            }
+          />
 
-        <Route
-          path="/my-projects"
-          element={
-            <PrivateRoute>
-              <MyProjects />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/my-tasks"
-          element={
-            <PrivateRoute>
-              <MyTasks />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <PrivateRoute>
-              <SettingsPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/notifications"
-          element={
-            <PrivateRoute>
-              <Notifications />
-            </PrivateRoute>
-          }
-        />
+          <Route
+            path="/my-projects"
+            element={
+              <PrivateRoute>
+                <MyProjects />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/my-tasks"
+            element={
+              <PrivateRoute>
+                <MyTasks />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <PrivateRoute>
+                <SettingsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <PrivateRoute>
+                <Notifications />
+              </PrivateRoute>
+            }
+          />
 
-        <Route
-          path="/app/*"
-          element={
-            <PrivateRoute>
-              <Home />
-            </PrivateRoute>
-          }
-        />
+          <Route
+            path="/app/*"
+            element={
+              <PrivateRoute>
+                <Home />
+              </PrivateRoute>
+            }
+          />
+        </Route>
 
         {/* 默认跳转 */}
         <Route path="/" element={<DefaultRedirect />} />
