@@ -109,6 +109,14 @@ if (unreadCount > prevUnreadRef.current) {
 
 ### PR 2：Android 前台服务 + PocketBase Realtime 长连（v2.97 → v2.98）
 
+> **⚠️ 2026-05-16 更新**：基于 `docs/superpowers/research/2026-05-16-pr2-tech-reference.md` 调研，本节设计已做 **6 处关键调整**（详见研究报告末尾"PR 2 设计调整建议"章节）：
+> - **A. FGS 类型选 `dataSync`**（非 `specialUse`），承认 Android 15 的 6 小时上限
+> - **B. 原生 OkHttp SSE**，不能在 WebView/JS SDK 里跑（Capacitor 5 在 STOPPED 时冻结 JS engine）
+> - **C. 重连策略明确化**：1/2/4/8/16/30s + ±20% jitter + NetworkCallback 即时重连 + ≥10 次失败停服推通知
+> - **D. 服务端配套不可省**：PB hooks 设 `idleTimeout=30min` + Nginx `proxy_read_timeout 1h; proxy_buffering off`
+> - **E. 国产 ROM 引导独立流程**：12 家 OEM ComponentName 表 + 诊断按钮（见研究报告 §5）
+> - **F. 前台 30s 轮询作 secondary 链路兜底**（SSE 静默断开时不漏消息）
+
 **目标：** App 在后台 / 锁屏 / 被杀（部分）场景下仍能收到通知。完全不依赖 Firebase。
 
 **架构：**
