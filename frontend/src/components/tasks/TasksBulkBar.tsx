@@ -34,11 +34,23 @@ export function TasksBulkBar({ selectedTasks, onClear }: TasksBulkBarProps) {
     setRunning(true)
     let success = 0
     let failed = 0
+    const operatorId = pb.authStore.model?.id || ''
+    const completedAt = new Date().toISOString()
     for (const t of pending) {
       try {
         await pb.collection('tasks').update(t.id, {
           status: 'completed',
-          completed_at: new Date().toISOString(),
+          completed_at: completedAt,
+        })
+        // 写 audit_log（E2E 测试发现 PR 4 原版漏了这一步）
+        await pb.collection('audit_logs').create({
+          project: t.project,
+          task: t.id,
+          action_type: 'bulk_mark_complete',
+          operator: operatorId,
+          after_data: { status: 'completed', completed_at: completedAt },
+        }).catch(() => {
+          // 审计写失败不阻塞主流程
         })
         success += 1
       } catch {
@@ -46,7 +58,8 @@ export function TasksBulkBar({ selectedTasks, onClear }: TasksBulkBarProps) {
       }
     }
     queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
-    queryClient.invalidateQueries({ queryKey: queryKeys.myTasks(pb.authStore.model?.id || '') })
+    queryClient.invalidateQueries({ queryKey: queryKeys.myTasks(operatorId) })
+    queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
     setRunning(false)
     Toast.show({
       icon: failed === 0 ? 'success' : 'fail',
