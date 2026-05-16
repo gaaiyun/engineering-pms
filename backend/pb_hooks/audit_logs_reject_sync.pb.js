@@ -18,6 +18,80 @@
  *   - 失败仅 log，不阻塞 audit_log 本身的更新
  *   - 仅在 review_status 变成 'rejected' 时触发（pending/approved/read 不动）
  */
+/**
+ * Bug fix H-1（Agent H 通知 E2E + Agent C P1-1）：
+ * useUnblockTask 解除卡点时联动把 blocker.rollback_to 任务 X 设回 completed，
+ * 但操作者（卡点解除人）通常不在 X.assignees 中 → PB tasks.updateRule
+ * 拒绝（403），前端 .catch 静默吞掉 → X 永远停在 in_progress，X assignees
+ * 也收不到"上游卡点已解除"通知。
+ *
+ * 修复：监听 audit_logs.create 当 action_type='unblock_task' 时，读
+ * before_data.rollback_to，用 PB hook 的系统权限（绕过 rule）把 X 设回
+ * completed + 给 X.assignees 创建通知。
+ */
+onRecordAfterCreateRequest((e) => {
+  try {
+    const audit = e.record
+    const actionType = audit.getString('action_type')
+    if (actionType !== 'unblock_task') return
+
+    let beforeData
+    try {
+      const raw = audit.get('before_data')
+      beforeData = typeof raw === 'string' ? JSON.parse(raw) : raw
+    } catch {
+      return
+    }
+    const rollbackTaskId = beforeData && beforeData.rollback_to
+    if (!rollbackTaskId) return
+
+    const dao = $app.dao()
+    let rollbackTask
+    try {
+      rollbackTask = dao.findRecordById('tasks', rollbackTaskId)
+    } catch (err) {
+      console.log('[audit_logs hook] rollback_to task not found:', rollbackTaskId)
+      return
+    }
+
+    // 仅当 X 当前是 in_progress 时设回 completed
+    if (rollbackTask.getString('status') === 'in_progress') {
+      rollbackTask.set('status', 'completed')
+      rollbackTask.set('completed_at', new Date().toISOString())
+      try {
+        dao.saveRecord(rollbackTask)
+        console.log('[audit_logs hook] unblock_task rollback_to', rollbackTaskId, 'set to completed')
+      } catch (saveErr) {
+        console.log('[audit_logs hook] save rollback task failed:', saveErr)
+        return
+      }
+
+      // 给 X.assignees 创建通知（同样用 PB hook 系统权限绕 notifications createRule）
+      const assignees = rollbackTask.get('assignees') || []
+      const operatorId = audit.getString('operator')
+      for (const uid of assignees) {
+        if (!uid || uid === operatorId) continue
+        try {
+          const notif = new Record(dao.findCollectionByNameOrId('notifications'), {
+            user: uid,
+            type: 'task_update',
+            title: '上游卡点已解除',
+            content: `任务「${rollbackTask.getString('stage_name')}」恢复完成状态`,
+            link_type: 'task',
+            link_id: rollbackTaskId,
+            is_read: false,
+          })
+          dao.saveRecord(notif)
+        } catch (notifErr) {
+          console.log('[audit_logs hook] create rollback notification failed:', notifErr)
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[audit_logs hook unblock_rollback] outer error:', e)
+  }
+}, 'audit_logs')
+
 onRecordAfterUpdateRequest((e) => {
   try {
     const audit = e.record
