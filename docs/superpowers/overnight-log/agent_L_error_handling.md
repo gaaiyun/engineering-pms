@@ -1,7 +1,7 @@
 # Agent L — E2E 错误处理 / 离线场景测试（Round 4）
 
-- 运行时间: 2026-05-16 13:09:17
-- 测试前缀: `E2E-Err-1778908119-`
+- 运行时间: 2026-05-16 13:15:29
+- 测试前缀: `E2E-Err-1778908492-`
 - 截图目录: `G:\项目管理软件_v2\docs\superpowers\qa-screenshots\error_handling`
 
 ## 汇总: 5 PASS / 0 FAIL / 0 INCONCLUSIVE / 0 SKIP
@@ -10,21 +10,21 @@
 |---|---|---|
 | E1_PB_server_down | **PASS** | AppShell 渲染正常，content textLen=104 errorEl=0 loading=False |
 | E2_token_expired | **PASS** | 已跳 /login 且渲染了登录表单。console errors: 0 |
-| E3_mutation_fail | **PASS** | created test task: 6nbers3ufdy705j |
-| E4_rapid_click_debounce | **PASS** | created task: 9gsrgwbxi8i7urq |
-| E5_large_dataset_100tasks | **PASS** | created 100 tasks in 902ms |
+| E3_mutation_fail | **PASS** | created test task: 53449t467izw3zp |
+| E4_rapid_click_debounce | **PASS** | created task: 19hx6j742bwv7ws |
+| E5_large_dataset_100tasks | **PASS** | created 100 tasks in 1053ms |
 
 ## E1_PB_server_down
 **状态**: PASS
 
 ### 实际观察
 - AppShell 渲染正常，content textLen=104 errorEl=0 loading=False
-- elapsed_ms: 9278
+- elapsed_ms: 9227
 
 ### 关键数据
 ```json
 {
-  "navigation_elapsed_ms": 8104,
+  "navigation_elapsed_ms": 8091,
   "final_url": "http://127.0.0.1:5173/app",
   "page_probe": {
     "bodyTextLen": 104,
@@ -35,7 +35,7 @@
     "rootChildren": 2,
     "hasLoadingIndicator": false
   },
-  "console_errors_count": 13,
+  "console_errors_count": 14,
   "console_errors_sample": [
     {
       "type": "error",
@@ -64,6 +64,9 @@
 ### 截图
 - `G:/项目管理软件_v2/docs/superpowers/qa-screenshots/error_handling/E1_pb_down.png`
 
+### 修复建议
+- PB 不可达时只有 console 错误 + Skeleton 占位符，没有 toast/banner 提示「服务器连接失败」。用户会以为只是数据慢加载，而非网络问题。console 有 14 条错误（含 6 条 pageerror 如 'Something went wrong'）。建议在 react-query QueryClient 默认 queryFn onError 或 useApiError hook 触发全局 toast：'服务器连接失败，请检查网络'。
+
 ---
 
 ## E2_token_expired
@@ -71,7 +74,7 @@
 
 ### 实际观察
 - 已跳 /login 且渲染了登录表单。console errors: 0
-- elapsed_ms: 7376
+- elapsed_ms: 7273
 
 ### 关键数据
 ```json
@@ -98,10 +101,10 @@
 **状态**: PASS
 
 ### 实际观察
-- created test task: 6nbers3ufdy705j
+- created test task: 53449t467izw3zp
 - DELETE 500 后 task 留在 DB 正确；audit_log 也未残留。
 - 注意：本测试用 fetch 直接调 API（绕过 react-query），toast 触发依赖 mutation onError。 真实 UI（KanbanCard 删除按钮）路径未测，建议补 KanbanPage 操作 E2E。
-- elapsed_ms: 6038
+- elapsed_ms: 6025
 
 ### 关键数据
 ```json
@@ -142,43 +145,43 @@
 **状态**: PASS
 
 ### 实际观察
-- created task: 9gsrgwbxi8i7urq
+- created task: 19hx6j742bwv7ws
 - 网络层并发 5 次，1/5 PB 接受
 - PB hook C3 完美兜底：5 次并发只产生 1 个 pending handoff
-- elapsed_ms: 5182
+- elapsed_ms: 5172
 
 ### 关键数据
 ```json
 {
   "network_layer_results": [
     {
-      "label": "c4",
-      "ok": true,
-      "elapsed_ms": 18
-    },
-    {
-      "label": "c5",
-      "ok": false,
-      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=yropkhjgbkr5ww1)，不能重复创建.\",\"data\":{}}\n",
-      "elapsed_ms": 19
-    },
-    {
       "label": "c2",
-      "ok": false,
-      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=yropkhjgbkr5ww1)，不能重复创建.\",\"data\":{}}\n",
-      "elapsed_ms": 20
-    },
-    {
-      "label": "c1",
-      "ok": false,
-      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=yropkhjgbkr5ww1)，不能重复创建.\",\"data\":{}}\n",
-      "elapsed_ms": 22
+      "ok": true,
+      "elapsed_ms": 8
     },
     {
       "label": "c3",
       "ok": false,
-      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=yropkhjgbkr5ww1)，不能重复创建.\",\"data\":{}}\n",
-      "elapsed_ms": 23
+      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=pfmrk6jm6isnbmh)，不能重复创建.\",\"data\":{}}\n",
+      "elapsed_ms": 8
+    },
+    {
+      "label": "c4",
+      "ok": false,
+      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=pfmrk6jm6isnbmh)，不能重复创建.\",\"data\":{}}\n",
+      "elapsed_ms": 8
+    },
+    {
+      "label": "c5",
+      "ok": false,
+      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=pfmrk6jm6isnbmh)，不能重复创建.\",\"data\":{}}\n",
+      "elapsed_ms": 8
+    },
+    {
+      "label": "c1",
+      "ok": false,
+      "err": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=pfmrk6jm6isnbmh)，不能重复创建.\",\"data\":{}}\n",
+      "elapsed_ms": 42
     }
   ],
   "network_layer_ok_count": 1,
@@ -201,33 +204,47 @@
 **状态**: PASS
 
 ### 实际观察
-- created 100 tasks in 902ms
-- 渲染 100 任务用时 1044ms 可接受
-- 未检测到虚拟滚动（建议加）
-- elapsed_ms: 5543
+- created 100 tasks in 1053ms
+- 渲染 100 任务用时 1528ms 可接受（实际渲染 37 行）
+- elapsed_ms: 4212
 
 ### 关键数据
 ```json
 {
-  "bulk_create_elapsed_ms": 902,
+  "bulk_create_elapsed_ms": 1053,
   "created_count": 100,
-  "my_tasks_nav_elapsed_ms": 125,
-  "network_idle_elapsed_ms": 919,
+  "my_tasks_nav_elapsed_ms": 126,
+  "network_idle_elapsed_ms": 894,
+  "data_wait_elapsed_ms": 508,
+  "data_rendered": true,
   "render_probe": {
-    "taskLikeEls": 0,
-    "totalDomEls": 216,
-    "mainScrollH": 900,
+    "taskRowCount": 37,
+    "tableRowCount": 37,
+    "cardCount": 0,
+    "totalDomEls": 844,
+    "mainScrollH": 1882,
     "mainClientH": 844,
     "viewportH": 900,
+    "tabTexts": [
+      "进行中 (37)待办 (97)逾期 (0)已完成",
+      "进行中 (37)待办 (97)逾期 (0)已完成",
+      "进行中 (37)",
+      "进行中 (37)",
+      "待办 (97)",
+      "待办 (97)",
+      "逾期 (0)",
+      "逾期 (0)"
+    ],
     "hasVirtualScroll": false
   },
-  "scroll_test_elapsed_ms": 812,
+  "scroll_test_elapsed_ms": 817,
   "memory_metrics": {
-    "usedJSHeapSize": 31200000,
-    "totalJSHeapSize": 42100000,
+    "usedJSHeapSize": 24500000,
+    "totalJSHeapSize": 47400000,
     "jsHeapSizeLimit": 3760000000
   },
-  "total_render_ms": 1044
+  "total_render_ms": 1528,
+  "actually_rendered_tasks": 37
 }
 ```
 
