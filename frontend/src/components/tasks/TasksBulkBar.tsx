@@ -3,7 +3,7 @@ import { Dialog, Toast } from 'antd-mobile'
 import { IoCloseOutline, IoCheckmarkCircleOutline, IoTrashOutline } from 'react-icons/io5'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Task } from '../../lib/api'
-import { useDeleteTask } from '../../lib/api'
+import { useDeleteTask, notifyProjectMembers } from '../../lib/api'
 import { queryKeys } from '../../lib/queryClient'
 import { pb } from '../../lib/pocketbase'
 
@@ -35,7 +35,10 @@ export function TasksBulkBar({ selectedTasks, onClear }: TasksBulkBarProps) {
     let success = 0
     let failed = 0
     const operatorId = pb.authStore.model?.id || ''
+    const operatorName = pb.authStore.model?.name || pb.authStore.model?.username || '某用户'
     const completedAt = new Date().toISOString()
+    // 用 Map 聚合每个项目下成功完成的任务，用于后面的项目级通知
+    const succeededByProject = new Map<string, Task[]>()
     for (const t of pending) {
       try {
         await pb.collection('tasks').update(t.id, {
@@ -52,14 +55,43 @@ export function TasksBulkBar({ selectedTasks, onClear }: TasksBulkBarProps) {
         }).catch(() => {
           // 审计写失败不阻塞主流程
         })
+        if (t.project) {
+          const list = succeededByProject.get(t.project) || []
+          list.push(t)
+          succeededByProject.set(t.project, list)
+        }
         success += 1
       } catch {
         failed += 1
       }
     }
+
+    // ⚠️ Bug fix #2（Agent B HIGH-2 + 同 PR 4 与 Bug B 配套）：
+    // 单条 useMarkTaskComplete 会通知项目成员，批量场景下静默 →
+    // 团队成员看不到协作反馈。聚合通知（每项目一条，避免刷屏）。
+    for (const [projectId, tasks] of succeededByProject.entries()) {
+      const count = tasks.length
+      notifyProjectMembers(
+        projectId,
+        '任务批量完成',
+        `${operatorName} 批量完成了 ${count} 个任务`,
+        'task_update',
+        operatorId,
+      ).catch((err) => console.warn('bulk complete notify failed', err))
+    }
+
+    // ⚠️ Bug fix #2 cache：原版只 invalidate tasks/myTasks，漏掉 projects、
+    // projectTasks（项目详情）、notifications → 项目卡片进度条 / 看板不刷新
     queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
     queryClient.invalidateQueries({ queryKey: queryKeys.myTasks(operatorId) })
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
     queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
+    for (const projectId of succeededByProject.keys()) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.project(projectId) })
+    }
+
     setRunning(false)
     Toast.show({
       icon: failed === 0 ? 'success' : 'fail',
