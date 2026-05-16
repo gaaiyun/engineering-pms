@@ -103,11 +103,27 @@ const TaskDetail = () => {
   const isAssignee = task?.assignees?.includes(currentUser?.id)
   const canComplete = isManager || isAssignee
 
+  // ⚠️ ARCH-DEBT P0-1（Agent C 数据流审计标记）：
+  //
+  // 本应用存在两条"标记完成"路径：
+  //   A. TaskDetail.handleComplete（本函数）— 直接 update status='completed'，
+  //      不创建 handoff。任何 assignee 或 manager 可用。
+  //   B. kanban/TaskDetailDrawer 内的 useMarkTaskComplete（api.ts:829）—
+  //      创建 handoff(status=pending) 进入 ReviewCenter 审核流。
+  //
+  // 设计原意可能是"快速完成"（员工直接交付，免去 handoff 表单填写），
+  // 但与"强制交接审核"流程冲突。短期方案：保留快速路径不破坏 UX，
+  // 同时在 audit_log 写入 note=quick_complete_skip_handoff 让 reviewer
+  // 在审计中心能区分这是直接完成还是经过 handoff 的完成。
+  //
+  // 长期方案：在 TaskDetail 加 handoff 表单 UI（proposed_title /
+  // proposed_assignees / proposed_due_date），统一走 useMarkTaskComplete。
+  // TODO: 计划在下一个 PR（v3.1）做此 UX 重构。
   const handleComplete = () => {
     if (!canComplete || !task) return
     Dialog.confirm({
       title: '确认完成',
-      content: '确认当前节点任务已全部完成？',
+      content: '确认当前节点任务已全部完成？\n（注：此路径将直接标记完成，不进入交接审核流程）',
       confirmText: '确认提交',
       cancelText: '取消',
       onConfirm: async () => {
@@ -115,16 +131,18 @@ const TaskDetail = () => {
         try {
           if (!id) return
           await pb.collection('tasks').update(id, { status: 'completed', completed_at: new Date().toISOString() })
-          // 审计日志
+          // 审计日志 — 加 note 标识本次完成跳过了 handoff（让 reviewer 在审计
+          // 中心可识别"快速完成 vs 经审核完成"两种情况）
           await pb.collection('audit_logs').create({
             project: task.project, task: id, action_type: 'mark_complete',
             operator: currentUser?.id,
             before_data: { status: task.status },
-            after_data: { status: 'completed' },
+            after_data: { status: 'completed', skip_handoff: true },
+            note: 'quick_complete_skip_handoff',
           }).catch(() => {})
           // 通知项目全员
           const userName = currentUser?.name || currentUser?.username
-          notifyProjectMembers(task.project, '任务完成', `${userName} 完成了任务「${task.stage_name}」`, 'task_update', currentUser?.id, id).catch(() => {})
+          notifyProjectMembers(task.project, '任务完成', `${userName} 完成了任务「${task.stage_name}」（快速完成，未走交接审核）`, 'task_update', currentUser?.id, id).catch(() => {})
           Toast.show({ content: '提交成功', icon: 'success' })
           loadData()
           queryClient.invalidateQueries({ queryKey: ['tasks'] })
@@ -133,7 +151,7 @@ const TaskDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
         } catch (e) {
           console.error(e)
-          Toast.show({ content: '提交失败: ' + (e as any).message, icon: 'fail' })
+          Toast.show({ content: '提交失败: ' + (e as Error).message, icon: 'fail' })
         } finally {
           setCompleting(false)
         }
