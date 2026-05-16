@@ -8,7 +8,7 @@
 
 ## 一句话总结
 
-**从 v2.96 跨越到 v3.01**，27+ commits 修复 25+ bugs（10 P0 / 8 HIGH / 7+ MED-P2），引入 6 个 PB hooks + 1 个 migration 兜底层，bundle main gzip **-90%**，5 个独立 E2E test suites 全绿，**所有业务流程关键 bug 闭环 +  GitHub 全部同步**。
+**从 v2.96 跨越到 v3.01**，29 commits 修复 27 bugs（11 P0 / 9 HIGH / 7 MED-P2），引入 6 个 PB hooks + 2 个 migration 兜底层，bundle main gzip **-90%**，6 个独立 E2E test suites（含 12 个 agent 调查覆盖业务/数据流/质量/安全/通知/并发/性能/响应式/权限/错误处理），**所有业务流程关键 bug 闭环 +  GitHub 全部同步**。
 
 ---
 
@@ -66,12 +66,14 @@
 | J-1 (Agent J) 桌面端 3 页面仍渲染 mobile header | P2 | `3ba8e5b` useBreakpoint 桌面隐藏 |
 | I-2 (Agent I) vite vendor-date 空 stub | perf | `3ba8e5b` 清理 manualChunks |
 
-### Round 4（continuing）
+### Round 4 (completed 13:20)
 
 | Bug | Severity | Fix |
 |---|---|---|
-| H-1 (Agent H) unblock rollback_to PB rule 403 静默 | MED | `a96f59b` PB hook 系统权限兜底 |
-| 剩余 Round 4 K/L agent findings | TBD | 收果中 |
+| H-1 unblock rollback_to PB rule 403 静默 | MED | `a96f59b` PB hook 系统权限兜底 |
+| P6 (Agent K) handoffs.createRule 越权 | HIGH 安全 | `86cd6d4` migration submitter=auth.id |
+| P8 (Agent K) audit_logs.listRule 跨项目泄露 | MED 信息泄露 | `86cd6d4` migration project.members 限制 |
+| L1-5 (Agent L) 错误处理路径 | ✅ ALL PASS | 0 新 bug，错误处理稳健 |
 
 ---
 
@@ -210,7 +212,9 @@ origin/main：同步（0 ahead 0 behind）
 | J-2 mobile_max 768px 内容窄 | P2 | 容器 max-width 调整 |
 | J-3 /project/:id/kanban 加载失败 | P2 | 数据/API 调查 |
 | Bundle: Login 去 framer-motion | P3 | Agent I 推荐，-40KB gz |
-| Round 4 K/L findings (running) | TBD | 收果后决定 |
+| 100 任务无虚拟滚动 | P3 | Agent L 1044ms 可接受，未来加 |
+
+**已完成 Round 4**：L 全 PASS、K 发现的 P6/P8 已修。
 
 ---
 
