@@ -103,15 +103,36 @@ body {
   color: var(--neutral-900);
 }
 
-/* Mobile Container Constraint */
-/* Mobile Container Constraint (Mobile Only) */
-@media (max-width: 768px) {
+/* Bug fix J-2（Agent J 跨断点截图发现）：
+ * 原 @media (max-width: 768px) 把 #root max-width=480 → 768 viewport
+ * 内容居中宽 430px，两侧各 168px 灰底空白。
+ *
+ * 修复：拆成两层 mobile 媒体查询：
+ *   < 500px (真手机)：保留 max-width=480 居中（无变化）
+ *   500-768px (宽 mobile / 768 临界)：max-width=none 铺满 viewport
+ *   AppShell 仍判定 mobile（透传无 Sidebar），不破坏移动 UX。
+ */
+
+/* Small mobile (<500px): 居中 480 容器（真手机视觉一致） */
+@media (max-width: 499px) {
   #root {
     width: 100%;
     max-width: 480px;
     min-height: 100dvh;
     background-color: var(--page-bg);
     box-shadow: 0 0 50px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow-x: hidden;
+  }
+}
+
+/* Wide mobile / tablet临界 (500-768px): 铺满 viewport 避免两侧空白 */
+@media (min-width: 500px) and (max-width: 768px) {
+  #root {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    background-color: var(--page-bg);
     position: relative;
     overflow-x: hidden;
   }

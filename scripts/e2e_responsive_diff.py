@@ -345,6 +345,14 @@ async def run_for_viewport(
         is_mobile=is_mobile,
         has_touch=is_mobile,
     )
+    # 修 J-3 false-positive：frontend/src/lib/pocketbase.ts 在 localhost 时
+    # 强制走生产 PB（127.0.0.1:8090），导致 first_project_id（来自本地 PB）
+    # 在生产 PB 不存在 → 'kanban 加载失败'。注入 pb_url 让浏览器与脚本共用
+    # 本地 PB 数据源。
+    import json as _json
+    await context.add_init_script(
+        f"window.localStorage.setItem('pb_url', {_json.dumps(PB_URL)});"
+    )
     page = await context.new_page()
     results: list[ShotResult] = []
     try:

@@ -143,19 +143,26 @@ export default function Login() {
       setFailedAttempts(0)
       setShowCaptcha(false)
 
+      // ⚠️ Bug fix C2 v3（终极方案 — pocketbase.ts HybridAuthStore）：
+      // 不再在 Login 这里折腾 localStorage / sessionStorage —— PB SDK 现在用
+      // 自定义的 HybridAuthStore，会根据 rememberMe 决定 token 写到哪个 storage。
+      // 我们只需要在 authWithPassword **之前** 设好 rememberMe 标记，
+      // SDK save() 会自动写到对的地方。
+      //
+      // 但注意：authWithPassword 已经在前面调用过了（line 132 上方）。所以
+      // 这里 set rememberMe='1' 后，SDK 当前内存里的 model 不会自动重写 —
+      // 直接调一次 pb.authStore.save 触发 HybridAuthStore.save 重新落盘。
       if (rememberMe) {
         localStorage.setItem('savedUsername', values.username.trim())
         localStorage.setItem('rememberMe', '1')
       } else {
         localStorage.removeItem('savedUsername')
         localStorage.removeItem('rememberMe')
-        // 保留原行为：复制 token 到 sessionStorage 备份（让 PB SDK 当前会话
-        // 仍能从 localStorage 读 token）。
-        // TODO C2: Agent D v2 指出'不记住登录'时 token 残留 localStorage 是
-        // 安全问题。但 v1/v2 修复均破坏业务流程（C2 直接删/C2-v2 beforeunload
-        // 误触发 → E2E S1/S6 FAIL）。正确方案是子类化 LocalAuthStore 让 PB
-        // SDK 走 sessionStorage 而非 localStorage，复杂度较高，留作单独 PR。
-        sessionStorage.setItem('pocketbase_auth', localStorage.getItem('pocketbase_auth') || '')
+      }
+      // 触发 HybridAuthStore.save 把 token 写到此时正确的 backend
+      // （save 内部根据 rememberMe 选择 localStorage 或 sessionStorage）
+      if (pb.authStore.isValid && pb.authStore.model) {
+        pb.authStore.save(pb.authStore.token, pb.authStore.model as Record<string, unknown> as Parameters<typeof pb.authStore.save>[1])
       }
 
       const { queryClient } = await import('../lib/queryClient')
