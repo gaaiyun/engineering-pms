@@ -482,14 +482,40 @@ export function useUpdateTaskSequence() {
 
     return useMutation({
         mutationFn: async (updates: { id: string; sequence: number }[]) => {
+            if (updates.length === 0) return []
             const promises = updates.map(({ id, sequence }) =>
                 pb.collection('tasks').update(id, { sequence })
             )
-            return await Promise.all(promises)
+            const results = await Promise.all(promises)
+
+            // ⚠️ Bug fix #7（Agent B + Agent F E2E 双重确认）：
+            // 原版拖拽改 sequence 完全不写 audit_log，导致经理在看板拖卡片重排
+            // 节点先后顺序时，审计中心查不到任何变更记录，合规追溯缺失。
+            //
+            // 修复：取第一条 task 的 project 作为 project 字段（拖拽通常在同一
+            // project 内），写一条聚合 audit_log（避免每条任务一条噪音）。
+            // 失败仅 warn 不阻塞主流程。
+            try {
+                const firstTask = await pb.collection('tasks').getOne<Task>(updates[0].id)
+                await pb.collection('audit_logs').create({
+                    project: firstTask.project,
+                    action_type: 'reorder_tasks',
+                    operator: pb.authStore.model?.id,
+                    after_data: {
+                        count: updates.length,
+                        updates: updates.map((u) => ({ id: u.id, sequence: u.sequence })),
+                    },
+                })
+            } catch (err) {
+                console.warn('[audit_logs] reorder_tasks failed:', err)
+            }
+
+            return results
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
         },
     })
 }
