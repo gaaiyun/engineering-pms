@@ -1,6 +1,78 @@
-import { pb } from './pocketbase';
+import { pb, PB_URL } from './pocketbase';
 import dayjs from 'dayjs';
 import { TaskStatusEnum } from './api';
+
+/**
+ * Bug fix C1（Agent D v2 HIGH-CRITICAL）：通过 PB 服务端代理调用 LLM。
+ *
+ * 旧路径：浏览器 → siliconflow API（apiKey 从 localStorage 读，明文暴露）
+ * 新路径：浏览器 → PB /api/custom/llm-proxy → siliconflow API
+ *         （apiKey 只存 PB app_settings collection，浏览器无感知）
+ *
+ * 旧调用 signature 兼容：`apiKey` 参数仍保留但**已废弃**（PB 代理优先）。
+ * 部署后若 PB 代理失败 → fallback 到旧直连（兼容未完成迁移的环境）。
+ */
+async function callLLMViaProxy(model: string, messages: Array<{role: string; content: string}>, options: { response_format?: { type: string }, temperature?: number, max_tokens?: number } = {}): Promise<unknown> {
+    const url = `${PB_URL.replace(/\/+$/, '')}/api/custom/llm-proxy`
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': pb.authStore.token,
+        },
+        body: JSON.stringify({
+            model,
+            messages,
+            response_format: options.response_format,
+            temperature: options.temperature,
+            max_tokens: options.max_tokens,
+        }),
+    })
+    if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(`PB proxy LLM call failed: HTTP ${resp.status} ${text.slice(0, 200)}`)
+    }
+    return resp.json()
+}
+
+async function callLLMDirect(apiKey: string, model: string, messages: Array<{role: string; content: string}>, options: { response_format?: { type: string }, temperature?: number, max_tokens?: number } = {}): Promise<unknown> {
+    // Legacy path: direct call from browser. Only used when PB proxy is unavailable
+    // AND user provided an apiKey via legacy localStorage. Strongly discouraged.
+    const resp = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model,
+            messages,
+            response_format: options.response_format,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.max_tokens ?? 2000,
+        }),
+    })
+    if (!resp.ok) {
+        throw new Error(await resp.text())
+    }
+    return resp.json()
+}
+
+/**
+ * 优先 PB 代理；失败时若有 apiKey 则 fallback 到直连（兼容旧部署）
+ */
+async function callLLM(apiKey: string | undefined, model: string, messages: Array<{role: string; content: string}>, options: { response_format?: { type: string }, temperature?: number, max_tokens?: number } = {}): Promise<unknown> {
+    try {
+        return await callLLMViaProxy(model, messages, options)
+    } catch (e) {
+        // PB proxy unavailable (503 / network / not-yet-deployed)
+        if (apiKey) {
+            console.warn('[ai-service] PB proxy failed, fallback to direct (LEGACY, insecure):', e)
+            return await callLLMDirect(apiKey, model, messages, options)
+        }
+        throw e
+    }
+}
 
 // ========== 统一状态判断 ==========
 const isInProgress = (status: string) => 
@@ -183,28 +255,12 @@ ${JSON.stringify(data, null, 2)}
 `;
 
     try {
-        const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: model,
-                messages: [{ role: "user", content: prompt }],
-                response_format: { type: "json_object" },
-                temperature: 0.7,
-                max_tokens: 2000
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("AI API Error:", errorText);
-            throw new Error(`AI API 调用失败: ${response.status} ${errorText}`);
-        }
-        
-        const json = await response.json();
+        // C1: 改用 callLLM 统一调用 — 优先 PB 代理（apiKey 不外泄），失败 fallback 直连
+        const json = await callLLM(apiKey, model, [{ role: "user", content: prompt }], {
+            response_format: { type: "json_object" },
+            temperature: 0.7,
+            max_tokens: 2000,
+        }) as { choices?: Array<{ message?: { content?: string } }> };
         const content = json.choices?.[0]?.message?.content;
         
         if (!content) {
@@ -243,26 +299,14 @@ ${JSON.stringify(data, null, 2)}
     }
 };
 
-export const chatWithAI = async (message: string, context: any, history: any[], apiKey: string, model: string = "deepseek-ai/DeepSeek-V3") => {
+export const chatWithAI = async (message: string, context: unknown, history: Array<{role: string; content: string}>, apiKey: string, model: string = "deepseek-ai/DeepSeek-V3") => {
     const messages = [
         { role: "system", content: `你是一位专业的项目管理助手。以下是实时项目数据：${JSON.stringify(context)}。请基于这些数据回答用户的问题，用中文回答。如果被问到绩效相关问题，请引用 personnel_performance 中的具体数字和人名。` },
         ...history,
         { role: "user", content: message }
     ];
 
-    const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            model: model,
-            messages: messages
-        })
-    });
-
-    if (!response.ok) throw new Error(await response.text());
-    const json = await response.json();
+    // C1: PB 代理优先
+    const json = await callLLM(apiKey, model, messages) as { choices?: Array<{ message?: { content?: string } }> };
     return json.choices?.[0]?.message?.content || '无响应';
 };
