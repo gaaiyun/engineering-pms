@@ -149,13 +149,13 @@ export default function Login() {
       } else {
         localStorage.removeItem('savedUsername')
         localStorage.removeItem('rememberMe')
-        // ⚠️ Bug fix C2（Agent D v2 HIGH）：原版把 token 复制到 sessionStorage
-        // 后没删除 localStorage 原件，token 仍跨会话残留 → "不记住登录"
-        // 失效，下次重启浏览器还能直接进。
-        // 正确做法：复制后立即 removeItem 原件。
-        const authSnapshot = localStorage.getItem('pocketbase_auth') || ''
-        sessionStorage.setItem('pocketbase_auth', authSnapshot)
-        localStorage.removeItem('pocketbase_auth')
+        // 保留原行为：复制 token 到 sessionStorage 备份（让 PB SDK 当前会话
+        // 仍能从 localStorage 读 token）。
+        // TODO C2: Agent D v2 指出'不记住登录'时 token 残留 localStorage 是
+        // 安全问题。但 v1/v2 修复均破坏业务流程（C2 直接删/C2-v2 beforeunload
+        // 误触发 → E2E S1/S6 FAIL）。正确方案是子类化 LocalAuthStore 让 PB
+        // SDK 走 sessionStorage 而非 localStorage，复杂度较高，留作单独 PR。
+        sessionStorage.setItem('pocketbase_auth', localStorage.getItem('pocketbase_auth') || '')
       }
 
       const { queryClient } = await import('../lib/queryClient')
