@@ -20,6 +20,45 @@
  *   - 失败仅 log，不阻塞 handoff 状态更新本身
  */
 
+/**
+ * Bug fix C3（Agent G 并发场景 P1）：防止同一 task 创建多个 pending handoff。
+ *
+ * 触发：员工快速二次点击"标记完成"，前端 useMarkTaskComplete 在前一个
+ * mutation 还没 onSuccess 时已被再次调用，产生两个 pending handoff 记录。
+ * 前端层的"isPending disable" 是 best-effort，PB 端强校验是兜底。
+ *
+ * 检查：from_task 已存在 status=pending 的 handoff 则拒绝创建。
+ */
+onRecordBeforeCreateRequest((e) => {
+  try {
+    const newRecord = e.record
+    const fromTaskId = newRecord.getString('from_task')
+    const status = newRecord.getString('status') || 'pending'
+    if (status !== 'pending' || !fromTaskId) return
+
+    const existing = $app.dao().findRecordsByFilter(
+      'handoffs',
+      `from_task = "${fromTaskId}" && status = "pending"`,
+      '',
+      1,
+      0,
+    )
+    if (existing.length > 0) {
+      console.log('[handoffs hook] blocked duplicate pending handoff for task', fromTaskId)
+      throw new BadRequestError(
+        `该任务已有 pending handoff (id=${existing[0].getId()})，不能重复创建`,
+      )
+    }
+  } catch (err) {
+    // BadRequestError 抛出来，PB 框架处理 400 响应
+    if (err && err.message && err.message.indexOf('该任务已有') === 0) {
+      throw err
+    }
+    // 其它错误仅 log，不阻塞创建
+    console.log('[handoffs hook] pre-create check error (ignored):', err)
+  }
+}, 'handoffs')
+
 onRecordAfterUpdateRequest((e) => {
   try {
     const handoff = e.record
@@ -49,12 +88,18 @@ onRecordAfterUpdateRequest((e) => {
 
     if (status === 'approved') {
       // I3 — 批准 handoff 强制 from_task=completed
-      if (currentTaskStatus !== 'completed') {
+      // Bug fix C2（Agent G 并发场景）：approve handoff 时同时存在 blocker
+      // 字段（员工标完成后又标卡点的竞态），approve 胜出后 status=completed
+      // 但 blocker JSON 残留 → 业务语义混乱。这里 force clear blocker。
+      const hadBlocker = !!task.get('blocker')
+      if (currentTaskStatus !== 'completed' || hadBlocker) {
         task.set('status', 'completed')
         task.set('completed_at', new Date().toISOString())
+        if (hadBlocker) task.set('blocker', null)
         try {
           dao.saveRecord(task)
-          console.log('[handoffs hook] approved → from_task', fromTaskId, 'set to completed')
+          console.log('[handoffs hook] approved → from_task', fromTaskId,
+                      'set to completed', hadBlocker ? '(cleared blocker)' : '')
         } catch (saveErr) {
           console.log('[handoffs hook] save task failed:', saveErr)
         }

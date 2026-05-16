@@ -1,0 +1,114 @@
+{
+  "prefix": "E2E-Edit-1778905386-",
+  "scenarios": [
+    {
+      "name": "E1_edit_stage_name",
+      "passed": true,
+      "error": "",
+      "notes": [
+        "created u7am8uimxeb8nph 'E2E-Edit-1778905386-E1-原名'",
+        "audit before='E2E-Edit-1778905386-E1-原名', after='E2E-Edit-1778905386-E1-改后'",
+        "emp1 task_update notifs: 1"
+      ],
+      "dumps": {
+        "stage_name_after": "E2E-Edit-1778905386-E1-改后",
+        "audit_logs": 1,
+        "before_after": {
+          "before.stage_name": "E2E-Edit-1778905386-E1-原名",
+          "after.stage_name": "E2E-Edit-1778905386-E1-改后"
+        },
+        "notifications": 1
+      }
+    },
+    {
+      "name": "E2_edit_deadline_assignees",
+      "passed": true,
+      "error": "",
+      "notes": [
+        "deadline → 2026-08-15, assignees → ['x2kc1qzod6qexqn', 'o4avodgw2fs9x63']",
+        "emp2 task_update notifs: 1"
+      ],
+      "dumps": {
+        "after": {
+          "deadline": "2026-08-15",
+          "assignees": [
+            "x2kc1qzod6qexqn",
+            "o4avodgw2fs9x63"
+          ]
+        },
+        "audit_logs": 1,
+        "emp2_notifs": 1
+      }
+    },
+    {
+      "name": "E3_batch_save",
+      "passed": true,
+      "error": "",
+      "notes": [
+        "batch_edit_tasks audit +1 (expect +1)",
+        "emp2 task_assigned for existing: 1"
+      ],
+      "dumps": {
+        "count": 4,
+        "updated": {
+          "stage_name": "E2E-Edit-1778905386-E3-原有-改后",
+          "assignees": [
+            "x2kc1qzod6qexqn",
+            "o4avodgw2fs9x63"
+          ],
+          "deadline": "2026-07-10"
+        },
+        "new_count": 3,
+        "batch_audit_diff": 1,
+        "emp2_task_assigned": 1
+      }
+    },
+    {
+      "name": "E4_sequence_drag",
+      "passed": true,
+      "error": "",
+      "notes": [
+        "3 sequences updated: [1, 2, 3]",
+        "sequence audit_logs: 0; per_task: 0",
+        "emp1 notifs for seq tasks: 0",
+        "[CONFIRM] Bug #7: sequence 不写 audit_log",
+        "[CONFIRM] Bug #7: sequence 不发通知"
+      ],
+      "dumps": {
+        "after_seq": {
+          "gt6pxs13jh7dwce": 1,
+          "skdxx1u10h2e4q5": 2,
+          "gotdhkyzz55nwm1": 3
+        },
+        "seq_audit": 0,
+        "per_task_audit": 0,
+        "seq_notifs": 0
+      }
+    },
+    {
+      "name": "E5_audit_integrity",
+      "passed": true,
+      "error": "",
+      "notes": [
+        "breakdown: {'batch_edit_tasks': 1, 'update_task': 2}",
+        "sequence audit: 0 (Bug #7 expect 3 got 0)"
+      ],
+      "dumps": {
+        "breakdown": {
+          "batch_edit_tasks": 1,
+          "update_task": 2
+        },
+        "seq_audit": 0
+      }
+    }
+  ],
+  "bugs": [
+    {
+      "severity": "P2",
+      "title": "useUpdateTaskSequence 不写 audit_log",
+      "file": "frontend/src/lib/api.ts:480",
+      "evidence": "3 sequence 改动后 sequence-type audit_logs=0, per-task audit_logs=0",
+      "fix": "mutationFn 中 await Promise.all(updates) 后，写一条 action_type='reorder_tasks' 的 audit_log，after_data 含 updates 数组"
+    }
+  ]
+}

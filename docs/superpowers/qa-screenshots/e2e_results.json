@@ -8,7 +8,7 @@
     ],
     "db_dumps": {
       "task": {
-        "id": "fjsb87ub4l3w9ku",
+        "id": "xd5hoq1uv4zo4vt",
         "status": "pending",
         "assignees": [
           "x2kc1qzod6qexqn"
@@ -23,7 +23,7 @@
     },
     "notes": [
       "project: 智慧产业园弱电项目 (3oiyzrhy13gjaut)",
-      "task created: fjsb87ub4l3w9ku status=pending",
+      "task created: xd5hoq1uv4zo4vt status=pending",
       "notification manually created (mimicking frontend mutation)",
       "notifications for this task: 1",
       "task visible in 待办 tab: True"
@@ -58,14 +58,13 @@
     ],
     "db_dumps": {
       "handoff": {
-        "id": "cj1s001q0lznuil",
+        "id": "gb5wawh8f7er62z",
         "status": "pending"
       }
     },
     "notes": [
-      "handoff created: cj1s001q0lznuil status=pending",
-      "handoff text present in review-center: False",
-      "WARN: handoff title not visible in review-center HTML"
+      "handoff created: gb5wawh8f7er62z status=pending",
+      "handoff text present in review-center?tab=handoff: True"
     ]
   },
   {
@@ -78,14 +77,12 @@
         "status": "approved"
       },
       "task_after": {
-        "status": "in_progress",
-        "completed_at": ""
+        "status": "completed",
+        "completed_at": "2026-05-16 04:48:54.196Z"
       }
     },
     "notes": [
-      "handoff status: approved, task status: in_progress, completed_at: ",
-      "BUG SUSPICION: task not auto-completed on handoff approval (status=in_progress). Likely需要前端 useApproveHandoff mutation 联动改 task.status，或 PB hooks 配置。",
-      "CONTINUING — flagged as known issue"
+      "handoff status: approved, task status: completed, completed_at: 2026-05-16 04:48:54.196Z"
     ]
   },
   {
@@ -101,13 +98,26 @@
       "task_after": {
         "status": "in_progress"
       },
-      "rejection_notifications": []
+      "rejection_notifications": [
+        {
+          "type": "audit_rejected",
+          "title": "操作被拒绝"
+        },
+        {
+          "type": "audit_rejected",
+          "title": "交接审核驳回"
+        },
+        {
+          "type": "audit_rejected",
+          "title": "操作被拒绝"
+        }
+      ]
     },
     "notes": [
-      "S5 task created: zxeuwdm8e37gkac",
-      "S5 handoff: 81px3w00hz8pkp1",
+      "S5 task created: a5oayrqs09r05ad",
+      "S5 handoff: rxhvr641t37c4yr",
       "handoff status: rejected, review_note: E2E S5 测试拒绝场景, task status: in_progress",
-      "employee notifications: 2 total, 0 rejection-related"
+      "employee notifications: 20 total, 5 rejection-related"
     ]
   },
   {
@@ -120,23 +130,23 @@
       "e2e_S6_after_bulk_complete.png"
     ],
     "db_dumps": {
-      "pbz519cwsx9ysg0": {
+      "fhlk5glfxb2t3ae": {
         "status": "completed",
-        "completed_at": "2026-05-15 19:07:31.506Z"
+        "completed_at": "2026-05-16 04:49:08.856Z"
       },
-      "3oxmt0okebslbl7": {
+      "mh3gihuaeuuxlg1": {
         "status": "completed",
-        "completed_at": "2026-05-15 19:07:31.506Z"
+        "completed_at": "2026-05-16 04:49:08.856Z"
       },
-      "bbii7vu1plzewam": {
+      "3kgbsfokdj0p1n8": {
         "status": "completed",
-        "completed_at": "2026-05-15 19:07:31.506Z"
+        "completed_at": "2026-05-16 04:49:08.856Z"
       },
       "audit_logs_for_bulk": 3
     },
     "notes": [
-      "created 3 tasks: ['pbz519cwsx9ysg0', '3oxmt0okebslbl7', 'bbii7vu1plzewam']",
-      "found 9 checkboxes on page",
+      "created 3 tasks: ['fhlk5glfxb2t3ae', 'mh3gihuaeuuxlg1', '3kgbsfokdj0p1n8']",
+      "found 13 checkboxes on page",
       "E2E S6 row checkboxes: 3",
       "bulk bar visible",
       "clicked dialog confirm",

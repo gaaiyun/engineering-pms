@@ -1,0 +1,184 @@
+[
+  {
+    "name": "C1_double_approve_handoff",
+    "passed": true,
+    "inconclusive": false,
+    "error": "",
+    "warnings": [],
+    "notes": [
+      "setup: task=qs277o3qcerc2k8 handoff=b0ojo2zn33may0g",
+      "thread results: 2/2 succeeded",
+      "downstream tasks (with from_task as predecessor): 0",
+      "handoff final status: approved",
+      "from_task final status: completed",
+      "elapsed: 1578ms"
+    ],
+    "db_dumps": {
+      "thread_results": [
+        {
+          "thread": "mgr1",
+          "ok": true,
+          "error": "",
+          "elapsed_ms": 4
+        },
+        {
+          "thread": "mgr2",
+          "ok": true,
+          "error": "",
+          "elapsed_ms": 5
+        }
+      ],
+      "handoff_final": {
+        "status": "approved",
+        "reviewer": "yclq2nmebp7qj8u",
+        "approved_task": ""
+      },
+      "from_task_final": {
+        "status": "completed"
+      },
+      "downstream_count": 0,
+      "downstream_ids": []
+    }
+  },
+  {
+    "name": "C2_approve_vs_block",
+    "passed": true,
+    "inconclusive": false,
+    "error": "",
+    "warnings": [],
+    "notes": [
+      "setup: task=2ybt5mlydu9y2kb handoff=47onvd49awxto9y",
+      "handoff final=approved, task final=completed, blocker=False",
+      "elapsed: 1604ms"
+    ],
+    "db_dumps": {
+      "thread_results": [
+        {
+          "thread": "block",
+          "ok": true,
+          "error": "",
+          "elapsed_ms": 12
+        },
+        {
+          "thread": "approve",
+          "ok": true,
+          "error": "",
+          "elapsed_ms": 13
+        }
+      ],
+      "handoff_final": {
+        "status": "approved"
+      },
+      "from_task_final": {
+        "status": "completed",
+        "blocker": false
+      }
+    }
+  },
+  {
+    "name": "C3_double_mark_complete",
+    "passed": true,
+    "inconclusive": false,
+    "error": "",
+    "warnings": [],
+    "notes": [
+      "setup: task=49jgp0yxnjtx9ya",
+      "pending handoffs from this task: 1",
+      "elapsed: 1080ms"
+    ],
+    "db_dumps": {
+      "thread_results": [
+        {
+          "thread": "click2",
+          "ok": true,
+          "handoff_id": "gzxd3gynpswy00y",
+          "elapsed_ms": 29
+        },
+        {
+          "thread": "click1",
+          "ok": false,
+          "error": "RuntimeError: HTTP 400: {\"code\":400,\"message\":\"该任务已有 pending handoff (id=gzxd3gynpswy00y)，不能重复创建.\",\"data\":{}}\n",
+          "elapsed_ms": 34
+        }
+      ],
+      "pending_handoffs_count": 1
+    }
+  },
+  {
+    "name": "C4_concurrent_drag_sequence",
+    "passed": true,
+    "inconclusive": false,
+    "error": "",
+    "warnings": [],
+    "notes": [
+      "setup 4 tasks: ['lx6gbu6kanmpd1b', 'ipjzlvwhocy431p', 'nqjng6sucy5dvy0', 'r7cd3mysy3f4yfx']",
+      "final sequences: {'E2E-Concurrent-1778906967-C4-A': 200, 'E2E-Concurrent-1778906967-C4-B': 300, 'E2E-Concurrent-1778906967-C4-C': 400, 'E2E-Concurrent-1778906967-C4-D': 100}",
+      "最终态 = mgr2 (last-writer-wins: mgr2)",
+      "reorder_tasks audit_logs count: 0 (本测试直接 PATCH，预期 0)",
+      "elapsed: 650ms"
+    ],
+    "db_dumps": {
+      "thread_results": [
+        {
+          "thread": "mgr1",
+          "ok": true,
+          "elapsed_ms": 9
+        },
+        {
+          "thread": "mgr2",
+          "ok": true,
+          "elapsed_ms": 35
+        }
+      ],
+      "final_sequences": {
+        "E2E-Concurrent-1778906967-C4-A": 200,
+        "E2E-Concurrent-1778906967-C4-B": 300,
+        "E2E-Concurrent-1778906967-C4-C": 400,
+        "E2E-Concurrent-1778906967-C4-D": 100
+      },
+      "reorder_audit_count": 0
+    }
+  },
+  {
+    "name": "C5_audit_reject_vs_approve",
+    "passed": true,
+    "inconclusive": false,
+    "error": "",
+    "warnings": [
+      "RACE: audit_log.mark_complete=rejected 但 handoff=approved。audit_logs_reject_sync.pb.js cancel pending handoffs 跑得比 mgr2 approve 慢，导致 mgr2 approve 先把 handoff 置 approved → hook 不会回滚 approved handoff。复现: 同时 PATCH audit_logs/a4lmi9zrop423da review_status=rejected 与 PATCH handoffs/qn04141vnkkosee status=approved。建议: PB rule for handoffs 限制 status='approved' 时必须 from_task.status='completed' 且 from_task 没有 review_status='rejected' 的 mark_complete audit_log；或前端 approveHandoff 之前 reload audit_log 确认未被拒。"
+    ],
+    "notes": [
+      "setup: task=sfstwgwhwspaq3h handoff=qn04141vnkkosee audit=a4lmi9zrop423da",
+      "handoff final: approved, task final: completed, audit final: rejected",
+      "elapsed: 2114ms"
+    ],
+    "db_dumps": {
+      "thread_results": [
+        {
+          "thread": "approve_handoff",
+          "ok": true,
+          "error": "",
+          "elapsed_ms": 3
+        },
+        {
+          "thread": "reject_audit",
+          "ok": true,
+          "error": "",
+          "elapsed_ms": 3
+        }
+      ],
+      "handoff_final": {
+        "status": "approved",
+        "approved_task": ""
+      },
+      "task_final": {
+        "status": "completed",
+        "blocker": false
+      },
+      "audit_final": {
+        "review_status": "rejected"
+      },
+      "downstream_count": 0
+    }
+  }
+]
