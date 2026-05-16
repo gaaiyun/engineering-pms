@@ -648,17 +648,34 @@ export function useApproveHandoff() {
                 note: reviewNote,
             }).catch(console.error)
 
-            // 通知提交人
+            // 通知提交人 — Bug fix C6（Agent H 通知 E2E 发现）：
+            // createTaskWithSideEffects 在创建新任务时已通过 notifyProjectMembers
+            // 通知项目全员（含 submitter），如果再发一条会让 submitter 收到 2 条
+            // 几乎相同的 task_update 通知。
+            //
+            // 解决：仅在 submitter 不是项目成员（理论罕见，除非项目成员变动）
+            // 才单独发；且 type 改为更精确的 task_update 但内容明确为'审核通过'
+            // 区分。最稳妥：检测项目成员表，submitter 不在其中再发。
             const reviewer = pb.authStore.model
             if (handoff.submitter && handoff.submitter !== reviewer?.id) {
-                await createNotificationRecord({
-                    user: handoff.submitter,
-                    title: '交接审核通过',
-                    content: `${reviewer?.name || reviewer?.username} 批准了您的交接提报「${handoff.proposed_title}」`,
-                    type: 'task_update',
-                    link_type: 'task',
-                    link_id: newTask.id,
-                })
+                try {
+                    const project = await pb.collection('projects').getOne<Project>(handoff.project)
+                    const projectMembers = project.members || []
+                    // 仅当 submitter 不在项目成员中（避免与 notifyProjectMembers 重复）
+                    if (!projectMembers.includes(handoff.submitter)) {
+                        await createNotificationRecord({
+                            user: handoff.submitter,
+                            title: '交接审核通过',
+                            content: `${reviewer?.name || reviewer?.username} 批准了您的交接提报「${handoff.proposed_title}」`,
+                            type: 'task_update',
+                            link_type: 'task',
+                            link_id: newTask.id,
+                        })
+                    }
+                } catch (e) {
+                    // 项目读取失败，保守不发重复通知（已有项目成员通知兜底）
+                    console.warn('check submitter membership failed, skip extra notify', e)
+                }
             }
 
             return newTask
