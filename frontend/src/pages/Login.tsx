@@ -149,7 +149,13 @@ export default function Login() {
       } else {
         localStorage.removeItem('savedUsername')
         localStorage.removeItem('rememberMe')
-        sessionStorage.setItem('pocketbase_auth', localStorage.getItem('pocketbase_auth') || '')
+        // ⚠️ Bug fix C2（Agent D v2 HIGH）：原版把 token 复制到 sessionStorage
+        // 后没删除 localStorage 原件，token 仍跨会话残留 → "不记住登录"
+        // 失效，下次重启浏览器还能直接进。
+        // 正确做法：复制后立即 removeItem 原件。
+        const authSnapshot = localStorage.getItem('pocketbase_auth') || ''
+        sessionStorage.setItem('pocketbase_auth', authSnapshot)
+        localStorage.removeItem('pocketbase_auth')
       }
 
       const { queryClient } = await import('../lib/queryClient')
