@@ -969,8 +969,14 @@ export function useMarkTaskBlocked() {
                 taskId,
             ).catch(() => {})
 
-            // 创建通知给需要帮助的人
-            for (const userId of blocker.need_help_from) {
+            // 创建通知给需要帮助的人 — Bug fix #10（Agent B LOW-10）：
+            //  - 用 Set 去重（避免选两次同一人导致重复通知）
+            //  - 排除自己（员工选自己当协助人会自通知）
+            //  - 过滤空字符串
+            const operatorId = pb.authStore.model?.id
+            const uniqueHelpers = Array.from(new Set(blocker.need_help_from || []))
+                .filter((uid) => uid && uid !== operatorId)
+            for (const userId of uniqueHelpers) {
                 await createNotificationRecord({
                     user: userId,
                     type: 'blocker_reported',
@@ -1583,6 +1589,28 @@ export function useUpdateAuditLogStatus() {
                             status: isOverdue ? 'overdue' : 'in_progress',
                             completed_at: null,
                         })
+                    }
+
+                    // ⚠️ Bug fix #9（Agent B MEDIUM-9，与 Bug #1 配套）：
+                    // 拒绝 mark_complete 时还要取消同步创建的 pending handoff，
+                    // 否则会出现"任务回到 in_progress + handoff 仍 pending"，
+                    // 另一管理员批准 handoff 后会触发我们 commit c7cee3c 的 PB hook
+                    // 重新把 task 设回 completed → 矛盾状态。
+                    // 取消方式：把 handoff 也置 rejected，写明自动撤销原因。
+                    try {
+                        const pendingHs = await pb.collection('handoffs').getFullList({
+                            filter: `from_task="${auditLog.task}" && status="pending"`,
+                            fields: 'id',
+                        })
+                        for (const h of pendingHs) {
+                            await pb.collection('handoffs').update(h.id, {
+                                status: 'rejected',
+                                reviewer: pb.authStore.model?.id,
+                                review_note: `任务完成被审计拒绝，自动撤销交接${reject_note ? '：' + reject_note : ''}`,
+                            }).catch((err) => console.warn('cancel pending handoff failed', err))
+                        }
+                    } catch (e) {
+                        console.warn('cleanup pending handoffs failed', e)
                     }
                 } catch (e) { console.warn('回滚任务状态失败', e) }
             }
