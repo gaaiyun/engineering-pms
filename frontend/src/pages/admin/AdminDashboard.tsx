@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
 import { pb, getPocketBaseErrorMessage } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
-import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount } from '../../lib/api'
+import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount, useUpdateProject, useDeleteTask } from '../../lib/api'
 import { queryKeys } from '../../lib/queryClient'
 import {
   BarChart,
@@ -92,6 +92,10 @@ const AdminDashboard = () => {
     { key: 'ai', title: 'AI', icon: <IoSparkles /> },
     { key: 'profile', title: '我的', icon: <IoPersonOutline /> },
   ]
+
+  // Bug fix P0-2 (Agent C 数据流审计)：用 mutation hook 取代直接 PB 调用
+  const updateProject = useUpdateProject()
+  const deleteTaskMutation = useDeleteTask()
 
   const { data: users = [] as User[], isLoading: usersLoading, error: usersError } = useUsers()
   const { data: rqProjects = [], isLoading: projectsLoading, error: projectsError } = useProjects()
@@ -313,7 +317,11 @@ const AdminDashboard = () => {
 
   const handleProjectStatusChange = async (project: Project, newStatus: Project['status']) => {
     try {
-      await pb.collection('projects').update(project.id, { status: newStatus })
+      // Bug fix P0-2: 走 useUpdateProject mutation 而非直接 PB update
+      //  - 自动写 audit_log（before/after diff）
+      //  - 通知项目全员 "项目变更：状态→X"
+      //  - invalidate projects + notifications cache
+      await updateProject.mutateAsync({ id: project.id, data: { status: newStatus } })
       Toast.show({ icon: 'success', content: '项目状态已更新' })
       refreshAll()
     } catch (error: unknown) {
@@ -428,7 +436,12 @@ const AdminDashboard = () => {
       cancelText: '取消',
       onConfirm: async () => {
         try {
-          await pb.collection('tasks').delete(taskId)
+          // Bug fix P0-2: 走 useDeleteTask mutation 而非直接 PB delete
+          //  - 自动写 audit_log（action_type=delete_task, before_data）
+          //  - 通知项目全员 "任务删除"
+          //  - 级联清理 handoffs / predecessor refs / notifications（P0-4 修复）
+          //  - invalidate tasks / projects / projectTasks
+          await deleteTaskMutation.mutateAsync(taskId)
           setProjectTasks((prev) => prev.filter((t) => t.id !== taskId))
           Toast.show({ icon: 'success', content: '已删除' })
           if (selectedProject) await handleSelectProject(selectedProject)
