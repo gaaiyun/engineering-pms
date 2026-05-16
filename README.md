@@ -6,36 +6,39 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite)
 ![PocketBase](https://img.shields.io/badge/PocketBase-0.22-B8DBE4)
-![Version](https://img.shields.io/badge/Version-v2.98-blueviolet)
+![Version](https://img.shields.io/badge/Version-v3.04-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 功能特性
 
-- **响应式三端布局** *(v2.98 新增)* — 移动端 / 平板 / 桌面自动切换，桌面端 Sidebar+TopBar 三区布局
+- **响应式三端布局** *(v3.0+)* — 移动端 / 平板 / 桌面自动切换，桌面端 Sidebar+TopBar 三区布局
 - **角色权限体系** — 经理/管理员全权管理，员工受限视图
 - **项目看板** — 拖拽式任务管理（待处理/进行中/卡点/已完成），桌面端拖拽脉冲呼吸视觉反馈
-- **任务表格视图** *(v2.98 新增)* — 桌面端 TanStack Table 排序 + 多选 + 批量改状态/删除
+- **任务表格视图** *(v3.0+)* — 桌面端 TanStack Table 排序 + 多选 + 批量改状态/删除
 - **时间轴/甘特图** — 项目进度可视化，支持移动端横屏
 - **批量任务编辑** — 三列表格一次性设置多个任务
 - **实时数据同步** — PocketBase Realtime SSE 自动刷新
-- **Android 后台通知** *(v2.98 新增)* — 原生前台服务保活，不依赖 Firebase/FCM，国产 ROM 友好
+- **Android 后台通知** *(v3.0+)* — 原生前台服务保活，不依赖 Firebase/FCM，国产 ROM 友好
 - **变更审计中心** — 所有变动可追溯，支持已阅/通过复核
 - **全员消息通知** — 项目内任何变动自动通知全体成员
-- **AI 智能分析** — 基于 DeepSeek 的项目诊断与问答
+- **AI 智能分析** — 基于 SiliconFlow / DeepSeek，**v3.04 起 API key 服务端代理**（不暴露浏览器）
+- **HybridAuthStore** *(v3.04)* — "不记住登录"时 token 走 sessionStorage（关浏览器即清）
+- **6 个 PB hooks 兜底层** *(v3.0+)* — handoff 状态同步 / audit reject 回滚 / project.progress 自动重算 / LLM proxy
 - **自动备份** — 每 12 小时备份，保留 60 天
 - **移动端适配** — Capacitor 打包 Android APK，PWA 支持
 
-## v3.0 改造（2026-05-16）
+## v3.0 - v3.04 改造（2026-05-16）
 
-v2.96 → v2.98 完整改造概览见 [docs/v3.0-changelog.md](./docs/v3.0-changelog.md)。简版：
+历经 4 轮夜间自主作业，58 个 commit，修复 30+ bug。完整 changelog 见 [docs/CHANGELOG.md](./docs/CHANGELOG.md) v3.0-v3.04 章节。简版：
 
 - **PR 1**：通知一期收尾，全局 `useNotificationAlerts` hook，前台 Toast/振动/三音调/红闪/系统通知统一链路
 - **PR 2**：Android 原生前台服务 + PocketBase Realtime SSE 长连接，**不依赖 Firebase**
 - **PR 3**：响应式 AppShell 三断点（mobile/tablet/desktop），桌面 Sidebar+TopBar 布局
 - **PR 4**：桌面任务表格视图 + 批量操作（标记完成/删除）
 - **PR 5**：看板桌面体验提升，拖拽脉冲呼吸动画
+- **v3.04 安全收尾**：C1 LLM API key 服务端代理 / C2 HybridAuthStore / 6 PB hooks 兜底 / Bundle gzip -90%
 
-完整 spec：[docs/superpowers/specs/2026-05-16-pms-notification-and-desktop-design.md](./docs/superpowers/specs/2026-05-16-pms-notification-and-desktop-design.md)
+**当前 APK**：`EngineeringPMS_v3.04_production_ready.apk`（versionCode 44 / 6.94 MB）
 
 ## 快速开始
 
@@ -84,10 +87,9 @@ START.bat
 
 | 角色 | 账号 | 密码 |
 |------|------|------|
-| 管理员 | zhao_boss | 12345678 |
-| 经理 | zhang_manager | 12345678 |
-| 员工 | li_audit | 12345678 |
-| 员工 | chen_doc | 12345678 |
+| 管理员 | admin_boss | 12345678 |
+| 经理 | zhang_manager / wang_manager / mgr_li | 12345678 |
+| 员工 | chen_doc / li_audit / zhao_site | 12345678 |
 
 ## 项目结构
 
@@ -122,7 +124,14 @@ START.bat
 
 ## 部署
 
-详见 [宝塔部署操作手册](docs/宝塔部署操作手册.md) 和 [快速启动指南](docs/快速启动_命令行版.md)。
+**首次部署：** 详见 [宝塔部署操作手册](docs/宝塔部署操作手册.md)（含 PocketBase Linux 二进制上传、前端站点配置、Nginx 反代等）。
+
+**已上线后增量升级（最常见）：** 见同文档"⭐ v3.04 增量升级流程"章节。最常用场景是**只更新前端**：
+1. 本地 `npm run build`
+2. 上传 `frontend/dist/` 内容覆盖 `/www/wwwroot/<站点>/`
+3. 浏览器强刷 — 不需要重启 PocketBase
+
+**APK 安装：** 把 `EngineeringPMS_v3.04_production_ready.apk` 发到手机安装；按 [docs/android-background-keepalive.md](docs/android-background-keepalive.md) 加电池白名单 + 自启动权限。
 
 ### 自动备份
 
@@ -154,19 +163,26 @@ schtasks /create /tn "PB_Backup" /tr "powershell -File C:\path\to\backend\backup
 
 ### Android APK 打包
 
-详见 [App 打包指南](docs/App打包指南.md)。
+详见 [docs/android-apk.md](docs/android-apk.md)。
 
-## 文档
+## 文档（精简后清单）
 
 | 文档 | 说明 |
 |------|------|
-| [代码架构文档](docs/代码架构文档.md) | 完整技术架构与文件说明 |
-| [数据库设计](docs/数据库设计_PocketBase版.md) | PocketBase 集合与字段设计 |
-| [技术选型方案](docs/技术选型方案.md) | 技术栈选择理由 |
-| [交付文档](docs/交付文档_完整版.md) | 完整交付说明 |
-| [用户使用指南](docs/用户使用指南.md) | 终端用户操作手册 |
-| [PRD](docs/PRD_v2.0_Enterprise.md) | 产品需求文档 |
-| [技术规格](docs/TECH_SPEC_v2.0.md) | 技术规格文档 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | **完整版本变更记录**（含 v3.0-v3.04 详细修复列表） |
+| [docs/宝塔部署操作手册.md](docs/宝塔部署操作手册.md) | 服务器首次部署 + v3.04 增量升级 |
+| [docs/代码架构文档.md](docs/代码架构文档.md) | 完整技术架构与文件说明 |
+| [docs/数据库设计_PocketBase版.md](docs/数据库设计_PocketBase版.md) | PocketBase 集合与字段设计 |
+| [docs/产品完整文档_v2.3.md](docs/产品完整文档_v2.3.md) | 产品功能 & 业务流程（v2.3 起持续维护） |
+| [docs/用户使用指南.md](docs/用户使用指南.md) | 终端用户操作手册 |
+| [docs/需求实现对照表.md](docs/需求实现对照表.md) | 需求与实现的逐项映射 |
+| [docs/notification-push-phase2.md](docs/notification-push-phase2.md) | Android 后台推送架构（PR 2 SSE + 前台服务） |
+| [docs/android-background-keepalive.md](docs/android-background-keepalive.md) | 国产 ROM 保活引导（11 家厂商） |
+| [docs/android-apk.md](docs/android-apk.md) | APK 打包流程 |
+| [docs/数据模拟指南.md](docs/数据模拟指南.md) | 测试数据生成 |
+| [docs/开源项目管理软件调研报告.md](docs/开源项目管理软件调研报告.md) | 选型调研参考 |
+
+> 夜间作业临时产物（12 个 agent 报告 + 4 个 round summary + 26 轮 E2E 测试日志）已归档至 `_archive/overnight_2026-05-16/`。
 
 ## 许可证
 

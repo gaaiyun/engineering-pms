@@ -8,7 +8,7 @@
     ],
     "db_dumps": {
       "task": {
-        "id": "xd5hoq1uv4zo4vt",
+        "id": "fm1izttl9fn89va",
         "status": "pending",
         "assignees": [
           "x2kc1qzod6qexqn"
@@ -23,7 +23,7 @@
     },
     "notes": [
       "project: 智慧产业园弱电项目 (3oiyzrhy13gjaut)",
-      "task created: xd5hoq1uv4zo4vt status=pending",
+      "task created: fm1izttl9fn89va status=pending",
       "notification manually created (mimicking frontend mutation)",
       "notifications for this task: 1",
       "task visible in 待办 tab: True"
@@ -58,12 +58,12 @@
     ],
     "db_dumps": {
       "handoff": {
-        "id": "gb5wawh8f7er62z",
+        "id": "6r0zij9uc9nc1q4",
         "status": "pending"
       }
     },
     "notes": [
-      "handoff created: gb5wawh8f7er62z status=pending",
+      "handoff created: 6r0zij9uc9nc1q4 status=pending",
       "handoff text present in review-center?tab=handoff: True"
     ]
   },
@@ -78,11 +78,11 @@
       },
       "task_after": {
         "status": "completed",
-        "completed_at": "2026-05-16 04:48:54.196Z"
+        "completed_at": "2026-05-16 07:46:01.036Z"
       }
     },
     "notes": [
-      "handoff status: approved, task status: completed, completed_at: 2026-05-16 04:48:54.196Z"
+      "handoff status: approved, task status: completed, completed_at: 2026-05-16 07:46:01.036Z"
     ]
   },
   {
@@ -98,26 +98,13 @@
       "task_after": {
         "status": "in_progress"
       },
-      "rejection_notifications": [
-        {
-          "type": "audit_rejected",
-          "title": "操作被拒绝"
-        },
-        {
-          "type": "audit_rejected",
-          "title": "交接审核驳回"
-        },
-        {
-          "type": "audit_rejected",
-          "title": "操作被拒绝"
-        }
-      ]
+      "rejection_notifications": []
     },
     "notes": [
-      "S5 task created: a5oayrqs09r05ad",
-      "S5 handoff: rxhvr641t37c4yr",
+      "S5 task created: xtn0hgm1lkmtc21",
+      "S5 handoff: 7574wd1v2bieu9c",
       "handoff status: rejected, review_note: E2E S5 测试拒绝场景, task status: in_progress",
-      "employee notifications: 20 total, 5 rejection-related"
+      "employee notifications: 20 total, 0 rejection-related"
     ]
   },
   {
@@ -130,22 +117,22 @@
       "e2e_S6_after_bulk_complete.png"
     ],
     "db_dumps": {
-      "fhlk5glfxb2t3ae": {
+      "por4v9vf19l09bm": {
         "status": "completed",
-        "completed_at": "2026-05-16 04:49:08.856Z"
+        "completed_at": "2026-05-16 07:46:16.067Z"
       },
-      "mh3gihuaeuuxlg1": {
+      "sn0kncqm0pi93ko": {
         "status": "completed",
-        "completed_at": "2026-05-16 04:49:08.856Z"
+        "completed_at": "2026-05-16 07:46:16.067Z"
       },
-      "3kgbsfokdj0p1n8": {
+      "9x5ows11999tmdk": {
         "status": "completed",
-        "completed_at": "2026-05-16 04:49:08.856Z"
+        "completed_at": "2026-05-16 07:46:16.067Z"
       },
       "audit_logs_for_bulk": 3
     },
     "notes": [
-      "created 3 tasks: ['fhlk5glfxb2t3ae', 'mh3gihuaeuuxlg1', '3kgbsfokdj0p1n8']",
+      "created 3 tasks: ['por4v9vf19l09bm', 'sn0kncqm0pi93ko', '9x5ows11999tmdk']",
       "found 13 checkboxes on page",
       "E2E S6 row checkboxes: 3",
       "bulk bar visible",

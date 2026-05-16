@@ -28,6 +28,11 @@ backend/pb_data/storage/
 .idea/
 *.swp
 *.swo
+*.code-workspace
+
+# Playwright test results
+frontend/test-results/
+frontend/playwright-report/
 
 # OS
 .DS_Store
@@ -39,3 +44,10 @@ npm-debug.log*
 
 # Backups
 backups/
+
+# Archive (历史 APK / 临时文件 / 旧文档 / 夜间产物 — 不推上 GitHub 避免大文件)
+_archive/
+
+# Temp PB data screenshots / debug
+docs/superpowers/qa-screenshots/*.json
+docs/superpowers/qa-screenshots/_debug_*.png

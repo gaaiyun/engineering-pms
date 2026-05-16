@@ -6,7 +6,7 @@
     "warnings": [],
     "db_dumps": {
       "task": {
-        "id": "31fz6iocctybtgp",
+        "id": "qob6fc3muig2opo",
         "status": "pending",
         "assignees": [
           "x2kc1qzod6qexqn"
@@ -16,7 +16,7 @@
     },
     "notes": [
       "project: 智慧产业园弱电项目 (3oiyzrhy13gjaut)",
-      "task created: 31fz6iocctybtgp status=pending",
+      "task created: qob6fc3muig2opo status=pending",
       "after employee start: status=in_progress"
     ]
   },
@@ -41,7 +41,7 @@
     },
     "notes": [
       "audit_log mark_blocked created",
-      "notifications sent to help_users: [('chen_doc', '0luywnl0xpx6h9s'), ('mgr_li', '3z139x7f7p2jm0e')]",
+      "notifications sent to help_users: [('chen_doc', 'r4pdoc9vd5g2ca8'), ('mgr_li', 'g7j6obuufzit5fm')]",
       "task after: status=blocked blocker={'expected_resolve': '2026-05-25 12:00:00.000Z', 'need_help_from': ['o4avodgw2fs9x63', 'yclq2nmebp7qj8u'], 'reason_detail': '等待客户提供详细规格说明,无法继续推进', 'reason_type': 'awaiting_input'}"
     ]
   },
@@ -120,10 +120,10 @@
     "notes": [
       "final task: status=in_progress blocker=None",
       "audit_logs unblock_task: 1",
-      "B5 checking notif for help_ids=['o4avodgw2fs9x63', 'yclq2nmebp7qj8u'] task_id=31fz6iocctybtgp",
+      "B5 checking notif for help_ids=['o4avodgw2fs9x63', 'yclq2nmebp7qj8u'] task_id=qob6fc3muig2opo",
       "user o4avodgw2fs9x63 notif (total=2): [('task_update', '卡点解除'), ('blocker_reported', '有任务遇到卡点需要您协助')]",
       "user yclq2nmebp7qj8u notif (total=2): [('task_update', '卡点解除'), ('blocker_reported', '有任务遇到卡点需要您协助')]",
-      "manager rejected mark_blocked audit_log 16icqhsnrg54jxf",
+      "manager rejected mark_blocked audit_log a79d6c2kladq4cq",
       "task status after audit reject: in_progress blocker=None"
     ]
   }
