@@ -64,12 +64,19 @@ public class RealtimeService extends Service implements PbSseClient.Listener {
     private static final int NOTIF_ID_ONGOING = 4097;
     private static final int NOTIF_ID_BUSINESS_BASE = 5000;
 
-    private PbSseClient client;
-    private String currentBaseUrl;
-    private String currentToken;
+    // ⚠️ Bug fix A1（Agent D v2 HIGH）：以下字段在多线程访问：
+    //   - onStartCommand 在 main thread
+    //   - PbSseClient 回调在 OkHttp dispatcher 线程（onConnected/onMessage）
+    //   - NetworkCallback.onAvailable 在 ConnectivityManager 系统线程
+    //   - businessNotifSerial 由 onMessage 自增（dispatcher 线程）
+    // 改 volatile 保证可见性；start/stop/updateToken 加 synchronized 保证原子。
+    private volatile PbSseClient client;
+    private volatile String currentBaseUrl;
+    private volatile String currentToken;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
-    private int businessNotifSerial = 0;
+    private final java.util.concurrent.atomic.AtomicInteger businessNotifSerial = new java.util.concurrent.atomic.AtomicInteger(0);
+    private final Object clientLock = new Object();
 
     @Nullable
     @Override
@@ -93,20 +100,24 @@ public class RealtimeService extends Service implements PbSseClient.Listener {
         Log.i(TAG, "onStartCommand action=" + action);
 
         if (ACTION_STOP.equals(action)) {
-            stopForegroundCompat();
+            synchronized (clientLock) {
+                stopForegroundCompat();
+            }
             stopSelf();
             return START_NOT_STICKY;
         }
 
         if (ACTION_UPDATE_TOKEN.equals(action)) {
             String token = intent.getStringExtra(EXTRA_TOKEN);
-            if (token != null && !token.equals(currentToken)) {
-                currentToken = token;
-                if (client != null) {
-                    client.stop();
-                    client = null;
+            synchronized (clientLock) {
+                if (token != null && !token.equals(currentToken)) {
+                    currentToken = token;
+                    if (client != null) {
+                        client.stop();
+                        client = null;
+                    }
+                    startSseClient();
                 }
-                startSseClient();
             }
             return START_STICKY;
         }
@@ -119,12 +130,13 @@ public class RealtimeService extends Service implements PbSseClient.Listener {
             stopSelf();
             return START_NOT_STICKY;
         }
-        currentBaseUrl = baseUrl;
-        currentToken = token;
-
-        startForegroundCompat();
-        if (client == null) {
-            startSseClient();
+        synchronized (clientLock) {
+            currentBaseUrl = baseUrl;
+            currentToken = token;
+            startForegroundCompat();
+            if (client == null) {
+                startSseClient();
+            }
         }
         return START_STICKY;
     }
@@ -291,7 +303,7 @@ public class RealtimeService extends Service implements PbSseClient.Listener {
                 .setVibrate(new long[]{0, 200, 100, 200, 100, 200})
                 .build();
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(NOTIF_ID_BUSINESS_BASE + (businessNotifSerial++ % 100), notif);
+        if (nm != null) nm.notify(NOTIF_ID_BUSINESS_BASE + (businessNotifSerial.getAndIncrement() % 100), notif);
     }
 
     /**
