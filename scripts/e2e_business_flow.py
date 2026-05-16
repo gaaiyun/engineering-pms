@@ -384,12 +384,14 @@ def s3_complete_handoff(browser, manager_auth: dict, employee_auth: dict) -> Sce
             r.error = "manager login failed"
             ctx.close()
             return r
-        page.goto(f"{APP_URL}/review-center", wait_until="networkidle", timeout=15000)
+        # 修复：原版默认 tab='all' 只显示 audit_logs，handoff 在另一个 tab。
+        # 用 ?tab=handoff 深链直接进交接审核 tab（ReviewCenter 已支持 URL param）
+        page.goto(f"{APP_URL}/review-center?tab=handoff", wait_until="networkidle", timeout=15000)
         page.wait_for_timeout(2000)
         shot(page, "S3_review_center", r)
         text = page.content()
         prefix_in_review = TEST_PREFIX in text or "S3-下一步" in text
-        r.notes.append(f"handoff text present in review-center: {prefix_in_review}")
+        r.notes.append(f"handoff text present in review-center?tab=handoff: {prefix_in_review}")
         ctx.close()
 
         if not prefix_in_review:

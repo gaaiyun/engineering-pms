@@ -5,7 +5,7 @@
  */
 import React, { useState, useMemo } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   useAuditLogs, useUpdateAuditLogStatus, useUnreadAuditCount,
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
@@ -43,9 +43,25 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   reject_handoff: { label: '交接驳回', color: '#ef4444' },
 }
 
+const VALID_TABS = ['all', 'unread', 'read', 'approved', 'rejected', 'handoff'] as const
+type TabKey = typeof VALID_TABS[number]
+
 const ReviewCenter: React.FC = () => {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('all')
+  // ⚠️ E2E 测试发现：原 default tab='all' 只显示 audit_logs，pending handoff
+  // 落在 'handoff' tab 上 → 经理打开 /review-center 时看不到待审交接 →
+  // 容易遗漏 + 通知点击跳转无法定位到正确 tab。
+  //
+  // 修复：读 URL ?tab= 参数支持深链；setActiveTab 同步写回 URL，
+  // 这样通知点击 /review-center?tab=handoff 可以直接进。
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlTab = searchParams.get('tab') as TabKey | null
+  const activeTab: TabKey =
+    urlTab && (VALID_TABS as readonly string[]).includes(urlTab) ? urlTab : 'all'
+  const setActiveTab = (key: string) => {
+    const next = (VALID_TABS as readonly string[]).includes(key) ? key : 'all'
+    setSearchParams({ tab: next }, { replace: true })
+  }
   const [searchText, setSearchText] = useState('')
   const [showFilter, setShowFilter] = useState(false)
   const [filterAction, setFilterAction] = useState('')
