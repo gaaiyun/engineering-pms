@@ -1125,6 +1125,46 @@ export function useDeleteProject() {
                     operator: pb.authStore.model?.id,
                     before_data: { name: project.name, status: project.status },
                 }).catch(() => {})
+                // ⚠️ Bug fix P0-5（Agent C 数据流审计发现）：级联清理项目所有关联记录。
+                // PB cascadeDelete=false，仅删 tasks 会留下：
+                //  - handoffs (project=projectId) → ReviewCenter 残留幽灵审批
+                //  - comments (project=projectId) → 评论数据孤儿
+                //  - progress_logs (project=projectId) → 进度日志孤儿
+                //  - notifications (link_type=project && link_id=projectId) → 通知点击 404
+                // 顺序：先清下属业务记录，再删 tasks，最后删 project
+                // audit_logs 保留（合规审计追溯），可作为 orphan 标记
+                try {
+                    const handoffs = await pb.collection('handoffs').getFullList({
+                        filter: `project="${projectId}"`,
+                        fields: 'id',
+                    })
+                    await Promise.allSettled(handoffs.map((h) => pb.collection('handoffs').delete(h.id)))
+                } catch (e) { console.warn('cascade clean handoffs failed', e) }
+
+                try {
+                    const comments = await pb.collection('comments').getFullList({
+                        filter: `project="${projectId}"`,
+                        fields: 'id',
+                    })
+                    await Promise.allSettled(comments.map((c) => pb.collection('comments').delete(c.id)))
+                } catch (e) { console.warn('cascade clean comments failed (collection may not exist)', e) }
+
+                try {
+                    const progressLogs = await pb.collection('progress_logs').getFullList({
+                        filter: `project="${projectId}"`,
+                        fields: 'id',
+                    })
+                    await Promise.allSettled(progressLogs.map((p) => pb.collection('progress_logs').delete(p.id)))
+                } catch (e) { console.warn('cascade clean progress_logs failed (collection may not exist)', e) }
+
+                try {
+                    const notifs = await pb.collection('notifications').getFullList({
+                        filter: `link_type="project" && link_id="${projectId}"`,
+                        fields: 'id',
+                    })
+                    await Promise.allSettled(notifs.map((n) => pb.collection('notifications').delete(n.id)))
+                } catch (e) { console.warn('cascade clean notifications failed', e) }
+
                 // 删除项目下所有任务（使用 allSettled 避免部分失败阻断后续删除）
                 const tasks = await pb.collection('tasks').getFullList({ filter: `project="${projectId}"`, fields: 'id' })
                 await Promise.allSettled(tasks.map(t => pb.collection('tasks').delete(t.id)))
