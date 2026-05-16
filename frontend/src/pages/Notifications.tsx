@@ -14,6 +14,7 @@ import { Toast, Dialog, Tabs, SwipeAction } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { invalidateNotificationQueries, useNotifications as useNotificationsQuery } from '../lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useBreakpoint } from '../lib/useBreakpoint'
 
 interface Notification {
   id: string
@@ -34,6 +35,10 @@ export default function Notifications() {
   const { data: rqNotifications = [], isLoading: loading } = useNotificationsQuery(userId)
   const notifications = rqNotifications as unknown as Notification[]
   const [activeTab, setActiveTab] = useState('all')
+  // Bug fix J-1: 桌面端 AppShell 已有 Sidebar/TopBar，移动版 page header
+  // 重复且 ← 在桌面端无意义。仅 mobile 渲染顶部 header。
+  const bp = useBreakpoint()
+  const isMobile = bp === 'mobile'
 
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications
@@ -187,9 +192,10 @@ export default function Notifications() {
 
   return (
     <div className="page" style={{ background: '#f8fafc' }}>
-      {/* Header */}
-      <div style={{ 
-        background: 'white', 
+      {/* Header — Bug fix J-1: 仅 mobile 渲染（桌面 AppShell 已有 TopBar） */}
+      {isMobile && (
+      <div style={{
+        background: 'white',
         padding: '16px 20px',
         borderBottom: '1px solid #e2e8f0',
         position: 'sticky',
@@ -259,6 +265,31 @@ export default function Notifications() {
           <Tabs.Tab title="交接" key="handoff" />
         </Tabs>
       </div>
+      )}
+      {!isMobile && (
+        // 桌面端：仅渲染 Tabs（标题由 AppShell TopBar 接管）
+        <div style={{
+          background: 'white',
+          padding: '0 24px',
+          borderBottom: '1px solid #e2e8f0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            style={{ '--title-font-size': '14px' }}
+          >
+            <Tabs.Tab title="全部" key="all" />
+            <Tabs.Tab title="未读" key="unread" />
+            <Tabs.Tab title="任务" key="task" />
+            <Tabs.Tab title="项目" key="project" />
+            <Tabs.Tab title="卡点" key="blocker" />
+            <Tabs.Tab title="交接" key="handoff" />
+          </Tabs>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ padding: '16px 20px' }}>

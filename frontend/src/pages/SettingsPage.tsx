@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBreakpoint } from '../lib/useBreakpoint'
 import { Toast, Dialog, Input, Switch } from 'antd-mobile'
 import { 
   IoArrowBackOutline, 
@@ -51,7 +52,10 @@ const SettingRow: React.FC<SettingRowProps> = ({ icon, color, label, value, onCl
 export default function SettingsPage() {
   const navigate = useNavigate()
   const user = pb.authStore.model
-  
+  // Bug fix J-1: 桌面端不渲染 mobile page header（与 AppShell TopBar 重复）
+  const bp = useBreakpoint()
+  const isMobile = bp === 'mobile'
+
   // 通知设置
   const [notificationEnabled, setNotificationEnabled] = useState(() => {
     return localStorage.getItem('notification_enabled') !== 'false'
@@ -221,14 +225,16 @@ export default function SettingsPage() {
 
   return (
     <div className="page" style={{ padding: 20 }}>
-      <div className="glass-header" style={{ 
-        padding: '16px 20px', 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: 12, 
-        marginBottom: 24, 
-        position: 'sticky', 
-        top: 0, 
+      {/* Bug fix J-1: 仅 mobile 渲染 page header */}
+      {isMobile && (
+      <div className="glass-header" style={{
+        padding: '16px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 24,
+        position: 'sticky',
+        top: 0,
         zIndex: 10,
         background: 'rgba(255,255,255,0.9)',
         backdropFilter: 'blur(12px)',
@@ -243,6 +249,7 @@ export default function SettingsPage() {
         </button>
         <div style={{ fontSize: 18, fontWeight: 800 }}>系统设置</div>
       </div>
+      )}
 
       {/* 通用设置 */}
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>通用</div>

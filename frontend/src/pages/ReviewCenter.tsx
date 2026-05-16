@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useBreakpoint } from '../lib/useBreakpoint'
 import {
   useAuditLogs, useUpdateAuditLogStatus, useUnreadAuditCount,
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
@@ -173,15 +174,43 @@ const ReviewCenter: React.FC = () => {
 
   const { data: unreadCount = 0 } = useUnreadAuditCount()
 
+  // Bug fix J-1: 桌面端 AppShell TopBar 已有标题，移动版 NavBar 重复
+  const bp = useBreakpoint()
+  const isMobile = bp === 'mobile'
+
   return (
     <div className="review-center">
-      <NavBar onBack={() => navigate(-1)} right={
-        <div onClick={() => setShowFilter(!showFilter)} style={{ padding: '4px 8px', cursor: 'pointer' }}>
-          <IoFunnelOutline size={20} color={filterAction ? '#3b82f6' : '#64748b'} />
+      {isMobile ? (
+        <NavBar onBack={() => navigate(-1)} right={
+          <div onClick={() => setShowFilter(!showFilter)} style={{ padding: '4px 8px', cursor: 'pointer' }}>
+            <IoFunnelOutline size={20} color={filterAction ? '#3b82f6' : '#64748b'} />
+          </div>
+        }>
+          变更审计中心 {unreadCount > 0 && <Tag color="danger" style={{ marginLeft: 6, fontSize: 10 }}>{unreadCount}</Tag>}
+        </NavBar>
+      ) : (
+        // 桌面端：仅渲染右上角筛选按钮 + 标题文本（无返回箭头）
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 24px',
+          background: 'white',
+          borderBottom: '1px solid #e2e8f0',
+        }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+            变更审计中心
+            {unreadCount > 0 && <Tag color="danger" style={{ marginLeft: 6, fontSize: 11 }}>{unreadCount}</Tag>}
+          </h2>
+          <button
+            onClick={() => setShowFilter(!showFilter)}
+            style={{ background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <IoFunnelOutline size={16} color={filterAction ? '#3b82f6' : '#64748b'} />
+            <span style={{ fontSize: 13, color: '#475569' }}>筛选</span>
+          </button>
         </div>
-      }>
-        变更审计中心 {unreadCount > 0 && <Tag color="danger" style={{ marginLeft: 6, fontSize: 10 }}>{unreadCount}</Tag>}
-      </NavBar>
+      )}
 
       {/* 搜索栏 */}
       <div style={{ padding: '8px 16px', background: 'white', borderBottom: '1px solid #f1f5f9' }}>

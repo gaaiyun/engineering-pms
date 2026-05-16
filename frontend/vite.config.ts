@@ -20,15 +20,18 @@ export default defineConfig({
           // framer-motion 动画库
           'vendor-motion': ['framer-motion'],
           // TanStack Query + Table
-          'vendor-tanstack': ['@tanstack/react-query', '@tanstack/react-table', '@tanstack/react-virtual'],
+          // tanstack/react-query 是 eager 必需（main app context），但
+          // react-table 仅 PR 4 表格用 + react-virtual 仅 1 处用 — 用函数式
+          // manualChunks 让 rollup 自动拆分（Agent I 建议）
+          'vendor-tanstack-query': ['@tanstack/react-query'],
           // react-icons 图标 tree-shaking 不彻底，拆出来
           'vendor-icons': ['react-icons/io5', 'react-icons'],
           // dnd-kit 系列
           'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
           // PocketBase SDK
           'vendor-pb': ['pocketbase'],
-          // dayjs date
-          'vendor-date': ['dayjs'],
+          // Agent I 报告：vendor-date 改函数式拆 — dayjs 在多处共享，让 rollup
+          // 决定。删除空 chunk（1 byte 占位）。
         },
       },
     },

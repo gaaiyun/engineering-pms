@@ -3,7 +3,49 @@
 - 生成时间: 2026-05-16 12:50:20  耗时 130.8s
 - BASE_URL: `http://127.0.0.1:5173` | PB_URL: `http://127.0.0.1:8090`
 - 账号: `zhang_manager` (manager)
-- 截图目录: `docs/superpowers/qa-screenshots/responsive/`  (35 张)
+- 截图目录: `docs/superpowers/qa-screenshots/responsive/`  (35 张, 5 viewport × 7 page = 35)
+- 脚本: `scripts/e2e_responsive_diff.py`
+
+## 0. 核心结论（人工核对截图后）
+
+**自动检查通过 35/35**：5 个 viewport × 7 个页面全部抓到 shell mode 符合预期：
+- 1440×900 / 1024×768 → `data-shell="desktop"`，sidebar = **240px**，正确。
+- 900×700 (tablet) → `data-shell="desktop"`，sidebar 折叠到 **64px**，正确（AppShell.tsx `collapsed = bp === 'tablet'`）。
+- 768×1024 / 390×844 → AppShell 透传，**无 sidebar、无 TopBar**，移动 TabBar 出现，正确。
+- 5/35 截图无 horizontal overflow（scrollW===clientW，与 viewport 完全等宽）。
+- PR 4 TasksTableView 在 `/my-tasks` 桌面端正确展示成 table，移动端展示成卡片/empty state（咖啡杯空态图）。
+
+**但目检截图发现 3 个真实 UI 问题**，自动 BUG 计数为 0 是因为 sidebar/shell 都符合断点定义；这些是 **页面内** 层级的响应式适配缺失：
+
+### Bug J-1 [P2] 桌面/平板端仍渲染移动端 Page Header（含左侧返回箭头）
+
+`/settings`, `/notifications` 在 1440 / 1024 / 900 三个非移动 viewport 上，main 区域**最上方仍然是移动版的居中页面 header**（带 `←` 返回箭头 + 居中标题），与左侧 sidebar 的"设置/通知"导航重复，并且这个 `←` 在桌面端**无意义**（桌面没有 history stack 的视觉锚）。
+
+- 证据截图:
+  - `1440x900_desktop_05_notifications.png` — 桌面端，"← 消息中心" 还在 main 顶部
+  - `1440x900_desktop_06_settings.png` — 桌面端，"← 系统设置" 还在 main 顶部
+  - `1440x900_desktop_04_review_handoff.png` — 顶部出现 `<` 折叠按钮 + 居中 "变更审计中心" 标题 + 右侧筛选 icon，是 ReviewCenter 的移动版 header
+- 推测原因: `Notifications.tsx / SettingsPage.tsx / ReviewCenter.tsx` 顶部 header 没有按 `useBreakpoint()` 隐藏；AppShell 的 TopBar 已经在桌面端起到全局头部作用，重复的页内 header 既冗余、`←` 又会误导用户。
+- 修复建议: 三个页面 header 包一层 `bp === 'mobile' ? <MobileHeader /> : null`，或把"返回 + 居中标题"块提到一个 `<MobileOnly>` 组件里。
+
+### Bug J-2 [P2] 768 mobile_max 页面内容固定窄宽，两侧大块空白
+
+在 `768x1024_mobile_max` viewport（mobile 临界 < 769px），所有页面 main 内容看起来是 **~430px 居中固定宽度**，两侧各有约 168px 灰底空白。
+
+- 证据截图:
+  - `768x1024_mobile_max_01_home.png` — 内容居中，约 430px 宽，两侧大量空白
+  - `768x1024_mobile_max_06_settings.png` — 整页设置卡片中心化，左右各 168px+ 灰底
+  - `768x1024_mobile_max_03_admin.png` — 管理控制台 2 列布局也被压在中央 ~480px
+- 与 `390x844_mobile`（也 mobile）对比：390 viewport 内容铺满，无明显左右空白；说明这不是断点判定问题，而是 Home / mobile 容器**自身设置了 max-width**（看起来 ~430px），导致 768 这种"宽 mobile" 时显得很挤。
+- 修复建议: mobile 容器把 `max-width` 改成 `min(100%, 480px)` 或在 `>=560px` 时切到 wide-mobile 布局（侧边充满）。
+
+### Bug J-3 [P3] `/project/:id/kanban` 在所有 viewport 都显示 "看板加载失败 重试"
+
+5 个 viewport 7 张 kanban 截图全部呈现错误占位符。可见文字`看板加载失败, 重试`。
+
+- 证据: 5 张 `*_07_project_kanban.png`
+- 不是响应式问题，是数据/API 问题——`ProjectKanban` 拉取 project 数据失败（用 `zhang_manager` 登录、project_id=`3oiyzrhy13gjaut`）。
+- 建议另起 Agent 调查后端 API（可能与 RLS 规则或 collection 字段相关），本 PR 范围之外。
 
 ## 1. 截图矩阵概览
 
@@ -154,6 +196,10 @@
 
 ## 6. 结论
 
-- 总截图: 35 / 35
-- 干净通过: 35
-- 含 BUG 标记的截图: 0
+- 总截图: 35 / 35 全部成功（5 viewport × 7 page）
+- 自动断点校验通过: 35（shell mode / sidebar 宽度 / horizontal overflow 全部 OK）
+- 目检发现的 UI 问题: **3 个**（详见 §0）
+  - J-1 [P2] desktop/tablet 仍渲染移动版 page header (`← 系统设置/消息中心/审计中心`)
+  - J-2 [P2] 768 mobile_max 内容固定 ~430px 居中，两侧大块空白
+  - J-3 [P3] kanban 跨 viewport 都数据加载失败（非响应式问题）
+- AppShell 响应式核心逻辑 (`useBreakpoint` + `data-shell`) 在 5 个断点上**均按设计工作**；问题集中在**单个页面**内部的移动 header 没有跟随断点隐藏。
