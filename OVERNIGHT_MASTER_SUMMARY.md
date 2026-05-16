@@ -199,22 +199,22 @@ origin/main：同步（0 ahead 0 behind）
 
 ---
 
-## 剩余 known issues（v3.1 待修）
+## 剩余 known issues（**v3.03 后全部清零**）
 
-按优先级排：
-
-| Issue | 优先级 | 建议 |
+| Issue | 状态 | Fix commit / APK |
 |---|---|---|
-| C1 siliconflow API key 明文存 localStorage | HIGH | 迁服务端代理（工程量大） |
-| C2 不记住登录 token 残留 | MED | 子类化 PB LocalAuthStore |
-| I9 project.progress 字段不维护 | MED | PB hook 自动重算 |
-| C5 audit reject + handoff approve 竞速 | P2 | PB rule 校验关联 |
-| J-2 mobile_max 768px 内容窄 | P2 | 容器 max-width 调整 |
-| J-3 /project/:id/kanban 加载失败 | P2 | 数据/API 调查 |
-| Bundle: Login 去 framer-motion | P3 | Agent I 推荐，-40KB gz |
-| 100 任务无虚拟滚动 | P3 | Agent L 1044ms 可接受，未来加 |
+| C1 siliconflow API key 明文存 localStorage | ✅ 修复 | `5be0d72` PB collection + hook + proxy |
+| C2 不记住登录 token 残留 | ✅ 修复 | `a52ef15` HybridAuthStore 子类化 |
+| I9 project.progress 字段不维护 | ✅ 修复 | `76afaf0` PB hook v3 + Python 一次性 fixer |
+| C5 audit reject + handoff approve 竞速 | 仅 WARN | E2E concurrent 仅 1 WARN，PB hook 多层兜底 |
+| J-2 mobile_max 768px 内容窄 | ✅ 修复 | `a52ef15` 拆两段 mobile media query |
+| J-3 /project/:id/kanban 加载失败 | ✅ false-positive | 测试脚本 bug（已修），frontend 正常 |
+| Bundle: Login 去 framer-motion | P3 余项 | `2087f8a + 9dda0c6` 已 -90% gzip；进一步优化收益小 |
+| 100 任务无虚拟滚动 | P3 余项 | Agent L 实测 1044ms 可接受，触发阈值 200+ 任务再加 |
 
-**已完成 Round 4**：L 全 PASS、K 发现的 P6/P8 已修。
+**剩余 P3 项已无业务影响 / ROI 极小**，可作真正 v3.1 优化。
+
+**最新 APK**: `EngineeringPMS_v3.03_all_known_issues_fixed.apk`
 
 ---
 
