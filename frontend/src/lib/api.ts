@@ -50,6 +50,11 @@ export interface Task extends RecordModel {
         reason_detail: string
         need_help_from: string[]
         expected_resolve: string
+        /**
+         * Bug fix E-3：mark_blocked 时若用户选择"回退到前序任务 X"，
+         * 此字段保存 X 的 taskId，useUnblockTask 读它把 X 设回 completed。
+         */
+        rollback_to?: string
     }
     predecessor_tasks?: string[]
     next_assignees?: string[]
@@ -1330,6 +1335,8 @@ export function useUnblockTask() {
     return useMutation({
         mutationFn: async ({ taskId, newStatus }: { taskId: string; newStatus: 'in_progress' | 'completed' }) => {
             const task = await pb.collection('tasks').getOne<Task>(taskId)
+            // ⚠️ Bug fix E-2（Agent E MED）：先读 rollback_to，解除卡点后联动恢复
+            const rollbackToTaskId = task.blocker?.rollback_to
             await pb.collection('tasks').update(taskId, {
                 status: newStatus,
                 blocker: null,
@@ -1339,9 +1346,40 @@ export function useUnblockTask() {
                 task: taskId,
                 action_type: 'unblock_task',
                 operator: pb.authStore.model?.id,
-                before_data: { status: 'blocked' },
+                before_data: { status: 'blocked', rollback_to: rollbackToTaskId },
                 after_data: { status: newStatus },
-            }).catch(console.error)
+            }).catch((err) => console.warn('[audit_logs] unblock_task failed:', err))
+
+            // ⚠️ Bug fix E-2：若 mark_blocked 时回退过某任务 X，现在 unblock 把 X 设回 completed
+            if (rollbackToTaskId) {
+                try {
+                    const rollbackTask = await pb.collection('tasks').getOne<Task>(rollbackToTaskId)
+                    // 仅当 X 现在还是 in_progress 时回设 completed（避免覆盖用户后续修改）
+                    if (rollbackTask.status === 'in_progress') {
+                        await pb.collection('tasks').update(rollbackToTaskId, {
+                            status: 'completed',
+                            completed_at: new Date().toISOString(),
+                        })
+                        // 通知 X 的 assignees：上游卡点已解除，您的任务恢复完成
+                        const xAssignees = rollbackTask.assignees || []
+                        for (const uid of xAssignees) {
+                            if (uid && uid !== pb.authStore.model?.id) {
+                                await createNotificationRecord({
+                                    user: uid,
+                                    type: 'task_update',
+                                    title: '上游卡点已解除',
+                                    content: `任务「${rollbackTask.stage_name}」恢复完成状态`,
+                                    link_type: 'task',
+                                    link_id: rollbackToTaskId,
+                                })
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('rollback_to recovery failed', e)
+                }
+            }
+
             // 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
             const statusLabel = newStatus === 'completed' ? '已完成' : '进行中'
@@ -1639,6 +1677,28 @@ export function useUpdateAuditLogStatus() {
                         console.warn('cleanup pending handoffs failed', e)
                     }
                 } catch (e) { console.warn('回滚任务状态失败', e) }
+            }
+
+            // ⚠️ Bug fix E-1（Agent E HIGH）：拒绝 mark_blocked 时回滚卡点 +
+            // 清空 blocker，避免任务永远卡在 blocked 无 UI 路径恢复
+            if (review_status === 'rejected' && auditLog.action_type === 'mark_blocked' && auditLog.task) {
+                try {
+                    const task = await pb.collection('tasks').getOne<Task>(auditLog.task)
+                    if (task.status === 'blocked') {
+                        await pb.collection('tasks').update(auditLog.task, {
+                            status: 'in_progress',
+                            blocker: null,
+                        })
+                    } else {
+                        // 员工可能已自己 unblock，blocker 已为 null/状态变了；
+                        // 仍然清一次 blocker 字段保证一致性
+                        if (task.blocker) {
+                            await pb.collection('tasks').update(auditLog.task, { blocker: null })
+                        }
+                    }
+                } catch (e) {
+                    console.warn('reject mark_blocked rollback failed', e)
+                }
             }
 
             // 拒绝 update_task 时，回滚到 before_data
