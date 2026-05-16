@@ -5,7 +5,7 @@
 **状态：** Draft → 待用户 Review
 **项目：** EngineeringPMS（工程资料员协同软件）
 **当前版本：** v2.96 → 目标 v3.0
-**仓库：** gaaiyun/engineering-pms（私有）
+**仓库：** gaaiyun/engineering-pms
 
 ---
 

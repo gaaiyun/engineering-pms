@@ -19,7 +19,7 @@
 | 测试脚本 | `scripts/verify_v3_ui.py` | ✅ |
 
 **关键发现（脚本演化中暴露）：**
-- `frontend/src/lib/pocketbase.ts` 在 `hostname === 'localhost'` 时**强制连 production PB（127.0.0.1:8090）**，本地开发环境必须用 `localStorage.pb_url` 覆盖才能连本地 PB
+- `frontend/src/lib/pocketbase.ts` 在 `hostname === 'localhost'` 时**强制连 PRODUCTION_PB_URL**（默认 127.0.0.1:8090，可通过 VITE_PB_URL 覆盖），本地开发环境必须用 `localStorage.pb_url` 覆盖才能连其他 PB 实例
 - PB JS SDK 的 `LocalAuthStore` 在初始化时会校验注入的 token；如果 token 来自不同 PB 实例，会被 `clear()` 清空 → 改走**实际 UI 表单登录** 是最可靠的路径
 
 ---

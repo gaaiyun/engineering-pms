@@ -9,12 +9,10 @@
     2. 安装浏览器: playwright install chromium
     3. 运行脚本: python screenshot_pages.py
 
-配置：
-    - BASE_URL: 前端地址（默认 http://127.0.0.1）
-    - USERNAME: 登录用户名
-    - PASSWORD: 登录密码
-    - EMPLOYEE_USERNAME: 员工用户名（用于截图员工视角页面）
-    - EMPLOYEE_PASSWORD: 员工密码
+配置（通过环境变量传入）：
+    - FRONTEND_URL: 前端地址（默认 http://localhost:5173）
+    - TEST_USERNAME / TEST_PASSWORD: 演示管理员/经理账号
+    - EMPLOYEE_USERNAME / EMPLOYEE_PASSWORD: 员工账号（用于截图员工视角）
     - OUTPUT_DIR: 截图输出目录
 """
 
@@ -24,7 +22,7 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 
 # ========== 配置 ==========
-BASE_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1')  # 默认线上演示地址；本地可覆盖 FRONTEND_URL=http://localhost:5173
+BASE_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')  # 默认本地开发；CI/线上可覆盖 FRONTEND_URL
 USERNAME = os.environ.get('TEST_USERNAME', 'wang_manager')  # 演示管理员/经理账号（可访问管理控制台与经理工作台）
 PASSWORD = os.environ.get('TEST_PASSWORD', '12345678')
 EMPLOYEE_USERNAME = os.environ.get('EMPLOYEE_USERNAME', 'li_audit')  # 演示普通员工账号

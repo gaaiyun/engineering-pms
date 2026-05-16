@@ -23,9 +23,113 @@
 - **全员消息通知** — 项目内任何变动自动通知全体成员
 - **AI 智能分析** — 基于 SiliconFlow / DeepSeek，**v3.04 起 API key 服务端代理**（不暴露浏览器）
 - **HybridAuthStore** *(v3.04)* — "不记住登录"时 token 走 sessionStorage（关浏览器即清）
-- **6 个 PB hooks 兜底层** *(v3.0+)* — handoff 状态同步 / audit reject 回滚 / project.progress 自动重算 / LLM proxy
+- **5 个 PB hooks 兜底层** *(v3.0+)* — handoff 状态同步 / audit reject 回滚 / project.progress 自动重算 / LLM proxy / SSE
 - **自动备份** — 每 12 小时备份，保留 60 天
 - **移动端适配** — Capacitor 打包 Android APK，PWA 支持
+
+## 系统架构
+
+### 整体分层
+
+```mermaid
+flowchart TB
+    subgraph 客户端层
+        Mobile["📱 Android APK<br/>Capacitor 5.7"]
+        Desktop["💻 桌面浏览器<br/>响应式 ≥1024"]
+        Tablet["📋 平板<br/>768–1023"]
+        Phone["📱 手机浏览器<br/>&lt;768"]
+    end
+
+    subgraph 前端运行时
+        AppShell["AppShell<br/>(三断点路由)"]
+        Pages["Pages 18 个<br/>(看板/表格/审计/AI)"]
+        Hooks["Hooks<br/>useNotificationAlerts<br/>useRealtimeSync"]
+        State["TanStack Query 5<br/>+ Zustand 5"]
+    end
+
+    subgraph 通信层
+        SDK["PocketBase JS SDK<br/>+ HybridAuthStore"]
+        SSE["Realtime SSE<br/>长连接"]
+        HTTP["REST API"]
+    end
+
+    subgraph 后端服务
+        PB["PocketBase 0.22<br/>(单二进制)"]
+        Hooks5["PB Hooks (5 个)<br/>project_progress / handoffs<br/>audit_reject / llm_proxy / sse"]
+        SQLite[("SQLite<br/>+ WAL")]
+    end
+
+    subgraph 外部服务
+        LLM["SiliconFlow / DeepSeek<br/>(LLM API)"]
+    end
+
+    Mobile & Desktop & Tablet & Phone --> AppShell
+    AppShell --> Pages
+    Pages --> Hooks
+    Pages --> State
+    State --> SDK
+    SDK --> HTTP
+    SDK --> SSE
+    HTTP & SSE --> PB
+    PB --> Hooks5
+    Hooks5 --> SQLite
+    Hooks5 -. "llm_proxy<br/>注入 API key" .-> LLM
+```
+
+### 数据流（任务交接闭环示例）
+
+```mermaid
+sequenceDiagram
+    participant E as 员工<br/>(浏览器)
+    participant FE as 前端 React
+    participant PB as PocketBase
+    participant H as PB Hooks
+    participant M as 经理<br/>(浏览器)
+
+    E->>FE: 点击"完成任务<br/>+提交交接"
+    FE->>PB: POST /api/collections/handoffs<br/>(status=pending)
+    PB->>H: onRecordBeforeCreate('handoffs')<br/>校验 submitter & assignees
+    PB-->>FE: 201 Created
+    PB-->>M: SSE 推送 (notifications)
+    M->>FE: 审核中心点击"通过"
+    FE->>PB: PATCH handoffs/:id<br/>(status=approved)
+    PB->>H: onRecordAfterUpdate('handoffs')<br/>同步 from_task.status=completed
+    H->>PB: UPDATE tasks SET status='completed'
+    PB->>H: onRecordAfterUpdate('tasks')<br/>重算 project.progress
+    H->>PB: UPDATE projects SET completed_tasks=...
+    PB-->>FE: 同步 + SSE 推送
+    PB-->>E: SSE 推送 (通知"交接已通过")
+```
+
+### 部署拓扑（生产）
+
+```mermaid
+flowchart LR
+    User["👤 用户"]
+
+    subgraph 阿里云ECS["阿里云 ECS（宝塔面板）"]
+        Nginx["Nginx<br/>:80/:443"]
+        Static["静态文件<br/>/www/wwwroot/&lt;site&gt;/<br/>(frontend/dist)"]
+        PB["pocketbase serve<br/>:8090"]
+        DB[("pb_data/<br/>SQLite + WAL")]
+        Cron["crontab<br/>每 12h backup"]
+        Backup["backups/<br/>保留 60 天"]
+    end
+
+    subgraph 外部["外部服务"]
+        SiliconFlow["SiliconFlow API"]
+    end
+
+    Android["📱 Android APK<br/>(直连 :8090)"]
+
+    User -->|"https://your-domain/"| Nginx
+    Nginx -->|"/"| Static
+    Nginx -->|"/pb/*<br/>反代"| PB
+    Android -->|"VITE_PB_URL<br/>:8090"| PB
+    PB --> DB
+    Cron -->|".backup<br/>+ gzip"| Backup
+    PB -. "llm-proxy<br/>(api_key 服务端)" .-> SiliconFlow
+```
 
 ## v3.0 - v3.04 改造（2026-05-16）
 
@@ -102,10 +206,60 @@ START.bat
 │   └── public/        # 静态资源
 ├── backend/           # PocketBase 后端配置
 │   ├── pb_data/       # 数据库（运行时生成）
-│   └── pb_migrations/ # 数据库迁移文件
+│   ├── pb_migrations/ # 数据库迁移文件（36 个）
+│   └── pb_hooks/      # 服务端 JS hooks（5 个文件 / 8 handler）
 ├── pocketbase/        # PocketBase 可执行文件
 ├── scripts/           # 运维脚本（备份、数据库重建等）
 └── docs/              # 项目文档
+```
+
+### 数据库实体关系（v3.04）
+
+```mermaid
+erDiagram
+    users ||--o{ projects : "manager"
+    users }o--o{ projects : "members"
+    projects ||--o{ tasks : "contains"
+    users }o--o{ tasks : "assignees"
+    tasks ||--o{ handoffs : "from_task"
+    handoffs }o--|| users : "submitter/reviewer"
+    handoffs ||--o| tasks : "approved_task"
+    tasks ||--o{ audit_logs : "tracks"
+    tasks ||--o{ comments : "discussed_in"
+    users ||--o{ notifications : "receives"
+    users ||--o{ device_tokens : "owns"
+    users ||--o{ ai_summaries : "target"
+    app_settings }o--|| users : "updated_by"
+
+    users {
+        text id PK
+        text username
+        text name
+        select role "admin|manager|employee"
+        select department
+        number flower_count
+    }
+    projects {
+        text id PK
+        text name
+        select status "active|completed|archived"
+        number progress "auto by hook"
+        relation manager FK
+        relation members FK
+    }
+    tasks {
+        text id PK
+        relation project FK
+        text stage_name
+        select status "pending|in_progress|blocked|completed|overdue"
+        relation assignees FK
+        json blocker
+        number sequence
+    }
+    app_settings {
+        text key PK "siliconflow_api_key etc"
+        text value "server-only"
+    }
 ```
 
 ## 技术栈

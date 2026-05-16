@@ -170,7 +170,7 @@ if (!(ReactDOM as any).unmountComponentAtNode) {
 | 经理 | wang_manager | 12345678 | 王经理 |
 | 员工 | wang_worker | 12345678 | 王工 |
 | 员工 | li_audit | 12345678 | 李审计 |
-| 超级管理员 | admin@example.com | ******** | PB Admin |
+| 超级管理员 | admin@example.com | ******** | PB Admin（部署时自行设置） |
 
 ---
 

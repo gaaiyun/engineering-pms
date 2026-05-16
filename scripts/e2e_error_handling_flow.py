@@ -133,7 +133,7 @@ async def inject_auth(page: Page, auth: dict, force_local_pb: bool = True) -> No
     """通过 localStorage 注入登录态。
 
     force_local_pb: 默认覆盖 pb_url 到 127.0.0.1:8090，因为前端 pocketbase.ts
-    在 localhost 模式下硬编码走线上 127.0.0.1:8090（用于 APK），但本测试
+    在 localhost 模式下默认走线上 PRODUCTION_PB_URL（用于 APK），但本测试
     需要前端连本地 PB（我们建的测试数据都在本地）。
     """
     payload = json.dumps({"token": auth["token"], "model": auth["record"]})

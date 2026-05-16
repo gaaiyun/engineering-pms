@@ -2,12 +2,15 @@ import PocketBase, { BaseAuthStore } from 'pocketbase'
 import type { RecordModel } from 'pocketbase'
 
 // 线上 PocketBase 地址（APK / localhost 均走此地址）
-const PRODUCTION_PB_URL = 'http://127.0.0.1:8090'
+// ⚠️ 部署到自己服务器时，请通过 VITE_PB_URL 环境变量覆盖此值。
+//    本地开发：在 frontend/.env.local 中设 VITE_PB_URL=http://YOUR_SERVER:8090
+//    生产构建：CI/CD 注入 VITE_PB_URL=https://your-domain.com/pb
+const PRODUCTION_PB_URL = (import.meta.env.VITE_PB_URL || 'http://127.0.0.1:8090')
 
 // 连接策略（按优先级）：
 // 1) 构建时注入：VITE_PB_URL（适用于 App 打包/多环境）
 // 2) localStorage 覆盖：pb_url（运行时临时调试）
-// 3) localhost / 127.0.0.1 → 线上地址（Capacitor WebView 和本地开发共用）
+// 3) localhost / 127.0.0.1 → PRODUCTION_PB_URL（Capacitor WebView 和本地开发共用）
 // 4) https 站点 → 同域 /pb（Nginx 反代）
 // 5) http 站点 → 同域名 :8090
 

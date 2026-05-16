@@ -346,7 +346,7 @@ async def run_for_viewport(
         has_touch=is_mobile,
     )
     # 修 J-3 false-positive：frontend/src/lib/pocketbase.ts 在 localhost 时
-    # 强制走生产 PB（127.0.0.1:8090），导致 first_project_id（来自本地 PB）
+    # 强制走 PRODUCTION_PB_URL，导致 first_project_id（来自本地 PB）
     # 在生产 PB 不存在 → 'kanban 加载失败'。注入 pb_url 让浏览器与脚本共用
     # 本地 PB 数据源。
     import json as _json

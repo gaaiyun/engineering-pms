@@ -62,12 +62,12 @@ const USERS = [
     { username: 'sun_safe', name: '孙安检员', role: 'employee', dept: '工程部', position: '安全管理员' },
     { username: 'wu_design', name: '吴设计师', role: 'employee', dept: '工程部', position: '设计师' },
     { username: 'huang_sup', name: '黄监理', role: 'employee', dept: '工程部', position: '监理工程师' },
-    // 无部门员工（2025-03 新增）
-    { username: 'hua_feng', name: '华峰', role: 'manager', dept: '', position: '' },
-    { username: 'liang_ruming', name: '梁汝铭', role: 'employee', dept: '', position: '' },
-    { username: 'peng_zhen', name: '彭镇', role: 'employee', dept: '', position: '' },
-    { username: 'wu_qilong', name: '吴奇龙', role: 'employee', dept: '', position: '' },
-    { username: 'wu_zhangsen', name: '吴彰森', role: 'manager', dept: '', position: '' },
+    // 无部门员工（演示用，可在 PB 后台改名）
+    { username: 'mgr_a', name: '经理A', role: 'manager', dept: '', position: '' },
+    { username: 'emp_b', name: '员工B', role: 'employee', dept: '', position: '' },
+    { username: 'emp_c', name: '员工C', role: 'employee', dept: '', position: '' },
+    { username: 'emp_d', name: '员工D', role: 'employee', dept: '', position: '' },
+    { username: 'mgr_e', name: '经理E', role: 'manager', dept: '', position: '' },
 ];
 
 // ============ 项目数据 ============

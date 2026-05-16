@@ -51,3 +51,4 @@ _archive/
 # Temp PB data screenshots / debug
 docs/superpowers/qa-screenshots/*.json
 docs/superpowers/qa-screenshots/_debug_*.png
+_secrets_to_redact.txt
