@@ -1,0 +1,48 @@
+=== E2E Blocker test starting, prefix=E2E-Blocker-1778906160- ===
+manager=张经理 / employee=赵工长
+help_users: 陈资料, 李经理
+
+--- B1_create_task ---
+  PASS: ok
+    · project: 智慧产业园弱电项目 (3oiyzrhy13gjaut)
+    · task created: 31fz6iocctybtgp status=pending
+    · after employee start: status=in_progress
+
+--- B2_mark_blocked ---
+  PASS: ok
+    · audit_log mark_blocked created
+    · notifications sent to help_users: [('chen_doc', '0luywnl0xpx6h9s'), ('mgr_li', '3z139x7f7p2jm0e')]
+    · task after: status=blocked blocker={'expected_resolve': '2026-05-25 12:00:00.000Z', 'need_help_from': ['o4avodgw2fs9x63', 'yclq2nmebp7qj8u'], 'reason_detail': '等待客户提供详细规格说明,无法继续推进', 'reason_type': 'awaiting_input'}
+
+--- B3_verify_persistence ---
+  PASS: ok
+    · persisted blocker (raw): {'expected_resolve': '2026-05-25 12:00:00.000Z', 'need_help_from': ['o4avodgw2fs9x63', 'yclq2nmebp7qj8u'], 'reason_detail': '等待客户提供详细规格说明,无法继续推进', 'reason_type': 'awaiting_input'}
+    · blocker field persisted correctly
+    · notif distribution: [{'user': 'chen_doc', 'count': 1}, {'user': 'mgr_li', 'count': 1}]
+    · audit_logs mark_blocked: 1
+    · [Bug#8 probe] wrote rollback_to='rollbacktest123', PB persisted = 'rollbacktest123'
+    · [Bug #8 partial] PB 持久化 rollback_to OK; 但 Task.blocker 类型未声明，useUnblockTask 不读它
+
+--- B4_unblock ---
+  PASS: ok
+    · before unblock: status=blocked blocker_present=True
+    · audit_log unblock_task created
+    · unblock-resolve notifications sent: 2
+    · after unblock: status=in_progress blocker=None
+
+--- B5_verify_unblock ---
+  WARN: ok
+    · final task: status=in_progress blocker=None
+    · audit_logs unblock_task: 1
+    · B5 checking notif for help_ids=['o4avodgw2fs9x63', 'yclq2nmebp7qj8u'] task_id=31fz6iocctybtgp
+    · user o4avodgw2fs9x63 notif (total=2): [('task_update', '卡点解除'), ('blocker_reported', '有任务遇到卡点需要您协助')]
+    · user yclq2nmebp7qj8u notif (total=2): [('task_update', '卡点解除'), ('blocker_reported', '有任务遇到卡点需要您协助')]
+    · manager rejected mark_blocked audit_log 16icqhsnrg54jxf
+    · task status after audit reject: in_progress blocker=None
+    ! [BUG] useUpdateAuditLogStatus (api.ts:1573-1672) 拒绝 mark_blocked 时无 action_type 特殊处理 — task.status/blocker 字段保持不变，与拒绝 mark_complete 不一致；若任务仍在 blocked 状态，员工被拒后仍无法恢复
+
+=== cleanup ===
+  E2E-Blocker tasks: 1
+  cleanup done
+
+=== 4 PASS, 1 WARN, 0 FAIL / total=5 ===

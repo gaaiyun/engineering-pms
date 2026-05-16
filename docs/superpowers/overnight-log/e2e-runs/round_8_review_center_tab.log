@@ -1,0 +1,48 @@
+=== E2E test starting, prefix=E2E-Test-1778904660- ===
+manager: 张经理 / employee: 赵工长
+
+--- s1_create_and_assign ---
+  PASS: ok
+    · project: 智慧产业园弱电项目 (3oiyzrhy13gjaut)
+    · task created: ngtf7gbh1vn7hd9 status=pending
+    · notification manually created (mimicking frontend mutation)
+    · notifications for this task: 1
+    · task visible in 待办 tab: True
+
+--- s2_accept_and_start ---
+  PASS: ok
+    · no UI button found — fallback to PB API status change
+    · task status after: in_progress
+    · audit_logs for task: 0
+
+--- s3_complete_handoff ---
+  PASS: ok
+    · handoff created: sbearabf7bq6dls status=pending
+    · handoff text present in review-center?tab=handoff: True
+
+--- s4_approve_handoff ---
+  PASS: ok
+    · handoff status: approved, task status: completed, completed_at: 2026-05-16 04:11:28.467Z
+
+--- s5_reject_handoff ---
+  PASS: ok
+    · S5 task created: 03kt1n0h80duyiu
+    · S5 handoff: 3plm93x24bb6wdg
+    · handoff status: rejected, review_note: E2E S5 测试拒绝场景, task status: in_progress
+    · employee notifications: 13 total, 0 rejection-related
+
+--- s6_batch_complete ---
+  PASS: ok
+    · created 3 tasks: ['sc50o8uuw3iyl6i', 'unh3a2rquh0jrp1', '9i24p2l4eitvpkj']
+    · found 9 checkboxes on page
+    · E2E S6 row checkboxes: 3
+    · bulk bar visible
+    · clicked dialog confirm
+    · 3 task statuses: ['completed', 'completed', 'completed']
+    · audit_logs for bulk_mark_complete: 3 (expected 3)
+
+=== cleanup ===
+  E2E tasks: 5
+  cleanup done
+
+=== 6/6 PASS ===
