@@ -1,0 +1,131 @@
+[
+  {
+    "name": "P1_patch_foreign_task",
+    "verdict": "PASS",
+    "summary": "PB blocked unauthorized PATCH (HTTP 404); task unchanged.",
+    "details": [
+      "created task 0eu6q9g5crxwm7i assignees=[chen_doc]",
+      "PATCH by employee A → HTTP 404",
+      "stage_name after attempt: 'E2E-Perm-1778907961-P1-T-assign-to-B-62948'"
+    ],
+    "warnings": [],
+    "raw": {
+      "patch_status": 404,
+      "patch_body": "{\"code\":404,\"message\":\"The requested resource wasn't found.\",\"data\":{}}\n"
+    }
+  },
+  {
+    "name": "P2_employee_delete_task",
+    "verdict": "PASS",
+    "summary": "PB blocked employee DELETE (HTTP 404).",
+    "details": [
+      "created task fnrnhix66j6ksgf assigned to employee A",
+      "DELETE by employee A → HTTP 404",
+      "task still exists: True"
+    ],
+    "warnings": [],
+    "raw": {
+      "delete_status": 404,
+      "delete_body": "{\"code\":404,\"message\":\"The requested resource wasn't found.\",\"data\":{}}\n"
+    }
+  },
+  {
+    "name": "P3_audit_log_forge_operator",
+    "verdict": "PASS",
+    "summary": "PB rejected forged operator (HTTP 400); self-operator OK.",
+    "details": [
+      "forge POST operator=chen_doc → HTTP 400",
+      "self-operator POST → HTTP 200"
+    ],
+    "warnings": [],
+    "raw": {
+      "forge_status": 400,
+      "forge_body": "{\"code\":400,\"message\":\"Failed to create record.\",\"data\":{}}\n"
+    }
+  },
+  {
+    "name": "P4_notification_to_other_user",
+    "verdict": "PASS",
+    "summary": "PB allows A to create notif for B (createRule = auth.id != ''). 前端业务可用。",
+    "details": [
+      "A → B notification POST → HTTP 200"
+    ],
+    "warnings": [
+      "当前 notifications.createRule = '@request.auth.id != \"\"'，任何登录用户能给任意用户发通知 — 可被滥用做骚扰/钓鱼"
+    ],
+    "raw": {
+      "post_status": 200,
+      "post_body": "{\"collectionId\":\"purhahujq0wmfxe\",\"collectionName\":\"notifications\",\"content\":\"A 发给 B 的通知，前端业务需要这个\",\"created\":\"2026-05-16 05:06:03.007Z\",\"id\":\"lc46paof8f411kt\",\"is_read\":false,\"link_id\":\"fakeid12345\",\"link_type\":\"task\",\"read_at\":\"\",\"title\":\"E2E-Perm-1778907961-P4 test\",\"type\":\"task_update\",\"updated\":"
+    }
+  },
+  {
+    "name": "P5_unblock_rollback_h1",
+    "verdict": "FAIL",
+    "summary": "H-1 CONFIRMED: A 解卡点后 useUnblockTask 尝试 PATCH X，PB 返回 HTTP 404（A 不在 X.assignees），前端 try/catch 静默吞掉 → X.status 永远停留 in_progress 而非 completed。",
+    "details": [
+      "X created: id=7nh133b105vfzj7 assignee=B status=completed",
+      "T created: id=biu6zao1e4tb1di assignee=A status=blocked blocker.rollback_to=X",
+      "X reset to in_progress via admin (simulating prior rollback)",
+      "A PATCH T (unblock) → HTTP 200",
+      "A PATCH X (rollback to completed) → HTTP 404",
+      "X final status: in_progress"
+    ],
+    "warnings": [
+      "修复方案：either (a) PB hook 拦截 unblock 时由系统代理回写 X.status；或 (b) 前端检测 403 后弹「请联系 X 的负责人手动恢复」提示；或 (c) 把回写权限授给 rollback 源任务的所有 assignees。"
+    ],
+    "raw": {
+      "unblock_T_status": 200,
+      "rollback_X_status": 404,
+      "rollback_X_body": "{\"code\":404,\"message\":\"The requested resource wasn't found.\",\"data\":{}}\n",
+      "X_final_status": "in_progress"
+    }
+  },
+  {
+    "name": "P6_handoff_from_foreign_task",
+    "verdict": "FAIL",
+    "summary": "PB ALLOWS A to create handoff from B's task — handoffs.createRule 太宽（@request.auth.id != \"\"），应限制为 from_task.assignees ~ auth.id || role in (admin,manager)",
+    "details": [
+      "T created: assignee=B id=fhpb5s5s5lqdfin",
+      "A POST handoff with from_task=B's task → HTTP 200"
+    ],
+    "warnings": [],
+    "raw": {
+      "post_status": 200,
+      "post_body": "{\"approved_task\":\"\",\"collectionId\":\"hnd0ffsv2pms001\",\"collectionName\":\"handoffs\",\"created\":\"2026-05-16 05:06:03.559Z\",\"from_task\":\"fhpb5s5s5lqdfin\",\"id\":\"zuhou4u6jb2p84k\",\"project\":\"9rjdnjwlhzowwk6\",\"proposed_assignees\":[],\"proposed_description\":\"\",\"proposed_due_date\":\"2026-08-01 23:59:59.000Z\",\"proposed_start_date\":\"\",\"proposed_title\":\"E2E-Perm-1778907961-P6 handoff\",\"review_note\":\"\",\"reviewer\":\""
+    }
+  },
+  {
+    "name": "P7_cross_project_task_list",
+    "verdict": "PASS",
+    "summary": "PB listRule 正确隔离: A 看到 0/2 条 proj_B 任务",
+    "details": [
+      "seeded 2 tasks in proj_B=vi63thsrt4usr7l",
+      "A list tasks filter=proj_B → totalItems=0",
+      "admin sees 2 tasks in proj_B"
+    ],
+    "warnings": [],
+    "raw": {
+      "A_list_count": 0,
+      "A_list_items": []
+    }
+  },
+  {
+    "name": "P8_audit_logs_cross_project",
+    "verdict": "FAIL",
+    "summary": "audit_logs 跨项目泄露：A（不在 proj_B members）能看到 proj_B 的 audit_log。当前 listRule = '@request.auth.id != \"\"'，无项目过滤。",
+    "details": [
+      "seed audit_log in proj_B (by B) → HTTP 200",
+      "A sees 2 p8_seed audit_logs; projects = ['9rjdnjwlhzowwk6', 'vi63thsrt4usr7l']"
+    ],
+    "warnings": [
+      "修复建议：listRule 改为 '@request.auth.role = \"admin\" || @request.auth.role = \"manager\" || project.members ~ @request.auth.id || operator = @request.auth.id'"
+    ],
+    "raw": {
+      "A_audit_seen_projects": [
+        "9rjdnjwlhzowwk6",
+        "vi63thsrt4usr7l"
+      ],
+      "A_audit_count": 2
+    }
+  }
+]
