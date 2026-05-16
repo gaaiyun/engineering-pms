@@ -436,7 +436,7 @@ export function useUpdateTask() {
         mutationFn: async ({ id, data }: { id: string; data: Partial<Task> }) => {
             const before = await pb.collection('tasks').getOne<Task>(id)
             const result = await pb.collection('tasks').update<Task>(id, data)
-            // 审计日志
+            // 审计日志 — Bug fix H1（Agent D v2 HIGH）：改 console.warn 不要静默
             await pb.collection('audit_logs').create({
                 project: before.project,
                 task: id,
@@ -444,7 +444,7 @@ export function useUpdateTask() {
                 operator: pb.authStore.model?.id,
                 before_data: { status: before.status, stage_name: before.stage_name, assignees: before.assignees, deadline: before.deadline },
                 after_data: data,
-            }).catch(() => {})
+            }).catch((err) => console.warn('[audit_logs] update_task create failed:', err))
             // 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
             const changes = []
@@ -676,7 +676,7 @@ export function useRejectHandoff() {
                 action_type: 'reject_handoff',
                 operator: pb.authStore.model?.id,
                 note: reviewNote,
-            }).catch(() => {})
+            }).catch((err) => console.warn('[audit_logs] reject_handoff create failed:', err))
 
             // 通知提交人
             const reviewer = pb.authStore.model
@@ -1101,7 +1101,7 @@ export function useCreateProject() {
                 action_type: 'create_project',
                 operator: pb.authStore.model?.id,
                 after_data: { name: data.name, manager: data.manager, members: data.members },
-            }).catch(() => {})
+            }).catch((err) => console.warn('[audit_logs] create_project failed:', err))
             // 通知项目成员
             await notifyProjectMembers(project.id, '项目创建', `${userName} 创建了新项目「${data.name}」`, 'project_update', pb.authStore.model?.id).catch(() => {})
             return project
@@ -1130,7 +1130,7 @@ export function useDeleteProject() {
                     project: projectId, action_type: 'delete_project',
                     operator: pb.authStore.model?.id,
                     before_data: { name: project.name, status: project.status },
-                }).catch(() => {})
+                }).catch((err) => console.warn('[audit_logs] delete_project failed:', err))
                 // ⚠️ Bug fix P0-5（Agent C 数据流审计发现）：级联清理项目所有关联记录。
                 // PB cascadeDelete=false，仅删 tasks 会留下：
                 //  - handoffs (project=projectId) → ReviewCenter 残留幽灵审批
@@ -1209,7 +1209,7 @@ export function useDeleteTask() {
                 project: task.project, task: taskId, action_type: 'delete_task',
                 operator: pb.authStore.model?.id,
                 before_data: { stage_name: task.stage_name, status: task.status, assignees: task.assignees },
-            }).catch(() => {})
+            }).catch((err) => console.warn('[audit_logs] delete_task failed:', err))
             // 通知项目全员
             if (task.project) {
                 notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', pb.authStore.model?.id).catch(() => {})
