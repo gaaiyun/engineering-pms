@@ -1,24 +1,43 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import DataImportCenter from './pages/admin/DataImportCenter'
-import TaskCreate from './pages/TaskCreate'
-import TaskDetail from './pages/TaskDetail'
-import ProjectTimeline from './pages/ProjectTimeline'
-import ProjectKanban from './pages/ProjectKanban'
-import MyProjects from './pages/MyProjects'
-import MyTasks from './pages/MyTasks'
-import SettingsPage from './pages/SettingsPage'
-import Notifications from './pages/Notifications'
-import ReviewCenter from './pages/ReviewCenter'
 import { pb } from './lib/pocketbase'
 import { useNotificationAlerts } from './lib/useNotificationAlerts'
 import { AppShell } from './components/layout'
 import { initRealtimeBridge } from './lib/realtimeBridge'
 import { useQueryClient } from '@tanstack/react-query'
+
+// ⚠️ Bundle optimization（Agent D 建议 — 路由级 React.lazy）：
+// 把 admin-only / 低频访问的页面切成动态 chunk，员工端首屏不再白载这些代码。
+// 预估 gzip 减少约 100-200 KB（依实际 chunk 体积）。
+// Login/Register/Home 保持同步 import（首屏关键路径）。
+const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'))
+const DataImportCenter = React.lazy(() => import('./pages/admin/DataImportCenter'))
+const TaskCreate = React.lazy(() => import('./pages/TaskCreate'))
+const TaskDetail = React.lazy(() => import('./pages/TaskDetail'))
+const ProjectTimeline = React.lazy(() => import('./pages/ProjectTimeline'))
+const ProjectKanban = React.lazy(() => import('./pages/ProjectKanban'))
+const MyProjects = React.lazy(() => import('./pages/MyProjects'))
+const MyTasks = React.lazy(() => import('./pages/MyTasks'))
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage'))
+const Notifications = React.lazy(() => import('./pages/Notifications'))
+const ReviewCenter = React.lazy(() => import('./pages/ReviewCenter'))
+
+// 路由 Suspense fallback — 简洁的加载指示
+const PageFallback = () => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '60dvh',
+    color: '#94a3b8',
+    fontSize: 14,
+  }}>
+    加载中...
+  </div>
+)
 
 // 简单的路由保护组件
 const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
@@ -129,6 +148,7 @@ function App() {
       <NotifyFlashOverlay />
       <GlobalNotificationProvider />
       <RealtimeBridgeProvider />
+      <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -258,6 +278,7 @@ function App() {
         <Route path="/" element={<DefaultRedirect />} />
         <Route path="*" element={<DefaultRedirect />} />
       </Routes>
+      </Suspense>
     </Router>
   )
 }
