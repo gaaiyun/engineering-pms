@@ -826,6 +826,42 @@ export function useCurrentUser() {
 }
 
 // ========== 通知 Hooks ==========
+function escapePocketBaseFilterValue(value: string) {
+    return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+export function buildNotificationFilter(userId: string, tab = 'all') {
+    const userFilter = `user="${escapePocketBaseFilterValue(userId)}"`
+
+    if (tab === 'all') return userFilter
+    if (tab === 'unread') return `${userFilter} && is_read=false`
+    if (tab === 'task') {
+        return `${userFilter} && (type~"task" || type="step_updated" || type="overdue" || type="audit_rejected" || type="progress_update")`
+    }
+    if (tab === 'handoff') return `${userFilter} && type~"handoff"`
+    if (tab === 'blocker') return `${userFilter} && (type~"blocker" || type="escalation")`
+    if (tab === 'project') return `${userFilter} && type~"project"`
+
+    return `${userFilter} && type="${escapePocketBaseFilterValue(tab)}"`
+}
+
+export function useNotificationPage(userId: string, tab = 'all', page = 1, perPage = 20) {
+    const safePage = Math.max(1, page)
+    const safePerPage = Math.max(1, perPage)
+
+    return useQuery({
+        queryKey: ['notifications', userId, 'page', tab, safePage, safePerPage],
+        queryFn: async () => {
+            return await pb.collection('notifications').getList<Notification>(safePage, safePerPage, {
+                filter: buildNotificationFilter(userId, tab),
+                sort: '-created',
+            })
+        },
+        enabled: !!userId && pb.authStore.isValid,
+        staleTime: 10 * 1000,
+    })
+}
+
 export function useNotifications(userId: string) {
     return useQuery({
         queryKey: queryKeys.notifications(userId),

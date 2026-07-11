@@ -12,7 +12,12 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Toast, Dialog, Tabs, SwipeAction } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
-import { invalidateNotificationQueries, useNotifications as useNotificationsQuery } from '../lib/api'
+import {
+  buildNotificationFilter,
+  invalidateNotificationQueries,
+  useNotificationPage,
+  useUnreadNotificationCount,
+} from '../lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useBreakpoint } from '../lib/useBreakpoint'
 
@@ -28,31 +33,33 @@ interface Notification {
   user: string
 }
 
+const PAGE_SIZE = 20
+
 export default function Notifications() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const userId = pb.authStore.model?.id || ''
-  const { data: rqNotifications = [], isLoading: loading } = useNotificationsQuery(userId)
-  const notifications = rqNotifications as unknown as Notification[]
   const [activeTab, setActiveTab] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const { data: notificationPage, isLoading: loading } = useNotificationPage(userId, activeTab, currentPage, PAGE_SIZE)
+  const { data: unreadTotal = 0 } = useUnreadNotificationCount(userId)
+  const notifications = useMemo(
+    () => (notificationPage?.items || []) as unknown as Notification[],
+    [notificationPage?.items],
+  )
+  const totalItems = notificationPage?.totalItems || 0
+  const totalPages = Math.max(1, notificationPage?.totalPages || 1)
   // Bug fix J-1: 桌面端 AppShell 已有 Sidebar/TopBar，移动版 page header
   // 重复且 ← 在桌面端无意义。仅 mobile 渲染顶部 header。
   const bp = useBreakpoint()
   const isMobile = bp === 'mobile'
 
-  const filteredNotifications = useMemo(() => {
-    if (activeTab === 'all') return notifications
-    if (activeTab === 'unread') return notifications.filter(n => !n.is_read)
-    if (activeTab === 'task') return notifications.filter(n => n.type?.startsWith('task') || n.type === 'step_updated' || n.type === 'overdue' || n.type === 'audit_rejected' || n.type === 'progress_update')
-    if (activeTab === 'handoff') return notifications.filter(n => n.type?.startsWith('handoff'))
-    if (activeTab === 'blocker') return notifications.filter(n => n.type?.startsWith('blocker') || n.type === 'escalation')
-    if (activeTab === 'project') return notifications.filter(n => n.type?.startsWith('project'))
-    return notifications.filter(n => n.type === activeTab)
-  }, [notifications, activeTab])
+  const unreadCount = Number(unreadTotal || 0)
 
-  const unreadCount = useMemo(() => 
-    notifications.filter(n => !n.is_read).length
-  , [notifications])
+  const changeTab = (key: string) => {
+    setActiveTab(key)
+    setCurrentPage(1)
+  }
 
   const markRead = async (notif: Notification) => {
     if (notif.is_read) return
@@ -65,7 +72,10 @@ export default function Notifications() {
   }
 
   const markAllRead = async () => {
-    const unread = notifications.filter(n => !n.is_read)
+    const unread = await pb.collection('notifications').getFullList<Notification>({
+      filter: buildNotificationFilter(userId, 'unread'),
+      fields: 'id',
+    })
     if (unread.length === 0) {
       Toast.show({ content: '没有未读消息' })
       return
@@ -175,7 +185,7 @@ export default function Notifications() {
     const groupMap = new Map<string, Notification[]>()
     const order = ['今天', '昨天', '本周', '更早']
 
-    for (const n of filteredNotifications) {
+    for (const n of notifications) {
       const label = getTimeGroup(n.created)
       if (!groupMap.has(label)) groupMap.set(label, [])
       groupMap.get(label)!.push(n)
@@ -188,7 +198,140 @@ export default function Notifications() {
       }
     }
     return groups
-  }, [filteredNotifications])
+  }, [notifications])
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        marginTop: 20,
+        paddingBottom: 16,
+      }}>
+        <button
+          disabled={currentPage <= 1 || loading}
+          onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+          style={{
+            border: '1px solid #dbeafe',
+            background: currentPage <= 1 || loading ? '#f8fafc' : 'white',
+            color: currentPage <= 1 || loading ? '#cbd5e1' : '#2563eb',
+            borderRadius: 10,
+            padding: '8px 14px',
+            fontWeight: 700,
+            cursor: currentPage <= 1 || loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          上一页
+        </button>
+        <span style={{ color: '#64748b', fontSize: 13, fontWeight: 700 }}>
+          {currentPage} / {totalPages} · 共 {totalItems} 条
+        </span>
+        <button
+          disabled={currentPage >= totalPages || loading}
+          onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+          style={{
+            border: '1px solid #dbeafe',
+            background: currentPage >= totalPages || loading ? '#f8fafc' : 'white',
+            color: currentPage >= totalPages || loading ? '#cbd5e1' : '#2563eb',
+            borderRadius: 10,
+            padding: '8px 14px',
+            fontWeight: 700,
+            cursor: currentPage >= totalPages || loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          下一页
+        </button>
+      </div>
+    )
+  }
+
+  const renderNotificationCard = (notif: Notification, index: number) => {
+    const card = (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, x: -80 }}
+        transition={{ delay: index * 0.03 }}
+        style={{
+          background: 'white',
+          borderRadius: 14,
+          padding: 16,
+          display: 'flex',
+          alignItems: 'start',
+          gap: 12,
+          borderLeft: !notif.is_read ? '4px solid #3b82f6' : '4px solid transparent',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+        onClick={() => handleClick(notif)}
+      >
+        {!notif.is_read && (
+          <div style={{
+            position: 'absolute', top: 16, right: 16,
+            width: 8, height: 8, borderRadius: '50%', background: '#3b82f6',
+          }} />
+        )}
+
+        <div style={{ marginTop: 2 }}>{getIcon(notif.type)}</div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700, fontSize: 15, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {notif.title}
+            </span>
+            <span style={{ fontSize: 10, color: '#94A3B8', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontWeight: 600, flexShrink: 0 }}>
+              {getTypeLabel(notif.type)}
+            </span>
+          </div>
+
+          <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {notif.content}
+          </div>
+
+          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>{formatTime(notif.created)}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); deleteNotification(notif) }}
+              style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 4, display: 'flex' }}
+            >
+              <IoTrashOutline size={16} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    )
+
+    if (!isMobile) {
+      return <div key={notif.id}>{card}</div>
+    }
+
+    return (
+      <div key={notif.id} style={{ overflow: 'hidden', borderRadius: 14 }}>
+        <SwipeAction
+          rightActions={[
+            {
+              key: 'delete',
+              text: '删除',
+              color: 'danger',
+              onClick: () => deleteNotification(notif),
+            },
+            ...(!notif.is_read ? [{
+              key: 'read',
+              text: '已读',
+              color: 'primary' as const,
+              onClick: () => markRead(notif),
+            }] : []),
+          ]}
+        >
+          {card}
+        </SwipeAction>
+      </div>
+    )
+  }
 
   return (
     <div className="page" style={{ background: '#f8fafc' }}>
@@ -250,14 +393,14 @@ export default function Notifications() {
         {/* Tabs */}
         <Tabs
           activeKey={activeTab}
-          onChange={setActiveTab}
+          onChange={changeTab}
           style={{
             '--title-font-size': '13px',
             '--active-title-color': '#3b82f6',
             '--active-line-color': '#3b82f6',
           }}
         >
-          <Tabs.Tab title={`全部 (${notifications.length})`} key="all" />
+          <Tabs.Tab title={activeTab === 'all' ? `全部 (${totalItems})` : '全部'} key="all" />
           <Tabs.Tab title={`未读 (${unreadCount})`} key="unread" />
           <Tabs.Tab title="任务" key="task" />
           <Tabs.Tab title="项目" key="project" />
@@ -278,7 +421,7 @@ export default function Notifications() {
         }}>
           <Tabs
             activeKey={activeTab}
-            onChange={setActiveTab}
+            onChange={changeTab}
             style={{ '--title-font-size': '14px' }}
           >
             <Tabs.Tab title="全部" key="all" />
@@ -297,7 +440,7 @@ export default function Notifications() {
           <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
             加载中...
           </div>
-        ) : filteredNotifications.length === 0 ? (
+        ) : notifications.length === 0 ? (
           <div style={{ textAlign: 'center', marginTop: 60, color: '#94a3b8' }}>
             <IoNotificationsOutline size={64} style={{ opacity: 0.2, marginBottom: 16 }} />
             <div style={{ fontSize: 15, fontWeight: 600 }}>暂无消息</div>
@@ -318,83 +461,12 @@ export default function Notifications() {
                     {group.label}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {group.items.map((notif, index) => (
-                      <SwipeAction
-                        key={notif.id}
-                        rightActions={[
-                          {
-                            key: 'delete',
-                            text: '删除',
-                            color: 'danger',
-                            onClick: () => deleteNotification(notif),
-                          },
-                          ...(!notif.is_read ? [{
-                            key: 'read',
-                            text: '已读',
-                            color: 'primary' as const,
-                            onClick: () => markRead(notif),
-                          }] : []),
-                        ]}
-                      >
-                        <motion.div
-                          initial={{ opacity: 0, y: 16 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, x: -80 }}
-                          transition={{ delay: index * 0.03 }}
-                          style={{
-                            background: 'white',
-                            borderRadius: 14,
-                            padding: 16,
-                            display: 'flex',
-                            alignItems: 'start',
-                            gap: 12,
-                            borderLeft: !notif.is_read ? '4px solid #3b82f6' : '4px solid transparent',
-                            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                            cursor: 'pointer',
-                            position: 'relative',
-                          }}
-                          onClick={() => handleClick(notif)}
-                        >
-                          {!notif.is_read && (
-                            <div style={{
-                              position: 'absolute', top: 16, right: 16,
-                              width: 8, height: 8, borderRadius: '50%', background: '#3b82f6',
-                            }} />
-                          )}
-
-                          <div style={{ marginTop: 2 }}>{getIcon(notif.type)}</div>
-
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                              <span style={{ fontWeight: 700, fontSize: 15, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                {notif.title}
-                              </span>
-                              <span style={{ fontSize: 10, color: '#94A3B8', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontWeight: 600, flexShrink: 0 }}>
-                                {getTypeLabel(notif.type)}
-                              </span>
-                            </div>
-
-                            <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                              {notif.content}
-                            </div>
-
-                            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span>{formatTime(notif.created)}</span>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); deleteNotification(notif) }}
-                                style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 4, display: 'flex' }}
-                              >
-                                <IoTrashOutline size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      </SwipeAction>
-                    ))}
+                    {group.items.map((notif, index) => renderNotificationCard(notif, index))}
                   </div>
                 </div>
               ))}
             </div>
+            {renderPagination()}
           </AnimatePresence>
         )}
       </div>
