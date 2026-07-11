@@ -7,33 +7,43 @@ import type { RecordModel } from 'pocketbase'
 //    生产构建：CI/CD 注入 VITE_PB_URL=https://your-domain.com/pb
 const PRODUCTION_PB_URL = (import.meta.env.VITE_PB_URL || 'http://127.0.0.1:8090')
 
-// 连接策略（按优先级）：
-// 1) 构建时注入：VITE_PB_URL（适用于 App 打包/多环境）
-// 2) localStorage 覆盖：pb_url（运行时临时调试）
-// 3) localhost / 127.0.0.1 → PRODUCTION_PB_URL（Capacitor WebView 和本地开发共用）
-// 4) https 站点 → 同域 /pb（Nginx 反代）
-// 5) http 站点 → 同域名 :8090
+type BrowserLocationLike = Pick<Location, 'protocol' | 'hostname' | 'origin'>
 
-function getPocketBaseUrl(): string {
-  const envUrl = (import.meta.env.VITE_PB_URL || '').trim()
+type ResolvePocketBaseUrlOptions = {
+  envUrl?: string
+  storedUrl?: string
+  location?: BrowserLocationLike
+}
+
+// 连接策略：
+// 1) localhost / 127.0.0.1：允许 localStorage.pb_url 临时覆盖，便于本地审计/切换临时 PB
+// 2) 构建时注入：VITE_PB_URL（适用于 APK / 多环境）
+// 3) 非本地 Web 站点：默认同源 /pb（由 Nginx / 网关反代 PocketBase）
+// 4) 兜底：本机 8090
+export function resolvePocketBaseUrl(options: ResolvePocketBaseUrlOptions): string {
+  const envUrl = (options.envUrl || '').trim()
+  const storedUrl = (options.storedUrl || '').trim()
+  const location = options.location
+  const hostname = location?.hostname || ''
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+
+  if (isLocalhost && storedUrl) return storedUrl
   if (envUrl) return envUrl
 
-  if (typeof window !== 'undefined') {
-    const storedUrl = (window.localStorage.getItem('pb_url') || '').trim()
-    if (storedUrl) return storedUrl
-
-    const { protocol, hostname, origin } = window.location
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
-
-    // Capacitor WebView 以 http://localhost 加载，直接走线上地址
+  if (location) {
     if (isLocalhost) return PRODUCTION_PB_URL
-
-    if (protocol === 'https:') return `${origin}/pb`
-
-    return `${protocol}//${hostname}:8090`
+    return `${location.origin}/pb`
   }
 
   return 'http://127.0.0.1:8090'
+}
+
+function getPocketBaseUrl(): string {
+  return resolvePocketBaseUrl({
+    envUrl: import.meta.env.VITE_PB_URL,
+    storedUrl: typeof window !== 'undefined' ? window.localStorage.getItem('pb_url') || '' : '',
+    location: typeof window !== 'undefined' ? window.location : undefined,
+  })
 }
 
 export const PB_URL = getPocketBaseUrl()
