@@ -1,17 +1,34 @@
 import { Outlet } from 'react-router-dom'
-import { useBreakpoint } from '../../lib/useBreakpoint'
+import { useAppSurface } from '../../lib/useAppSurface'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { MobileNavigation } from './MobileNavigation'
 
 export function AppShell() {
-  const bp = useBreakpoint()
+  const surface = useAppSurface()
 
-  // 移动端：透传，不接管布局（Home.tsx 继续渲染底部 TabBar）
-  if (bp === 'mobile') {
-    return <Outlet />
+  if (surface === 'compact') {
+    return (
+      <div
+        data-shell="compact"
+        style={{
+          height: '100dvh',
+          width: '100vw',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          background: '#f8fafc',
+        }}
+      >
+        <main style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <Outlet />
+        </main>
+        <MobileNavigation />
+      </div>
+    )
   }
 
-  const collapsed = bp === 'tablet'
+  const collapsed = surface === 'sidebar-collapsed'
 
   return (
     <div

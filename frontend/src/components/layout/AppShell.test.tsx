@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
 
-const mockBp = vi.hoisted(() => vi.fn())
-vi.mock('../../lib/useBreakpoint', () => ({
-  useBreakpoint: mockBp,
+const mockSurface = vi.hoisted(() => vi.fn())
+vi.mock('../../lib/useAppSurface', () => ({
+  useAppSurface: mockSurface,
 }))
 
 vi.mock('../../lib/pocketbase', () => ({
@@ -37,42 +37,53 @@ function renderShell(initialEntries: string[] = ['/app']) {
 }
 
 beforeEach(() => {
-  mockBp.mockReset()
+  mockSurface.mockReset()
 })
 
 describe('AppShell', () => {
-  it('renders only Outlet on mobile (no sidebar)', () => {
-    mockBp.mockReturnValue('mobile')
+  it('compact 端渲染唯一底部导航，不渲染侧栏与顶栏', () => {
+    mockSurface.mockReturnValue('compact')
     renderShell()
     expect(screen.getByTestId('content')).toBeInTheDocument()
-    expect(screen.queryByLabelText('主导航')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('底部导航')).toBeInTheDocument()
+    expect(screen.queryByLabelText('桌面主导航')).not.toBeInTheDocument()
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('navigation')).toHaveLength(1)
+    expect(screen.getByText('工作台')).toBeInTheDocument()
+    expect(screen.getByText('任务')).toBeInTheDocument()
+    expect(screen.getByText('项目')).toBeInTheDocument()
+    expect(screen.getByText('通知')).toBeInTheDocument()
+    expect(screen.getByText('我的')).toBeInTheDocument()
   })
 
-  it('renders sidebar + topbar on tablet (collapsed)', () => {
-    mockBp.mockReturnValue('tablet')
+  it('键鼠小窗口渲染折叠侧栏和顶栏', () => {
+    mockSurface.mockReturnValue('sidebar-collapsed')
     renderShell()
-    const nav = screen.getByLabelText('主导航')
+    const nav = screen.getByLabelText('桌面主导航')
     expect(nav).toBeInTheDocument()
     expect(nav).toHaveAttribute('data-collapsed', 'true')
+    expect(screen.getAllByRole('navigation')).toHaveLength(1)
   })
 
-  it('renders sidebar + topbar on desktop (expanded)', () => {
-    mockBp.mockReturnValue('desktop')
+  it('桌面渲染完整侧栏和顶栏', () => {
+    mockSurface.mockReturnValue('sidebar-expanded')
     renderShell()
-    const nav = screen.getByLabelText('主导航')
+    const nav = screen.getByLabelText('桌面主导航')
     expect(nav).toHaveAttribute('data-collapsed', 'false')
+    expect(screen.getAllByRole('navigation')).toHaveLength(1)
   })
 
   it('shows notification badge with unread count', () => {
-    mockBp.mockReturnValue('desktop')
+    mockSurface.mockReturnValue('sidebar-expanded')
     renderShell()
     expect(screen.getByTestId('badge')).toHaveAttribute('data-content', '3')
   })
 
-  it('renders admin-only items when user is admin', () => {
-    mockBp.mockReturnValue('desktop')
+  it('管理员显示审核中心和系统管理，不再显示管理后台', () => {
+    mockSurface.mockReturnValue('sidebar-expanded')
     renderShell()
-    expect(screen.getByText('管理后台')).toBeInTheDocument()
     expect(screen.getByText('审核中心')).toBeInTheDocument()
+    expect(screen.getByText('系统管理')).toBeInTheDocument()
+    expect(screen.queryByText('管理后台')).not.toBeInTheDocument()
   })
 })

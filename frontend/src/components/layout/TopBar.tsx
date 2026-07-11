@@ -64,7 +64,7 @@ export function TopBar() {
 
       <button
         type="button"
-        onClick={() => navigate('/settings')}
+        onClick={() => navigate('/me')}
         style={{
           background: 'transparent',
           border: 'none',

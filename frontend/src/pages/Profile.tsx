@@ -6,12 +6,14 @@ import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutlin
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTasks, useProjects } from '../lib/api'
 import { logoutWithDeviceCleanup } from '../lib/pushNotifications'
+import { canAccessSystem, normalizeAppRole } from '../lib/navigation'
 
 import { AVATAR_STYLE_GROUPS } from '../lib/avatarOptions'
 
 export default function Profile() {
   const navigate = useNavigate()
   const user = pb.authStore.model
+  const appRole = normalizeAppRole(user?.role)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   // 获取真实数据
@@ -288,8 +290,8 @@ export default function Profile() {
             </div>
             <IoChevronForward color="#CBD5E1" />
           </div>
-          {(user?.role === 'admin' || user?.role === 'manager') && (
-            <div className="profile-row" onClick={() => navigate('/admin?tab=users')}>
+          {canAccessSystem(appRole) && (
+            <div className="profile-row" onClick={() => navigate('/system/users')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
                   <IoPeopleOutline size={18} />

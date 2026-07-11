@@ -3,9 +3,15 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
-import { pb } from './lib/pocketbase'
 import { useNotificationAlerts } from './lib/useNotificationAlerts'
 import { AppShell } from './components/layout'
+import {
+  AdminOnlyRoute,
+  DefaultRedirect,
+  LegacyAdminRedirect,
+  ManagerRoute,
+  PrivateRoute,
+} from './components/auth/RouteGuards'
 import { initRealtimeBridge } from './lib/realtimeBridge'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -24,6 +30,7 @@ const MyTasks = React.lazy(() => import('./pages/MyTasks'))
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage'))
 const Notifications = React.lazy(() => import('./pages/Notifications'))
 const ReviewCenter = React.lazy(() => import('./pages/ReviewCenter'))
+const Profile = React.lazy(() => import('./pages/Profile'))
 
 // 路由 Suspense fallback — 简洁的加载指示
 const PageFallback = () => (
@@ -38,42 +45,6 @@ const PageFallback = () => (
     加载中...
   </div>
 )
-
-// 简单的路由保护组件
-const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
-  return pb.authStore.isValid ? children : <Navigate to="/login" />
-}
-
-// 管理员路由保护 - 只允许 admin 角色访问
-const AdminRoute = ({ children }: { children: React.ReactElement }) => {
-  if (!pb.authStore.isValid) return <Navigate to="/login" />
-  const role = (pb.authStore.model as { role?: string } | null)?.role?.toLowerCase()
-  // Manager 也是管理员
-  if (role !== 'admin' && role !== 'manager') {
-    return <Navigate to="/app" />
-  }
-  return children
-}
-
-// 经理路由保护 - 只允许 manager 和 admin 角色访问
-const ManagerRoute = ({ children }: { children: React.ReactElement }) => {
-  if (!pb.authStore.isValid) return <Navigate to="/login" />
-  const role = (pb.authStore.model as { role?: string } | null)?.role?.toLowerCase()
-  if (role !== 'admin' && role !== 'manager') {
-    return <Navigate to="/app" />
-  }
-  return children
-}
-
-// 智能默认跳转 - 根据角色跳转到对应首页
-const DefaultRedirect = () => {
-  if (!pb.authStore.isValid) return <Navigate to="/login" replace />
-  const role = (pb.authStore.model as { role?: string } | null)?.role?.toLowerCase()
-  if (role === 'admin' || role === 'manager') {
-    return <Navigate to="/admin" replace />
-  }
-  return <Navigate to="/app" replace />
-}
 
 import { App as CapacitorApp } from '@capacitor/app'
 
@@ -153,34 +124,65 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* 受保护路由：桌面/平板 wrap AppShell；mobile AppShell 自己透传 */}
+        {/* 受保护路由统一由 AppShell 提供桌面侧栏或 compact 底栏 */}
         <Route element={<AppShell />}>
           <Route
             path="/admin"
-            element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            }
+            element={<LegacyAdminRedirect />}
           />
 
-          {/* 数据导入中心 */}
           <Route
             path="/admin/import"
             element={
-              <AdminRoute>
-                <DataImportCenter />
-              </AdminRoute>
+              <AdminOnlyRoute>
+                <Navigate to="/system/import" replace />
+              </AdminOnlyRoute>
             }
           />
 
-          {/* 经理工作台 - 统一使用 AdminDashboard（manager + admin 均可访问） */}
           <Route
             path="/manager"
+            element={<DefaultRedirect />}
+          />
+
+          <Route
+            path="/system"
             element={
-              <ManagerRoute>
-                <AdminDashboard />
-              </ManagerRoute>
+              <AdminOnlyRoute>
+                <Navigate to="/system/users" replace />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/system/users"
+            element={
+              <AdminOnlyRoute>
+                <AdminDashboard section="users" />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/system/ai"
+            element={
+              <AdminOnlyRoute>
+                <AdminDashboard section="ai" />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/system/import"
+            element={
+              <AdminOnlyRoute>
+                <DataImportCenter />
+              </AdminOnlyRoute>
+            }
+          />
+          <Route
+            path="/system/settings"
+            element={
+              <AdminOnlyRoute>
+                <SettingsPage />
+              </AdminOnlyRoute>
             }
           />
 
@@ -252,6 +254,14 @@ function App() {
             element={
               <PrivateRoute>
                 <SettingsPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/me"
+            element={
+              <PrivateRoute>
+                <Profile />
               </PrivateRoute>
             }
           />

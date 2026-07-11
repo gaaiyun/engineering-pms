@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBreakpoint } from '../lib/useBreakpoint'
 import { Toast, Dialog, Input, Switch } from 'antd-mobile'
@@ -13,7 +13,7 @@ import {
   IoTrashOutline,
   IoCloudOutline
 } from 'react-icons/io5'
-import { pb } from '../lib/pocketbase'
+import { getPocketBaseErrorMessage, pb } from '../lib/pocketbase'
 
 interface SettingRowProps {
   icon: React.ReactNode
@@ -63,11 +63,7 @@ export default function SettingsPage() {
   
   // API Key 设置
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  
-  useEffect(() => {
-    setApiKey(localStorage.getItem('sf_api_key') || '')
-  }, [])
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('sf_api_key') || '')
 
   const handleNotificationToggle = (checked: boolean) => {
     setNotificationEnabled(checked)
@@ -132,8 +128,8 @@ export default function SettingsPage() {
           passwordConfirm: pwdValues.confirm,
         })
         Toast.show({ content: '密码修改成功', icon: 'success' })
-      } catch (error: any) {
-        Toast.show({ content: error.message || '修改失败', icon: 'fail' })
+      } catch (error) {
+        Toast.show({ content: getPocketBaseErrorMessage(error, '修改失败'), icon: 'fail' })
       }
     }
   }
@@ -280,8 +276,8 @@ export default function SettingsPage() {
         />
       </div>
 
-      {/* AI 设置 - 仅经理可见 */}
-      {(user?.role === 'admin' || user?.role === 'manager') && (
+      {/* AI 设置 - 仅管理员可见 */}
+      {user?.role === 'admin' && (
         <>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>AI 设置</div>
           <div className="profile-table" style={{ marginBottom: 24 }}>

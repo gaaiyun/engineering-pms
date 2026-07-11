@@ -1,6 +1,7 @@
 import { Button, Form, Input, Toast, Checkbox } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
+import { getPostLoginPath, normalizeAppRole } from '../lib/navigation'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
@@ -170,12 +171,8 @@ export default function Login() {
 
       Toast.show({ icon: 'success', content: '登录成功' })
 
-      const role = (authData.record?.role || 'employee').toLowerCase()
-      if (role === 'admin' || role === 'manager') {
-        navigate('/admin', { replace: true })
-      } else {
-        navigate('/app', { replace: true })
-      }
+      const role = normalizeAppRole(authData.record?.role)
+      navigate(getPostLoginPath(role), { replace: true })
     } catch (error: any) {
       const newAttempts = failedAttempts + 1
       setFailedAttempts(newAttempts)

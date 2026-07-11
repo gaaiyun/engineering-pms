@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
+import { Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
 import { pb, getPocketBaseErrorMessage } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount, useUpdateProject, useDeleteTask } from '../../lib/api'
@@ -19,9 +19,9 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
-  IoSparkles, IoGridOutline, IoPeopleOutline, IoBriefcaseOutline, 
+  IoSparkles, IoPeopleOutline, IoBriefcaseOutline,
   IoCheckmarkCircleOutline, IoFolderOutline, IoAddCircleOutline, IoWarningOutline,
-  IoTimeOutline, IoPersonOutline, IoSettingsOutline, IoNotificationsOutline,
+  IoTimeOutline, IoSettingsOutline, IoNotificationsOutline,
   IoLogOutOutline, IoChevronForwardOutline, IoCalendarOutline, IoCloudUploadOutline
 } from 'react-icons/io5'
 import AIConsole from './AIConsole'
@@ -69,29 +69,38 @@ interface Task {
 const VALID_TABS = ['dashboard', 'users', 'projects', 'ai', 'timeline', 'profile'] as const
 type TabKey = typeof VALID_TABS[number]
 
-const AdminDashboard = () => {
+interface AdminDashboardProps {
+  section?: 'users' | 'ai'
+}
+
+const AdminDashboard = ({ section }: AdminDashboardProps) => {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabFromUrl = searchParams.get('tab') as TabKey | null
-  const activeKey: TabKey = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'dashboard'
+  const activeKey: TabKey = section || (tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'dashboard')
   const setActiveKey = (key: TabKey) => {
+    if (section) {
+      const routeByKey: Record<TabKey, string> = {
+        dashboard: '/app',
+        users: '/system/users',
+        projects: '/my-projects',
+        ai: '/system/ai',
+        timeline: '/my-projects',
+        profile: '/me',
+      }
+      navigate(routeByKey[key])
+      return
+    }
     setSearchParams({ tab: key }, { replace: true })
   }
   
   // 处理无效 tab：如果 URL 中的 tab 无效，重定向到 dashboard
   useEffect(() => {
-    if (tabFromUrl && !VALID_TABS.includes(tabFromUrl)) {
+    if (!section && tabFromUrl && !VALID_TABS.includes(tabFromUrl)) {
       setSearchParams({ tab: 'dashboard' }, { replace: true })
     }
-  }, [tabFromUrl, setSearchParams])
+  }, [section, tabFromUrl, setSearchParams])
   const authUser = pb.authStore.model
-
-  const tabs = [
-    { key: 'dashboard', title: '概览', icon: <IoGridOutline /> },
-    { key: 'timeline', title: '时间轴', icon: <IoTimeOutline /> },
-    { key: 'projects', title: '项目', icon: <IoBriefcaseOutline /> },
-    { key: 'ai', title: 'AI', icon: <IoSparkles /> },
-    { key: 'profile', title: '我的', icon: <IoPersonOutline /> },
-  ]
 
   // Bug fix P0-2 (Agent C 数据流审计)：用 mutation hook 取代直接 PB 调用
   const updateProject = useUpdateProject()
@@ -130,7 +139,6 @@ const AdminDashboard = () => {
   const [profileSaving, setProfileSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const refreshAll = () => {
@@ -141,7 +149,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const role = pb.authStore.model?.role?.toLowerCase()
-    if (!pb.authStore.isValid || (role !== 'admin' && role !== 'manager')) {
+    if (!pb.authStore.isValid || role !== 'admin') {
       Toast.show({ icon: 'fail', content: '没有权限访问管理员后台' })
       navigate('/app')
     }
@@ -455,7 +463,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+    <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
       <div style={{ flex: 1, overflow: 'auto' }}>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16 }}>
@@ -1350,7 +1358,7 @@ const AdminDashboard = () => {
               </div>
 
               <div
-                onClick={() => navigate('/admin/import')}
+                onClick={() => navigate('/system/import')}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: 16, cursor: 'pointer', borderRadius: 12
@@ -1397,20 +1405,6 @@ const AdminDashboard = () => {
         </>)}
       </div>
 
-      <TabBar
-        activeKey={activeKey}
-        onChange={key => setActiveKey(key as any)}
-        style={{
-          background: 'rgba(255,255,255,0.9)',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(0,0,0,0.05)',
-          paddingBottom: 'env(safe-area-inset-bottom)'
-        }}
-      >
-        {tabs.map(item => (
-          <TabBar.Item key={item.key} icon={item.icon} title={item.title} />
-        ))}
-      </TabBar>
       <Dialog
         visible={showUserModal}
         title="编辑用户"

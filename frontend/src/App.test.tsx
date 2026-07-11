@@ -1,135 +1,107 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import React from 'react'
+
+type AuthModel = { role?: string } | null
 
 const mockAuthStore = vi.hoisted(() => ({
   isValid: false,
-  model: null as Record<string, unknown> | null,
+  model: null as AuthModel,
 }))
 
 vi.mock('./lib/pocketbase', () => ({
-  pb: {
-    authStore: mockAuthStore,
-  },
+  pb: { authStore: mockAuthStore },
 }))
 
-vi.mock('@capacitor/app', () => ({
-  App: { addListener: vi.fn() },
-}))
+import {
+  AdminOnlyRoute,
+  DefaultRedirect,
+  LegacyAdminRedirect,
+  ManagerRoute,
+  PrivateRoute,
+} from './components/auth/RouteGuards'
 
-import { pb } from './lib/pocketbase'
-
-const PrivateRoute = ({ children }: { children: React.ReactElement }) => {
-  return pb.authStore.isValid ? children : <Navigate to="/login" />
-}
-
-const AdminRoute = ({ children }: { children: React.ReactElement }) => {
-  if (!pb.authStore.isValid) return <Navigate to="/login" />
-  const role = (pb.authStore.model as any)?.role?.toLowerCase()
-  if (role !== 'admin' && role !== 'manager') return <Navigate to="/app" />
-  return children
-}
-
-const ManagerRoute = ({ children }: { children: React.ReactElement }) => {
-  if (!pb.authStore.isValid) return <Navigate to="/login" />
-  const role = (pb.authStore.model as any)?.role?.toLowerCase()
-  if (role !== 'admin' && role !== 'manager') return <Navigate to="/app" />
-  return children
-}
-
-function renderWithRouter(initialPath: string, guardedElement: React.ReactElement) {
+function renderGuard(element: React.ReactElement, initialPath = '/protected') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/login" element={<div>Login Page</div>} />
         <Route path="/app" element={<div>App Home</div>} />
-        <Route path="/protected" element={guardedElement} />
+        <Route path="/system/users" element={<div>System Users</div>} />
+        <Route path="/system/ai" element={<div>System AI</div>} />
+        <Route path="/my-projects" element={<div>Projects</div>} />
+        <Route path="/me" element={<div>Me</div>} />
+        <Route path="/protected" element={element} />
+        <Route path="/admin" element={element} />
       </Routes>
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
+beforeEach(() => {
+  mockAuthStore.isValid = false
+  mockAuthStore.model = null
+})
+
 describe('PrivateRoute', () => {
-  beforeEach(() => {
-    mockAuthStore.isValid = false
-    mockAuthStore.model = null
-  })
-
-  it('未登录时重定向到 /login', () => {
-    renderWithRouter('/protected', <PrivateRoute><div>Secret</div></PrivateRoute>)
+  it('未登录跳转登录页，已登录渲染内容', () => {
+    const first = renderGuard(<PrivateRoute><div>Secret</div></PrivateRoute>)
     expect(screen.getByText('Login Page')).toBeInTheDocument()
-  })
+    first.unmount()
 
-  it('已登录时渲染子组件', () => {
     mockAuthStore.isValid = true
-    renderWithRouter('/protected', <PrivateRoute><div>Secret</div></PrivateRoute>)
+    renderGuard(<PrivateRoute><div>Secret</div></PrivateRoute>)
     expect(screen.getByText('Secret')).toBeInTheDocument()
   })
 })
 
-describe('AdminRoute', () => {
-  beforeEach(() => {
-    mockAuthStore.isValid = false
-    mockAuthStore.model = null
-  })
-
-  it('未登录时重定向到 /login', () => {
-    renderWithRouter('/protected', <AdminRoute><div>Admin</div></AdminRoute>)
-    expect(screen.getByText('Login Page')).toBeInTheDocument()
-  })
-
-  it('employee 访问时重定向到 /app', () => {
+describe('角色守卫', () => {
+  it('manager 和 admin 可访问经理页面', () => {
     mockAuthStore.isValid = true
-    mockAuthStore.model = { role: 'employee' } as any
-    renderWithRouter('/protected', <AdminRoute><div>Admin</div></AdminRoute>)
+    mockAuthStore.model = { role: 'manager' }
+    const first = renderGuard(<ManagerRoute><div>Manager Area</div></ManagerRoute>)
+    expect(screen.getByText('Manager Area')).toBeInTheDocument()
+    first.unmount()
+
+    mockAuthStore.model = { role: 'admin' }
+    renderGuard(<ManagerRoute><div>Manager Area</div></ManagerRoute>)
+    expect(screen.getByText('Manager Area')).toBeInTheDocument()
+  })
+
+  it('系统管理只允许 admin，manager 会回工作台', () => {
+    mockAuthStore.isValid = true
+    mockAuthStore.model = { role: 'manager' }
+    const first = renderGuard(<AdminOnlyRoute><div>System Area</div></AdminOnlyRoute>)
     expect(screen.getByText('App Home')).toBeInTheDocument()
-  })
+    first.unmount()
 
-  it('admin 可以访问', () => {
-    mockAuthStore.isValid = true
-    mockAuthStore.model = { role: 'admin' } as any
-    renderWithRouter('/protected', <AdminRoute><div>Admin</div></AdminRoute>)
-    expect(screen.getByText('Admin')).toBeInTheDocument()
-  })
-
-  it('manager 可以访问', () => {
-    mockAuthStore.isValid = true
-    mockAuthStore.model = { role: 'manager' } as any
-    renderWithRouter('/protected', <AdminRoute><div>Admin</div></AdminRoute>)
-    expect(screen.getByText('Admin')).toBeInTheDocument()
+    mockAuthStore.model = { role: 'admin' }
+    renderGuard(<AdminOnlyRoute><div>System Area</div></AdminOnlyRoute>)
+    expect(screen.getByText('System Area')).toBeInTheDocument()
   })
 })
 
-describe('ManagerRoute', () => {
-  beforeEach(() => {
-    mockAuthStore.isValid = false
-    mockAuthStore.model = null
-  })
-
-  it('未登录时重定向到 /login', () => {
-    renderWithRouter('/protected', <ManagerRoute><div>Manager</div></ManagerRoute>)
-    expect(screen.getByText('Login Page')).toBeInTheDocument()
-  })
-
-  it('employee 访问时重定向到 /app', () => {
+describe('默认与旧链接跳转', () => {
+  it.each(['employee', 'manager', 'admin'])('%s 登录后统一进入 /app', role => {
     mockAuthStore.isValid = true
-    mockAuthStore.model = { role: 'employee' } as any
-    renderWithRouter('/protected', <ManagerRoute><div>Manager</div></ManagerRoute>)
+    mockAuthStore.model = { role }
+    renderGuard(<DefaultRedirect />, '/protected')
     expect(screen.getByText('App Home')).toBeInTheDocument()
   })
 
-  it('admin 可以访问', () => {
+  it.each([
+    ['/admin', 'App Home'],
+    ['/admin?tab=dashboard', 'App Home'],
+    ['/admin?tab=projects', 'Projects'],
+    ['/admin?tab=timeline', 'Projects'],
+    ['/admin?tab=users', 'System Users'],
+    ['/admin?tab=ai', 'System AI'],
+    ['/admin?tab=profile', 'Me'],
+  ])('%s 兼容跳转到新页面', (path, expectedText) => {
     mockAuthStore.isValid = true
-    mockAuthStore.model = { role: 'admin' } as any
-    renderWithRouter('/protected', <ManagerRoute><div>Manager</div></ManagerRoute>)
-    expect(screen.getByText('Manager')).toBeInTheDocument()
-  })
-
-  it('manager 可以访问', () => {
-    mockAuthStore.isValid = true
-    mockAuthStore.model = { role: 'manager' } as any
-    renderWithRouter('/protected', <ManagerRoute><div>Manager</div></ManagerRoute>)
-    expect(screen.getByText('Manager')).toBeInTheDocument()
+    mockAuthStore.model = { role: 'admin' }
+    renderGuard(<LegacyAdminRedirect />, path)
+    expect(screen.getByText(expectedText)).toBeInTheDocument()
   })
 })
