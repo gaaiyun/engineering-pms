@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EngineeringPMS 统一导航线框图</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e9eef5; color: #172033; font: 14px/1.5 system-ui, sans-serif; }
+    header { padding: 24px 28px 12px; }
+    h1 { margin: 0 0 6px; font-size: 24px; }
+    .note { color: #667085; }
+    .gallery { display: grid; grid-template-columns: 1.45fr 1fr .72fr; gap: 22px; padding: 18px 28px 32px; align-items: start; }
+    .frame { overflow: hidden; min-height: 650px; background: #f7f9fc; border: 2px solid #172033; border-radius: 18px; box-shadow: 0 16px 40px #23344d1c; }
+    .caption { padding: 10px 14px; color: white; background: #172033; font-weight: 800; }
+    .desktop { display: grid; grid-template-columns: 210px 1fr; min-height: 610px; }
+    .side { padding: 20px 12px; color: #dbe4f1; background: #101c31; }
+    .brand { margin: 0 8px 24px; color: white; font-size: 18px; font-weight: 900; }
+    .nav { padding: 11px 12px; margin: 4px 0; border-radius: 9px; }
+    .nav.active { color: white; background: #3569ea; }
+    .nav.system { margin-top: 22px; border-top: 1px solid #ffffff24; border-radius: 0; padding-top: 20px; }
+    .content { min-width: 0; }
+    .top { height: 54px; padding: 16px 20px; background: white; border-bottom: 1px solid #dfe5ee; color: #667085; }
+    .main { padding: 24px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .card, .list { min-height: 98px; padding: 16px; background: white; border: 1px solid #cfd8e6; border-radius: 14px; }
+    .list { margin-top: 16px; min-height: 250px; }
+    .bar { height: 12px; margin: 14px 0; border-radius: 8px; background: #dce4ef; }
+    .bar.short { width: 65%; }
+    .tablet { display: grid; grid-template-columns: 68px 1fr; min-height: 610px; }
+    .tablet .side { text-align: center; padding-inline: 8px; }
+    .tablet .brand { font-size: 0; }
+    .tablet .brand::after { content: "EP"; font-size: 17px; }
+    .tablet .nav { font-size: 0; }
+    .tablet .nav::after { content: "●"; font-size: 16px; }
+    .tablet .cards { grid-template-columns: 1fr 1fr; }
+    .phone { position: relative; min-height: 610px; padding-bottom: 66px; }
+    .phone .top { height: 58px; font-weight: 800; color: #172033; }
+    .phone .main { padding: 16px; }
+    .phone .cards { grid-template-columns: 1fr 1fr; }
+    .phone .card { min-height: 88px; }
+    .bottom { position: absolute; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, 1fr); padding: 9px 4px 12px; background: white; border-top: 1px solid #ccd6e4; text-align: center; font-size: 11px; }
+    .bottom strong { display: block; margin-bottom: 3px; color: #3569ea; font-size: 17px; }
+    @media (max-width: 1000px) { .gallery { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>统一导航：一套信息架构，三种呈现</h1>
+    <div class="note">桌面/键鼠小窗口使用侧栏；触控设备与 App 使用底部五栏。页面内部不再重复渲染主导航。</div>
+  </header>
+  <main class="gallery">
+    <section class="frame">
+      <div class="caption">桌面 · 完整侧栏（管理员）</div>
+      <div class="desktop">
+        <aside class="side">
+          <div class="brand">EngineeringPMS</div>
+          <div class="nav active">工作台</div><div class="nav">任务</div><div class="nav">项目管理</div>
+          <div class="nav">审核中心</div><div class="nav">通知</div><div class="nav">我的</div>
+          <div class="nav system">系统管理</div>
+        </aside>
+        <div class="content"><div class="top">搜索任务、项目、通知…</div><div class="main">
+          <h2>工作台</h2><div class="cards"><div class="card">项目概况<div class="bar"></div></div><div class="card">任务状态<div class="bar short"></div></div><div class="card">待审核<div class="bar"></div></div></div>
+          <div class="list">近期工作与快捷入口<div class="bar"></div><div class="bar short"></div><div class="bar"></div></div>
+        </div></div>
+      </div>
+    </section>
+    <section class="frame">
+      <div class="caption">键鼠小窗口 · 折叠侧栏</div>
+      <div class="tablet">
+        <aside class="side"><div class="brand">EngineeringPMS</div><div class="nav active">工作台</div><div class="nav">任务</div><div class="nav">项目</div><div class="nav">审核</div><div class="nav">通知</div><div class="nav">我的</div></aside>
+        <div class="content"><div class="top">工作台</div><div class="main"><div class="cards"><div class="card">项目</div><div class="card">任务</div></div><div class="list"><div class="bar"></div><div class="bar short"></div><div class="bar"></div></div></div></div>
+      </div>
+    </section>
+    <section class="frame">
+      <div class="caption">手机 / App / 未来小程序</div>
+      <div class="phone">
+        <div class="top">工作台</div><div class="main"><div class="cards"><div class="card">项目</div><div class="card">任务</div><div class="card">待办</div><div class="card">审核</div></div><div class="list"><div class="bar"></div><div class="bar short"></div><div class="bar"></div></div></div>
+        <nav class="bottom"><span><strong>●</strong>工作台</span><span><strong>○</strong>任务</span><span><strong>○</strong>项目</span><span><strong>○</strong>通知</span><span><strong>○</strong>我的</span></nav>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

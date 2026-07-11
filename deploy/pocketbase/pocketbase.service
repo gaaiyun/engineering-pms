@@ -1,0 +1,18 @@
+[Unit]
+Description=EngineeringPMS PocketBase
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/www/server/pocketbase
+ExecStart=/www/server/pocketbase/pocketbase serve --http=0.0.0.0:8090
+Restart=always
+RestartSec=5
+LimitNOFILE=4096
+SyslogIdentifier=engineering-pms-pocketbase
+
+[Install]
+WantedBy=multi-user.target
