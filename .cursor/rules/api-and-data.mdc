@@ -1,53 +1,16 @@
 ---
-description: API 数据流、审计日志与通知规则
+description: API、缓存、事务与通知边界
 globs: frontend/src/lib/**/*.ts
 alwaysApply: false
 ---
 
-# API 与数据流规范
+# API 与数据流
 
-## Mutation 后必须 Invalidate
-
-每个 mutation 成功后，必须 invalidate 相关的 queryKey：
-
-| 操作 | 需要 invalidate 的 keys |
-|------|------------------------|
-| 创建/更新/删除任务 | `queryKeys.tasks`, `queryKeys.projects` |
-| 创建/更新/删除项目 | `queryKeys.projects` |
-| 更新项目成员 | `queryKeys.projects`, `queryKeys.users` |
-| 归档/取消归档项目 | `queryKeys.projects` |
-| 标记任务完成/卡点/取消卡点 | `queryKeys.tasks`, `queryKeys.projects` |
-| 审核交接 | `queryKeys.handoffs`, `queryKeys.tasks` |
-| 标记审计已阅/通过 | `queryKeys.auditLogs(taskId)` |
-| 标记通知已读 | `queryKeys.notifications(userId)` |
-
-## 审计日志与通知
-
-以下操作必须同时写审计日志 + 发全员通知：
-
-- 创建任务（useCreateTask）
-- 更新任务（useUpdateTask）
-- 标记完成（useMarkTaskComplete）
-- 标记卡点（useMarkTaskBlocked）
-- 取消卡点（useUnblockTask）
-
-通知使用 `notifyProjectMembers()` 函数，审计日志写入 `audit_logs` 集合。
-
-## PocketBase 集合与字段名
-
-| 集合 | 关键字段 |
-|------|---------|
-| `users` | username, name, role, department, avatar |
-| `projects` | name, status, progress, manager, members |
-| `tasks` | project, stage_name, status, assignees, created_by, deadline, blocker, sequence |
-| `notifications` | user, title, content, type, is_read, link_type, link_id |
-| `audit_logs` | project, task, action_type, operator, before_data, after_data, review_status |
-| `handoffs` | project, from_task, proposed_title, proposed_assignees |
-| `ai_summaries` | user, project, summary_type, content |
-
-## Realtime 订阅
-
-`pocketbase.ts` 中的 `subscribeToChanges()` 订阅 6 个集合：
-tasks, projects, notifications, handoffs, audit_logs, ai_summaries
-
-变动时自动 `invalidateQueries` 刷新前端缓存。登出或组件卸载时 `unsubscribeAll()`。
+- 查询优先复用 `lib/api.ts` hooks 和 `queryKeys`。
+- 非幂等 mutation 不自动 retry；成功后 invalidate 直接受影响的 tasks/projects/handoffs/notifications/audit keys。
+- 完成、卡点、解阻、交接审批和任务删除必须调用服务端事务路由。
+- 可信通知由 Hook/服务端命令创建，浏览器不能直接给其他用户创建通知。
+- 普通审计记录只更新 `review_status=read`；业务批准/驳回只在 handoff 流程。
+- Realtime 事件只负责刷新缓存，不复制业务副作用。
+- employee 查询必须受项目成员/任务负责人规则限制；全局搜索不能绕过集合规则。
+- 错误消息使用 `getPocketBaseErrorMessage`，不得输出 token、Key 或上游响应全文。
