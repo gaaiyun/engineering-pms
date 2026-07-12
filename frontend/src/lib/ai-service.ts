@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { TaskStatusEnum } from './api';
 
 /**
- * Bug fix C1（Agent D v2 HIGH-CRITICAL）：通过 PB 服务端代理调用 LLM。
+ * 通过 PocketBase 服务端代理调用 LLM。
  *
  * 旧路径：浏览器 → siliconflow API（apiKey 从 localStorage 读，明文暴露）
  * 新路径：浏览器 → PB /api/custom/llm-proxy → siliconflow API
@@ -48,6 +48,56 @@ const isBlocked = (status: string) => status === TaskStatusEnum.BLOCKED;
 const isOverdue = (status: string) => status === TaskStatusEnum.OVERDUE;
 const isPending = (status: string) => status === TaskStatusEnum.PENDING;
 
+interface ProjectRecord {
+    id: string
+    name?: string
+    code?: string
+    status?: string
+    progress?: number
+}
+
+interface UserRecord {
+    id: string
+    name?: string
+    username?: string
+    department?: string
+    role?: string
+}
+
+interface TaskRecord {
+    id: string
+    project: string
+    stage_name?: string
+    status: string
+    deadline?: string
+    assignees?: string[]
+    blocker?: {
+        reason_detail?: string
+        reason_type?: string
+        expected_resolve?: string
+    } | null
+    expand?: { assignees?: UserRecord[] }
+}
+
+interface UserStats {
+    name: string
+    department: string
+    role: string
+    total: number
+    overdue: number
+    completed: number
+    active: number
+    blocked: number
+    pending: number
+}
+
+const isTaskOverdue = (task: TaskRecord) =>
+    isOverdue(task.status) || (
+        task.status !== TaskStatusEnum.COMPLETED &&
+        !!task.deadline &&
+        dayjs(task.deadline).endOf('day').isBefore(dayjs())
+    )
+
 // Aggregate data for the AI prompt
 export const aggregateProjectData = async () => {
     const userId = pb.authStore.model?.id;
@@ -55,21 +105,21 @@ export const aggregateProjectData = async () => {
 
     // Fetch all relevant data
     const [allProjects, allTasks, users] = await Promise.all([
-        pb.collection('projects').getFullList({ sort: '-created' }),
-        pb.collection('tasks').getFullList({ expand: 'assignees,project', sort: '-created' }),
-        pb.collection('users').getFullList(),
+        pb.collection('projects').getFullList<ProjectRecord>({ sort: '-created' }),
+        pb.collection('tasks').getFullList<TaskRecord>({ expand: 'assignees,project', sort: '-created' }),
+        pb.collection('users').getFullList<UserRecord>(),
     ]);
 
     // 排除归档项目的数据
-    const archivedIds = new Set(allProjects.filter((p: any) => p.status === 'archived').map((p: any) => p.id))
-    const projects = allProjects.filter((p: any) => p.status !== 'archived')
-    const tasks = allTasks.filter((t: any) => !archivedIds.has(t.project))
+    const archivedIds = new Set(allProjects.filter(project => project.status === 'archived').map(project => project.id))
+    const projects = allProjects.filter(project => project.status !== 'archived')
+    const tasks = allTasks.filter(task => !archivedIds.has(task.project))
 
     // Calculate Team Stats - 优化：确保所有用户都被统计
-    const userStats: Record<string, any> = {};
+    const userStats: Record<string, UserStats> = {};
     users.forEach(u => {
         userStats[u.id] = { 
-            name: u.name || u.username, 
+            name: u.name || u.username || '未命名',
             department: u.department || '未分配',
             role: u.role || 'employee',
             total: 0, 
@@ -81,13 +131,13 @@ export const aggregateProjectData = async () => {
         };
     });
 
-    tasks.forEach((t: any) => {
+    tasks.forEach((t) => {
         // 直接使用 assignees 字段（数组）
         const assigneeIds = t.assignees || [];
         assigneeIds.forEach((uid: string) => {
             if (userStats[uid]) {
                 userStats[uid].total++;
-                if (isOverdue(t.status)) userStats[uid].overdue++;
+                if (isTaskOverdue(t)) userStats[uid].overdue++;
                 if (isCompleted(t.status)) userStats[uid].completed++;
                 if (isInProgress(t.status)) userStats[uid].active++;
                 if (isBlocked(t.status)) userStats[uid].blocked++;
@@ -97,10 +147,10 @@ export const aggregateProjectData = async () => {
         
         // 也统计 expand 中的 assignees（兼容两种数据结构）
         const expandedAssignees = t.expand?.assignees || [];
-        expandedAssignees.forEach((u: any) => {
+        expandedAssignees.forEach((u) => {
             if (userStats[u.id] && !assigneeIds.includes(u.id)) {
                 userStats[u.id].total++;
-                if (isOverdue(t.status)) userStats[u.id].overdue++;
+                if (isTaskOverdue(t)) userStats[u.id].overdue++;
                 if (isCompleted(t.status)) userStats[u.id].completed++;
                 if (isInProgress(t.status)) userStats[u.id].active++;
                 if (isBlocked(t.status)) userStats[u.id].blocked++;
@@ -111,8 +161,8 @@ export const aggregateProjectData = async () => {
 
     // 只返回有任务的用户统计，并按任务数排序
     const personnelPerformance = Object.values(userStats)
-        .filter((u: any) => u.total > 0)
-        .map((u: any) => ({
+        .filter((u) => u.total > 0)
+        .map((u) => ({
             name: u.name,
             department: u.department,
             role: u.role,
@@ -128,12 +178,12 @@ export const aggregateProjectData = async () => {
         .sort((a, b) => b.assigned_tasks - a.assigned_tasks);
 
     // Calculate Project Risks - 增强风险分析
-    const projectRisks = projects.map((p: any) => {
-        const pTasks = tasks.filter((t: any) => t.project === p.id);
-        const blockedTasks = pTasks.filter((t: any) => isBlocked(t.status));
-        const overdueTasks = pTasks.filter((t: any) => isOverdue(t.status));
-        const inProgressTasks = pTasks.filter((t: any) => isInProgress(t.status));
-        const completedTasks = pTasks.filter((t: any) => isCompleted(t.status));
+    const projectRisks = projects.map((p) => {
+        const pTasks = tasks.filter((t) => t.project === p.id);
+        const blockedTasks = pTasks.filter((t) => isBlocked(t.status));
+        const overdueTasks = pTasks.filter(isTaskOverdue);
+        const inProgressTasks = pTasks.filter((t) => isInProgress(t.status));
+        const completedTasks = pTasks.filter((t) => isCompleted(t.status));
 
         return {
             name: p.name,
@@ -144,12 +194,12 @@ export const aggregateProjectData = async () => {
             in_progress_count: inProgressTasks.length,
             blocked_count: blockedTasks.length,
             overdue_count: overdueTasks.length,
-            blockers: blockedTasks.map((t: any) => ({ 
+            blockers: blockedTasks.map((t) => ({
                 task: t.stage_name, 
                 reason: t.blocker?.reason_detail || t.blocker?.reason_type || '原因未知',
                 expected_resolve: t.blocker?.expected_resolve
             })),
-            overdue_tasks: overdueTasks.map((t: any) => ({
+            overdue_tasks: overdueTasks.map((t) => ({
                 task: t.stage_name,
                 deadline: t.deadline
             })),
@@ -162,11 +212,11 @@ export const aggregateProjectData = async () => {
     // 计算全局统计
     const globalStats = {
         total_tasks: tasks.length,
-        pending: tasks.filter((t: any) => isPending(t.status)).length,
-        in_progress: tasks.filter((t: any) => isInProgress(t.status)).length,
-        blocked: tasks.filter((t: any) => isBlocked(t.status)).length,
-        completed: tasks.filter((t: any) => isCompleted(t.status)).length,
-        overdue: tasks.filter((t: any) => isOverdue(t.status)).length,
+        pending: tasks.filter((t) => isPending(t.status)).length,
+        in_progress: tasks.filter((t) => isInProgress(t.status)).length,
+        blocked: tasks.filter((t) => isBlocked(t.status)).length,
+        completed: tasks.filter((t) => isCompleted(t.status)).length,
+        overdue: tasks.filter(isTaskOverdue).length,
     };
 
     return {
@@ -174,7 +224,7 @@ export const aggregateProjectData = async () => {
         manager: pb.authStore.model?.name || pb.authStore.model?.username,
         manager_role: pb.authStore.model?.role,
         total_projects: projects.length,
-        active_projects: projects.filter((p: any) => p.status === 'active').length,
+        active_projects: projects.filter((p) => p.status === 'active').length,
         project_risks: projectRisks,
         personnel_performance: personnelPerformance,
         global_stats: globalStats,
@@ -184,7 +234,7 @@ export const aggregateProjectData = async () => {
     };
 };
 
-export const generateAIReport = async (data: any, apiKey: string | undefined, model: string = "deepseek-ai/DeepSeek-V3") => {
+export const generateAIReport = async (data: unknown, apiKey: string | undefined, model = '') => {
     const prompt = `
 # 角色
 你是一位资深的工程项目管理总监，正在分析项目管理数据并为管理层提供决策支持。
@@ -253,8 +303,11 @@ ${JSON.stringify(data, null, 2)}
                     // 继续回退方案
                 }
             }
+            const overallRisk = typeof data === 'object' && data !== null && 'overall_risk' in data
+                ? String((data as { overall_risk?: unknown }).overall_risk || 'medium')
+                : 'medium'
             return {
-                risk_level: data.overall_risk || 'medium',
+                risk_level: overallRisk,
                 content: content
             };
         }
@@ -264,7 +317,7 @@ ${JSON.stringify(data, null, 2)}
     }
 };
 
-export const chatWithAI = async (message: string, context: unknown, history: Array<{role: string; content: string}>, apiKey: string | undefined, model: string = "deepseek-ai/DeepSeek-V3") => {
+export const chatWithAI = async (message: string, context: unknown, history: Array<{role: string; content: string}>, apiKey: string | undefined, model = '') => {
     const messages = [
         { role: "system", content: `你是一位专业的项目管理助手。以下是实时项目数据：${JSON.stringify(context)}。请基于这些数据回答用户的问题，用中文回答。如果被问到绩效相关问题，请引用 personnel_performance 中的具体数字和人名。` },
         ...history,

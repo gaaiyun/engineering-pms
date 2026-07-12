@@ -103,7 +103,7 @@ body {
   color: var(--neutral-900);
 }
 
-/* Bug fix J-2（Agent J 跨断点截图发现）：
+/* 跨断点截图发现：
  * 原 @media (max-width: 768px) 把 #root max-width=480 → 768 viewport
  * 内容居中宽 430px，两侧各 168px 灰底空白。
  *
@@ -154,7 +154,7 @@ body {
 /* Layout */
 .page {
   padding: 24px 20px;
-  min-height: 100dvh;
+  min-height: 100%;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
@@ -919,9 +919,9 @@ body {
 
 /* === Touch Device Optimizations === */
 @media (pointer: coarse) {
-  /* Larger touch targets */
+  /* 保留可点击性，同时避免把业务列表撑成演示型大卡片。 */
   .profile-row {
-    min-height: 56px;
+    min-height: 44px;
   }
 
   /* Disable hover effects on touch devices */
@@ -1030,4 +1030,25 @@ body {
   padding: 14px 20px !important;
   box-shadow: 0 8px 32px rgba(220, 38, 38, 0.35) !important;
   font-weight: 600 !important;
+}
+
+@media (max-width: 768px) {
+  body { font-size: 12.5px; }
+  .page { padding: 12px 12px calc(62px + env(safe-area-inset-bottom)); }
+  .page-title { font-size: 20px; margin-bottom: 4px; letter-spacing: -.025em; }
+  .page-subtitle { font-size: 10px; letter-spacing: 1px; }
+  .section-label { margin-top: 13px; margin-bottom: 6px; font-size: 11px; }
+  .elevated-card { margin-bottom: 8px; padding: 11px 12px; border-radius: 9px; box-shadow: none; }
+  .project-card { margin-bottom: 8px; padding: 12px; border-radius: 10px; box-shadow: none; }
+  .profile-row { padding: 9px 12px; }
+  .adm-button { --border-radius: 7px; font-size: 12px; }
+  .adm-button:not(.adm-button-mini) { padding-top: 7px; padding-bottom: 7px; }
+  .adm-input-element, .adm-text-area-element { font-size: 13px; line-height: 1.45; }
+  .adm-list-item { --padding-left: 12px; }
+  .adm-list-item-content { padding-right: 12px; }
+  .adm-list-item-content-main { padding-top: 9px; padding-bottom: 9px; }
+  .adm-form-item-label { font-size: 12px; }
+  .adm-tabs-tab { font-size: 12px; padding: 9px 0; }
+  .adm-tag { font-size: 10px; }
+  .adm-dialog-content { font-size: 12px; }
 }

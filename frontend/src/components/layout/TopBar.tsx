@@ -4,6 +4,7 @@ import { Badge } from 'antd-mobile'
 import { useNotificationAlerts } from '../../lib/useNotificationAlerts'
 import { pb } from '../../lib/pocketbase'
 import { GlobalSearch } from './GlobalSearch'
+import './TopBar.css'
 
 export function TopBar() {
   const navigate = useNavigate()
@@ -13,6 +14,7 @@ export function TopBar() {
 
   return (
     <header
+      className="app-topbar"
       style={{
         height: 56,
         flexShrink: 0,
@@ -49,6 +51,7 @@ export function TopBar() {
       </button>
 
       <button
+        className="app-topbar__user"
         type="button"
         onClick={() => navigate('/me')}
         style={{
@@ -62,7 +65,7 @@ export function TopBar() {
         }}
       >
         <IoPersonCircleOutline size={28} color="#475569" />
-        <span style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>{displayName}</span>
+        <span className="app-topbar__user-name" style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>{displayName}</span>
       </button>
     </header>
   )

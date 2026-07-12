@@ -21,8 +21,8 @@ export function MobileNavigation() {
         flexShrink: 0,
         display: 'grid',
         gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
-        minHeight: 58,
-        padding: '7px 4px calc(7px + env(safe-area-inset-bottom))',
+        minHeight: 50,
+        padding: '5px 4px calc(5px + env(safe-area-inset-bottom))',
         borderTop: '1px solid #e2e8f0',
         background: 'rgba(255,255,255,.96)',
         backdropFilter: 'blur(14px)',
@@ -43,14 +43,14 @@ export function MobileNavigation() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 2,
+              gap: 1,
               color: active ? '#2563eb' : '#64748b',
               textDecoration: 'none',
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: active ? 700 : 500,
             }}
           >
-            <NavigationIcon iconKey={item.iconKey} size={21} />
+            <NavigationIcon iconKey={item.iconKey} size={19} />
             <span>{item.compactLabel}</span>
           </NavLink>
         )

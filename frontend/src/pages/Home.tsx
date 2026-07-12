@@ -17,6 +17,7 @@ import { pb } from '../lib/pocketbase'
 import { useNotifications, useTasks, useUnreadNotificationCount } from '../lib/api'
 import { useAppSurface } from '../lib/useAppSurface'
 import { GlobalSearch } from '../components/layout/GlobalSearch'
+import './Home.css'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -99,17 +100,17 @@ export default function Home() {
         {isManager ? (
           <ManagerWorkbench isAdmin={isAdmin} onNavigate={navigate} />
         ) : (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={{ paddingTop: 20 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 20, color: '#0f172a' }}>我的工作台</h1>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ paddingTop: 20 }}>
+            <h1 className="home-title">我的工作台</h1>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 24 }}>
-              <MetricCard value={activeTasks.length} label="进行中" color="#2563eb" />
+            <div className="home-metrics" aria-label="任务概况">
+              <MetricCard value={activeTasks.length} label="未完成" color="#2563eb" />
               <MetricCard value={overdueCount} label="已逾期" color={overdueCount > 0 ? '#dc2626' : '#94a3b8'} danger={overdueCount > 0} />
               <MetricCard value={completedCount} label="已完成" color="#059669" />
             </div>
 
             {urgentCount > 0 && (
-              <div style={{ background: 'linear-gradient(135deg,#fff7ed,#fef3c7)', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #fed7aa' }}>
+              <div className="home-alert">
                 <IoFlameOutline size={20} color="#ea580c" />
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#9a3412' }}>有 {urgentCount} 个任务即将到期，请尽快处理</span>
               </div>
@@ -118,7 +119,7 @@ export default function Home() {
             <section style={{ marginBottom: 32 }}>
               <SectionTitle icon={<IoCheckmarkCircleOutline size={20} color="#2563eb" />} title="我的任务" onMore={() => navigate('/my-tasks')} />
               {currentTasks.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="home-list">
                   {currentTasks.map(task => {
                     const urgency = getDeadlineUrgency(task.deadline)
                     const deadlineWarning = urgency === 'overdue' || urgency === 'urgent'
@@ -127,7 +128,7 @@ export default function Home() {
                         type="button"
                         key={task.id}
                         onClick={() => navigate(`/task/${task.id}`)}
-                        style={{ width: '100%', textAlign: 'left', background: '#fff', borderRadius: 12, padding: 16, cursor: 'pointer', border: `1px solid ${deadlineWarning ? '#fecaca' : '#e2e8f0'}`, boxShadow: deadlineWarning ? '0 2px 8px rgba(239,68,68,.08)' : '0 1px 3px rgba(0,0,0,.05)' }}
+                        className={`home-list-row${deadlineWarning ? ' home-list-row--warning' : ''}`}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                           <span style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.stage_name}</span>
@@ -144,20 +145,20 @@ export default function Home() {
                     )
                   })}
                 </div>
-              ) : <EmptyLine text="暂无进行中的任务" />}
+              ) : <EmptyLine text="暂无未完成任务" />}
             </section>
 
             <section>
               <SectionTitle
                 icon={<IoNotificationsOutline size={20} color="#ef4444" />}
                 title="未读消息"
-                badge={recentNotifications.length}
+                badge={Number(unreadCount)}
                 onMore={() => navigate('/notifications')}
               />
               {recentNotifications.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="home-list">
                   {recentNotifications.map(notification => (
-                    <button type="button" key={notification.id} onClick={() => navigate('/notifications')} style={{ width: '100%', textAlign: 'left', background: '#fff', borderRadius: 12, padding: 16, cursor: 'pointer', border: '1px solid #fee2e2', boxShadow: '0 1px 3px rgba(239,68,68,.1)' }}>
+                    <button type="button" key={notification.id} onClick={() => navigate('/notifications')} className="home-list-row home-list-row--notification">
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>{notification.title}</div>
                       <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>{notification.content}</div>
                       <div style={{ fontSize: 11, color: '#94a3b8' }}>{dayjs(notification.created).format('MM/DD HH:mm')}</div>
@@ -186,12 +187,12 @@ function ManagerWorkbench({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigat
   return (
     <div style={{ paddingTop: 20 }}>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>管理工作台</div>
-        <h1 style={{ margin: '4px 0 0', fontSize: 24, color: '#0f172a' }}>工作进展与快捷操作</h1>
+        <h1 style={{ margin: 0, fontSize: 24, color: '#0f172a', letterSpacing: '-0.02em' }}>管理工作台</h1>
+        <div style={{ marginTop: 5, fontSize: 13, color: '#64748b' }}>项目进度、审批与团队提醒</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
         {shortcuts.map(shortcut => (
-          <button key={shortcut.path} type="button" onClick={() => onNavigate(shortcut.path)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 16, border: '1px solid #dbe4ef', borderRadius: 14, background: '#fff', color: '#1e293b', fontWeight: 700, cursor: 'pointer' }}>
+          <button key={shortcut.path} type="button" onClick={() => onNavigate(shortcut.path)} style={{ minWidth: 156, flex: '1 1 156px', display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', border: '1px solid #cdd9e7', borderRadius: 10, background: '#fff', color: '#1e293b', fontWeight: 700, cursor: 'pointer' }}>
             <span style={{ color: '#2563eb' }}>{shortcut.icon}</span>{shortcut.label}
           </button>
         ))}
@@ -203,7 +204,7 @@ function ManagerWorkbench({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigat
 
 function MetricCard({ value, label, color, danger = false }: { value: number; label: string; color: string; danger?: boolean }) {
   return (
-    <div style={{ minWidth: 0, background: danger ? '#fef2f2' : '#fff', borderRadius: 14, padding: '14px 8px', textAlign: 'center', border: `1px solid ${danger ? '#fecaca' : '#e2e8f0'}` }}>
+    <div className={`home-metric${danger ? ' home-metric--danger' : ''}`}>
       <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
       <div style={{ fontSize: 11, color: danger ? '#dc2626' : '#64748b', fontWeight: 600, marginTop: 2 }}>{label}</div>
     </div>

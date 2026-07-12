@@ -20,6 +20,7 @@ import {
 } from '../lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppSurface } from '../lib/useAppSurface'
+import { collapseDuplicateNotifications } from '../lib/notification-utils'
 
 interface Notification {
   id: string
@@ -31,6 +32,8 @@ interface Notification {
   link_type?: string
   link_id?: string
   user: string
+  duplicateCount?: number
+  duplicateIds?: string[]
 }
 
 const PAGE_SIZE = 20
@@ -44,7 +47,7 @@ export default function Notifications() {
   const { data: notificationPage, isLoading: loading } = useNotificationPage(userId, activeTab, currentPage, PAGE_SIZE)
   const { data: unreadTotal = 0 } = useUnreadNotificationCount(userId)
   const notifications = useMemo(
-    () => (notificationPage?.items || []) as unknown as Notification[],
+    () => collapseDuplicateNotifications((notificationPage?.items || []) as unknown as Notification[]),
     [notificationPage?.items],
   )
   const totalItems = notificationPage?.totalItems || 0
@@ -63,7 +66,9 @@ export default function Notifications() {
   const markRead = async (notif: Notification) => {
     if (notif.is_read) return
     try {
-      await pb.collection('notifications').update(notif.id, { is_read: true })
+      await Promise.all([notif.id, ...(notif.duplicateIds || [])].map(id =>
+        pb.collection('notifications').update(id, { is_read: true })
+      ))
       invalidateNotificationQueries(queryClient, [userId])
     } catch (e) {
       console.error(e)
@@ -101,9 +106,11 @@ export default function Notifications() {
     
     if (result) {
       try {
-        await pb.collection('notifications').delete(notif.id)
+        await Promise.all([notif.id, ...(notif.duplicateIds || [])].map(id =>
+          pb.collection('notifications').delete(id)
+        ))
         invalidateNotificationQueries(queryClient, [userId])
-        Toast.show({ content: '已删除', icon: 'success' })
+        Toast.show({ content: notif.duplicateCount ? `已删除 ${notif.duplicateCount} 条重复通知` : '已删除', icon: 'success' })
       } catch {
         Toast.show({ content: '删除失败', icon: 'fail' })
       }
@@ -113,11 +120,17 @@ export default function Notifications() {
   const handleClick = (notif: Notification) => {
     markRead(notif)
     if (notif.link_id) {
-      // 根据链接类型跳转不同页面
-      if (notif.link_type === 'handoff' || notif.type === 'handoff' || notif.type === 'handoff_pending' || notif.type === 'handoff_result') {
+      if (notif.link_type === 'task') {
+        navigate(`/task/${notif.link_id}`)
+      } else if (notif.link_type === 'handoff' || notif.type === 'handoff' || notif.type === 'handoff_pending' || notif.type === 'handoff_result') {
+        const role = pb.authStore.model?.role
+        if (role !== 'admin' && role !== 'manager') {
+          navigate('/my-tasks')
+          return
+        }
         navigate('/review-center')
       } else if (notif.link_type === 'project') {
-        navigate(`/project/${notif.link_id}/timeline`)
+        navigate(`/project/${notif.link_id}`)
       } else {
         navigate(`/task/${notif.link_id}`)
       }
@@ -256,11 +269,11 @@ export default function Notifications() {
         transition={{ delay: index * 0.03 }}
         style={{
           background: 'white',
-          borderRadius: 14,
-          padding: 16,
+          borderRadius: isCompact ? 9 : 12,
+          padding: isCompact ? '10px 11px' : 14,
           display: 'flex',
           alignItems: 'start',
-          gap: 12,
+          gap: isCompact ? 9 : 12,
           borderLeft: !notif.is_read ? '4px solid #3b82f6' : '4px solid transparent',
           boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
           cursor: 'pointer',
@@ -275,23 +288,28 @@ export default function Notifications() {
           }} />
         )}
 
-        <div style={{ marginTop: 2 }}>{getIcon(notif.type)}</div>
+        <div style={{ marginTop: 1, transform: isCompact ? 'scale(.82)' : undefined, transformOrigin: 'top left' }}>{getIcon(notif.type)}</div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+            <span style={{ fontWeight: 700, fontSize: isCompact ? 13 : 15, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
               {notif.title}
             </span>
             <span style={{ fontSize: 10, color: '#94A3B8', background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontWeight: 600, flexShrink: 0 }}>
               {getTypeLabel(notif.type)}
             </span>
+            {notif.duplicateCount && notif.duplicateCount > 1 && (
+              <span style={{ fontSize: 10, color: '#475569', background: '#e2e8f0', padding: '2px 6px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>
+                ×{notif.duplicateCount}
+              </span>
+            )}
           </div>
 
-          <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <div style={{ fontSize: isCompact ? 11 : 13, color: '#64748B', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {notif.content}
           </div>
 
-          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: isCompact ? 5 : 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>{formatTime(notif.created)}</span>
             <button
               onClick={(e) => { e.stopPropagation(); deleteNotification(notif) }}
@@ -309,7 +327,7 @@ export default function Notifications() {
     }
 
     return (
-      <div key={notif.id} style={{ overflow: 'hidden', borderRadius: 14 }}>
+      <div key={notif.id} style={{ overflow: 'hidden', borderRadius: 9 }}>
         <SwipeAction
           rightActions={[
             {
@@ -338,13 +356,13 @@ export default function Notifications() {
       {isCompact && (
       <div style={{
         background: 'white',
-        padding: '16px 20px',
+        padding: '10px 12px 8px',
         borderBottom: '1px solid #e2e8f0',
         position: 'sticky',
         top: 0,
         zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
               onClick={() => navigate(-1)}

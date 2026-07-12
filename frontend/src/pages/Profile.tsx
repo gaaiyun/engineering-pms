@@ -1,465 +1,274 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
-import { Avatar, Input, Toast, Button } from 'antd-mobile'
-import { pb } from '../lib/pocketbase'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Avatar, Button, Input, Popup, Toast } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
-import { IoDocumentTextOutline, IoListOutline, IoSettingsOutline, IoLogOutOutline, IoChevronForward, IoCameraOutline, IoClose, IoPeopleOutline } from 'react-icons/io5'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useTasks, useProjects } from '../lib/api'
+import {
+  IoBriefcaseOutline,
+  IoCameraOutline,
+  IoChevronForward,
+  IoClose,
+  IoLogOutOutline,
+  IoMailOutline,
+  IoPeopleOutline,
+  IoPersonOutline,
+  IoSettingsOutline,
+} from 'react-icons/io5'
+import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
+import { useTasks } from '../lib/api'
 import { logoutWithDeviceCleanup } from '../lib/pushNotifications'
 import { canAccessSystem, normalizeAppRole } from '../lib/navigation'
+import { getProfessionalAvatarOptions, getUserAvatarUrl } from '../lib/avatar'
+import './Profile.css'
 
-import { AVATAR_STYLE_GROUPS } from '../lib/avatarOptions'
+const ROLE_LABELS = {
+  employee: '普通员工',
+  manager: '项目经理',
+  admin: '系统管理员',
+} as const
+
+type ProfileActionProps = {
+  icon: React.ReactNode
+  title: string
+  description: string
+  onClick: () => void
+}
+
+function ProfileAction({ icon, title, description, onClick }: ProfileActionProps) {
+  return (
+    <button type="button" className="profile-action" onClick={onClick}>
+      <span className="profile-action__icon">{icon}</span>
+      <span className="profile-action__copy">
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      <IoChevronForward className="profile-action__arrow" aria-hidden />
+    </button>
+  )
+}
 
 export default function Profile() {
   const navigate = useNavigate()
   const user = pb.authStore.model
   const appRole = normalizeAppRole(user?.role)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
-  // 获取真实数据
   const { data: tasks = [] } = useTasks()
-  useProjects()
-  
-  // 计算用户统计数据
-  const stats = useMemo(() => {
-    const userId = user?.id
-    if (!userId) return { projectCount: 0, taskCount: 0, completionRate: 0 }
-    
-    // 我参与的项目（作为assignee的任务所属的项目）
-    const myProjects = new Set<string>()
-    let myTasks = 0
-    let completedTasks = 0
-    
-    tasks.forEach((task: any) => {
-      const assignees = task.assignees || []
-      if (assignees.includes(userId)) {
-        myTasks++
-        myProjects.add(task.project)
-        if (task.status === 'completed') {
-          completedTasks++
-        }
-      }
-    })
-    
-    return {
-      projectCount: myProjects.size,
-      taskCount: myTasks,
-      completionRate: myTasks > 0 ? Math.round((completedTasks / myTasks) * 100) : 0
-    }
-  }, [tasks, user?.id])
 
-  // 编辑状态
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(user?.name || '')
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
-
-  useEffect(() => {
-    if (user?.name) setEditName(user.name)
-  }, [user?.name])
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
-  const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
   const [saving, setSaving] = useState(false)
 
-  const handleLogout = async () => {
-    await logoutWithDeviceCleanup()
-    navigate('/login', { replace: true })
+  useEffect(() => {
+    setEditName(user?.name || '')
+  }, [user?.name])
+
+  const stats = useMemo(() => {
+    const userId = user?.id
+    if (!userId) return { projectCount: 0, taskCount: 0, completionRate: 0 }
+    const projectIds = new Set<string>()
+    let taskCount = 0
+    let completedCount = 0
+    tasks.forEach(task => {
+      if (!task.assignees?.includes(userId)) return
+      taskCount += 1
+      if (task.project) projectIds.add(task.project)
+      if (task.status === 'completed') completedCount += 1
+    })
+    return {
+      projectCount: projectIds.size,
+      taskCount,
+      completionRate: taskCount ? Math.round((completedCount / taskCount) * 100) : 0,
+    }
+  }, [tasks, user?.id])
+
+  const cancelEditing = () => {
+    setIsEditing(false)
+    setEditName(user?.name || '')
+    setSelectedAvatar(null)
   }
 
-  // 保存个人资料
   const handleSave = async () => {
     if (!user) return
+    const name = editName.trim()
+    if (!name) {
+      Toast.show({ icon: 'fail', content: '姓名不能为空' })
+      return
+    }
+
     setSaving(true)
     try {
       const formData = new FormData()
-      formData.append('name', editName)
-
-      // 如果选择了默认头像（URL方式），需要先下载再上传
-      if (selectedAvatar && selectedAvatar.startsWith('http')) {
-        try {
-          const response = await fetch(selectedAvatar)
-          if (!response.ok) throw new Error('头像下载失败')
-          const blob = await response.blob()
-          formData.append('avatar', blob, 'avatar.svg')
-        } catch {
-          Toast.show({ icon: 'fail', content: '头像下载失败，请选择其他头像或上传自定义头像' })
-          setSaving(false)
-          return
-        }
+      formData.append('name', name)
+      if (selectedAvatar) {
+        const response = await fetch(selectedAvatar)
+        if (!response.ok) throw new Error('头像读取失败')
+        formData.append('avatar', await response.blob(), 'professional-avatar.svg')
       }
-
       await pb.collection('users').update(user.id, formData)
-
-      // 刷新 authStore
       await pb.collection('users').authRefresh()
-
-      Toast.show({ icon: 'success', content: '保存成功' })
+      Toast.show({ icon: 'success', content: '个人资料已更新' })
       setIsEditing(false)
       setShowAvatarPicker(false)
       setSelectedAvatar(null)
-    } catch (error: any) {
-      Toast.show({ icon: 'fail', content: error.message || '保存失败' })
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '保存失败') })
     } finally {
       setSaving(false)
     }
   }
 
-  // 处理文件上传
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
     if (!file || !user) return
+    if (!file.type.startsWith('image/')) {
+      Toast.show({ icon: 'fail', content: '请选择图片文件' })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      Toast.show({ icon: 'fail', content: '头像不能超过 5MB' })
+      return
+    }
 
     setSaving(true)
     try {
       const formData = new FormData()
       formData.append('avatar', file)
-
       await pb.collection('users').update(user.id, formData)
       await pb.collection('users').authRefresh()
-
       Toast.show({ icon: 'success', content: '头像已更新' })
       setShowAvatarPicker(false)
-    } catch (error: any) {
-      Toast.show({ icon: 'fail', content: error.message || '上传失败' })
+      setSelectedAvatar(null)
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '上传失败') })
     } finally {
+      event.target.value = ''
       setSaving(false)
     }
   }
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
-  }
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
-  }
-
-  const currentAvatarUrl = user?.avatar ? pb.files.getUrl(user, user.avatar) : ''
+  const displayAvatar = selectedAvatar || getUserAvatarUrl(user)
+  const roleLabel = ROLE_LABELS[appRole]
 
   return (
-    <div className="page" style={{ padding: 20 }}>
-      {/* Header */}
-      <div className="page-header" style={{ marginBottom: 20, borderBottom: 'none' }}>
+    <div className="page profile-page">
+      <header className="profile-page__header">
         <div>
-          <div className="page-subtitle">个人中心</div>
-          <h2 className="page-title">我的资料</h2>
+          <p>个人中心</p>
+          <h1>我的资料</h1>
         </div>
-        {!isEditing ? (
-          <Button size="small" fill="none" style={{ color: 'var(--accent-color)', fontWeight: 600 }} onClick={() => setIsEditing(true)}>
-            编辑
-          </Button>
-        ) : (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button size="small" fill="none" style={{ color: '#94a3b8' }} onClick={() => { setIsEditing(false); setEditName(user?.name || '') }}>
-              取消
-            </Button>
-            <Button size="small" color="primary" loading={saving} style={{ borderRadius: 8 }} onClick={handleSave}>
-              保存
-            </Button>
+        {isEditing ? (
+          <div className="profile-page__header-actions">
+            <Button size="small" fill="none" onClick={cancelEditing}>取消</Button>
+            <Button size="small" color="primary" loading={saving} onClick={handleSave}>保存修改</Button>
           </div>
+        ) : (
+          <Button size="small" fill="outline" onClick={() => setIsEditing(true)}>编辑资料</Button>
         )}
-      </div>
+      </header>
 
-      <motion.div variants={containerVariants} initial="hidden" animate="show">
-        {/* Holographic Apple-style ID Card */}
-        <motion.div
-          variants={itemVariants}
-          className="holographic-card shimmer-effect"
-          style={{
-            padding: 32,
-            marginBottom: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center'
-          }}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          {/* Avatar with Edit Button */}
-          <div style={{ position: 'relative', marginBottom: 16 }}>
-            <Avatar
-              src={selectedAvatar || currentAvatarUrl}
-              style={{
-                '--size': '88px',
-                borderRadius: '50%',
-                boxShadow: '0 8px 24px -6px rgba(0,0,0,0.1)',
-                border: '4px solid #fff'
-              }}
-            />
-            {isEditing && (
-              <div
-                onClick={() => setShowAvatarPicker(true)}
-                style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  right: 0,
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: 'var(--accent-color)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
-                }}
-              >
-                <IoCameraOutline size={16} />
+      <div className="profile-layout">
+        <section className="profile-identity" aria-label="员工身份信息">
+          <div className="profile-identity__main">
+            <div className="profile-avatar-wrap">
+              <Avatar src={displayAvatar} className="profile-avatar" />
+              {isEditing && (
+                <button type="button" className="profile-avatar-edit" onClick={() => setShowAvatarPicker(true)} aria-label="更换头像">
+                  <IoCameraOutline />
+                </button>
+              )}
+            </div>
+            <div className="profile-identity__copy">
+              {isEditing ? (
+                <Input className="profile-name-input" value={editName} onChange={setEditName} placeholder="请输入真实姓名" maxLength={30} />
+              ) : (
+                <h2>{user?.name || user?.username || '未命名成员'}</h2>
+              )}
+              <div className="profile-identity__meta">
+                <span>{user?.department || '部门未设置'}</span>
+                <span aria-hidden>·</span>
+                <span>{roleLabel}</span>
               </div>
+              <div className="profile-identity__status"><i /> 在职 · 账号正常</div>
+            </div>
+          </div>
+
+          <dl className="profile-stats">
+            <div><dt>参与项目</dt><dd>{stats.projectCount}</dd></div>
+            <div><dt>负责任务</dt><dd>{stats.taskCount}</dd></div>
+            <div><dt>任务完成率</dt><dd>{stats.completionRate}%</dd></div>
+          </dl>
+        </section>
+
+        <section className="profile-details" aria-labelledby="profile-details-title">
+          <div className="profile-section-heading">
+            <div>
+              <h2 id="profile-details-title">基本信息</h2>
+              <p>用于项目协作与系统通知</p>
+            </div>
+          </div>
+          <dl className="profile-info-list">
+            <div><dt><IoPersonOutline />登录账号</dt><dd>{user?.username || '—'}</dd></div>
+            <div><dt><IoMailOutline />工作邮箱</dt><dd>{user?.email || '未设置'}</dd></div>
+            <div><dt><IoPeopleOutline />所属部门</dt><dd>{user?.department || '未设置'}</dd></div>
+            <div><dt><IoBriefcaseOutline />系统角色</dt><dd>{roleLabel}</dd></div>
+          </dl>
+        </section>
+
+        <section className="profile-links" aria-labelledby="profile-links-title">
+          <div className="profile-section-heading">
+            <div>
+              <h2 id="profile-links-title">工作与设置</h2>
+              <p>常用入口集中在这里</p>
+            </div>
+          </div>
+          <div className="profile-action-list">
+            <ProfileAction icon={<IoBriefcaseOutline />} title="我的项目" description="查看参与项目与时间轴" onClick={() => navigate('/my-projects')} />
+            <ProfileAction icon={<IoPersonOutline />} title="我的任务" description="处理任务、卡点与交接" onClick={() => navigate('/my-tasks')} />
+            <ProfileAction icon={<IoSettingsOutline />} title="偏好设置" description="通知、显示与账号安全" onClick={() => navigate('/settings')} />
+            {canAccessSystem(appRole) && (
+              <ProfileAction icon={<IoPeopleOutline />} title="用户管理" description="维护成员账号与角色" onClick={() => navigate('/system/users')} />
             )}
           </div>
+        </section>
+      </div>
 
-          {/* Name Display/Edit */}
-          {isEditing ? (
-            <Input
-              value={editName}
-              onChange={setEditName}
-              placeholder="输入您的姓名"
-              style={{
-                fontSize: 20, fontWeight: 700, textAlign: 'center',
-                '--color': '#1e293b', marginBottom: 8, background: '#f8fafc',
-                borderRadius: 12, padding: '8px 16px'
-              }}
-            />
-          ) : (
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5, marginBottom: 4 }}>
-              {user?.name || user?.username || 'User'}
-            </div>
-          )}
+      <button type="button" className="profile-logout" onClick={async () => {
+        await logoutWithDeviceCleanup()
+        navigate('/login', { replace: true })
+      }}>
+        <IoLogOutOutline />退出当前账号
+      </button>
 
-          <div style={{
-            fontSize: 13, color: '#64748b', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8,
-            marginBottom: 24
-          }}>
-            <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{user?.department || '部门未设置'}</span>
-            <span style={{ width: 4, height: 4, background: '#cbd5e1', borderRadius: '50%' }} />
-            <span>{(user?.role === 'admin' || user?.role === 'manager') ? '项目经理' : '普通员工'}</span>
-          </div>
-
-          {/* Statistics Dashboard - Clean Business Style */}
-          <div style={{ display: 'flex', gap: 16, width: '100%', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{stats.projectCount}</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>参与项目</div>
-            </div>
-            <div style={{ width: 1, background: '#e2e8f0' }} />
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{stats.taskCount}</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>全部任务</div>
-            </div>
-            <div style={{ width: 1, background: '#e2e8f0' }} />
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: stats.completionRate >= 80 ? '#16a34a' : stats.completionRate >= 50 ? '#f59e0b' : '#ef4444' }}>{stats.completionRate}%</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>完成率</div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Menu List */}
-        <motion.div variants={itemVariants} className="profile-table">
-          <div className="profile-row" onClick={() => navigate('/my-projects')}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
-                <IoDocumentTextOutline size={18} />
-              </div>
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>我的项目</span>
-            </div>
-            <IoChevronForward color="#CBD5E1" />
-          </div>
-          <div className="profile-row" onClick={() => navigate('/my-tasks')}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A' }}>
-                <IoListOutline size={18} />
-              </div>
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>我的任务</span>
-            </div>
-            <IoChevronForward color="#CBD5E1" />
-          </div>
-          <div className="profile-row" onClick={() => navigate('/settings')}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
-                <IoSettingsOutline size={18} />
-              </div>
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>设置</span>
-            </div>
-            <IoChevronForward color="#CBD5E1" />
-          </div>
-          {canAccessSystem(appRole) && (
-            <div className="profile-row" onClick={() => navigate('/system/users')}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
-                  <IoPeopleOutline size={18} />
-                </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>用户管理</span>
-              </div>
-              <IoChevronForward color="#CBD5E1" />
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div variants={itemVariants} style={{ marginTop: 40, textAlign: 'center' }}>
-          <button
-            onClick={handleLogout}
-            style={{
-              background: 'transparent',
-              border: '1px solid #E2E8F0',
-              color: '#94A3B8',
-              padding: '12px 32px',
-              borderRadius: 30,
-              fontSize: 12,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              display: 'inline-flex',
-              alignItems: 'center',
-              cursor: 'pointer',
-              gap: 8,
-              transition: 'all 0.2s'
-            }}
-          >
-            <IoLogOutOutline size={16} /> 退出登录
+      <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileUpload} />
+      <Popup
+        visible={showAvatarPicker}
+        onMaskClick={() => setShowAvatarPicker(false)}
+        bodyClassName="profile-avatar-popup"
+      >
+        <div className="profile-avatar-picker">
+          <header>
+            <div><h2>设置员工头像</h2><p>建议使用清晰、正面的本人照片；也可选择统一企业字标</p></div>
+            <button type="button" onClick={() => setShowAvatarPicker(false)} aria-label="关闭"><IoClose /></button>
+          </header>
+          <button type="button" className="profile-avatar-upload" onClick={() => fileInputRef.current?.click()}>
+            <IoCameraOutline /><span><strong>上传本人照片</strong><small>JPG、PNG，最大 5MB</small></span>
           </button>
-        </motion.div>
-      </motion.div>
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileUpload}
-      />
-
-      {/* Avatar Picker Modal */}
-      <AnimatePresence>
-        {showAvatarPicker && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0, left: 0, right: 0, bottom: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'flex-end',
-              justifyContent: 'center'
-            }}
-            onClick={() => setShowAvatarPicker(false)}
-          >
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25 }}
-              onClick={e => e.stopPropagation()}
-              style={{
-                background: '#fff',
-                borderRadius: '24px 24px 0 0',
-                padding: 24,
-                width: '100%',
-                maxWidth: 480,
-                maxHeight: '70vh',
-                overflow: 'auto'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b' }}>选择头像</div>
-                <IoClose size={24} color="#94a3b8" style={{ cursor: 'pointer' }} onClick={() => setShowAvatarPicker(false)} />
-              </div>
-
-              {/* Upload Button */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                  color: '#fff',
-                  padding: '14px 20px',
-                  borderRadius: 12,
-                  textAlign: 'center',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  marginBottom: 20,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8
-                }}
+          <div className="profile-avatar-presets-label">企业字标</div>
+          <div className="profile-avatar-presets">
+            {getProfessionalAvatarOptions(editName || user?.name || user?.username).map(url => (
+              <button
+                type="button"
+                key={url}
+                className={selectedAvatar === url ? 'is-selected' : ''}
+                onClick={() => setSelectedAvatar(url)}
               >
-                <IoCameraOutline size={20} />
-                上传自定义头像
-              </div>
-
-              {/* Default Avatars Grid */}
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 12 }}>选择预设头像</div>
-              {/* Style Tabs */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                {AVATAR_STYLE_GROUPS.map((g, idx) => (
-                  <div
-                    key={g.key}
-                    onClick={() => setAvatarStyleIdx(idx)}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      background: avatarStyleIdx === idx ? 'var(--accent-color, #3b82f6)' : '#f1f5f9',
-                      color: avatarStyleIdx === idx ? '#fff' : '#64748b',
-                      transition: 'all 0.2s'
-                    }}
-                  >{g.label}</div>
-                ))}
-              </div>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 12
-              }}>
-                {AVATAR_STYLE_GROUPS[avatarStyleIdx].avatars.map((url, i) => (
-                  <div
-                    key={url}
-                    onClick={() => setSelectedAvatar(url)}
-                    style={{
-                      width: '100%',
-                      aspectRatio: '1',
-                      borderRadius: 12,
-                      overflow: 'hidden',
-                      border: selectedAvatar === url ? '3px solid var(--accent-color)' : '2px solid #e2e8f0',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <img src={url} alt={`Avatar ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                ))}
-              </div>
-
-              {/* Confirm Button */}
-              {selectedAvatar && (
-                <Button
-                  block
-                  color="primary"
-                  loading={saving}
-                  style={{ marginTop: 20, borderRadius: 12, height: 48 }}
-                  onClick={handleSave}
-                >
-                  使用此头像
-                </Button>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <img src={url} alt="企业头像预设" />
+              </button>
+            ))}
+          </div>
+          <Button block color="primary" disabled={!selectedAvatar} loading={saving} onClick={handleSave}>应用所选头像</Button>
+        </div>
+      </Popup>
     </div>
   )
 }

@@ -3,8 +3,8 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 100dvh;
-    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+    min-height: 0;
+    background: #f4f6f8;
 }
 
 .kanban-navbar {
@@ -92,7 +92,7 @@
     /* PC端卡片悬浮效果 */
     .task-card {
         transition: transform 0.2s, box-shadow 0.2s;
-        cursor: grab;
+        cursor: pointer;
     }
 
     .task-card:hover {
@@ -100,8 +100,14 @@
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
     }
 
-    .task-card:active {
-        cursor: grabbing;
+    .task-drag-handle {
+        opacity: 0.72;
+        transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+    }
+
+    .task-card:hover .task-drag-handle,
+    .task-drag-handle:focus-visible {
+        opacity: 1;
     }
 }
 
@@ -110,7 +116,7 @@
     .kanban-board {
         padding: 32px 48px;
         gap: 28px;
-        justify-content: center;
+        justify-content: flex-start;
     }
 
     .kanban-column {
@@ -122,8 +128,10 @@
 /* 移动端横向滚动优化 */
 @media (max-width: 768px) {
     .kanban-board {
+        gap: 10px;
+        padding: 10px 12px calc(76px + env(safe-area-inset-bottom));
         scroll-snap-type: x mandatory;
-        scroll-padding: 16px;
+        scroll-padding: 12px;
     }
 
     .kanban-board::after {
@@ -133,7 +141,7 @@
 
     .kanban-column {
         scroll-snap-align: start;
-        min-width: 280px;
+        min-width: min(82vw, 292px);
         flex-shrink: 0;
     }
 
@@ -141,6 +149,14 @@
     .task-card:active {
         transform: scale(0.98);
         transition: transform 0.1s;
+    }
+
+    .task-drag-handle {
+        width: 32px;
+        height: 32px;
+        flex-basis: 32px;
+        margin: -7px -6px -7px 0;
+        opacity: 1;
     }
 }
 

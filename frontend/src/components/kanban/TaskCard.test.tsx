@@ -2,15 +2,19 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
 // Mock dnd-kit
-vi.mock('@dnd-kit/sortable', () => ({
-  useSortable: () => ({
+const { useSortableMock } = vi.hoisted(() => ({
+  useSortableMock: vi.fn(() => ({
     attributes: {},
     listeners: {},
     setNodeRef: vi.fn(),
     transform: null,
     transition: null,
     isDragging: false,
-  }),
+  })),
+}))
+
+vi.mock('@dnd-kit/sortable', () => ({
+  useSortable: useSortableMock,
 }))
 vi.mock('@dnd-kit/utilities', () => ({
   CSS: { Transform: { toString: () => undefined } },
@@ -56,7 +60,7 @@ describe('TaskCard', () => {
     expect(screen.getByText(/里程碑/)).toBeInTheDocument()
   })
 
-  it('应渲染负责人头像首字', () => {
+  it('应渲染负责人正式头像', () => {
     const task = {
       ...baseTask,
       expand: {
@@ -66,7 +70,7 @@ describe('TaskCard', () => {
       },
     } as unknown as Task
     render(<TaskCard task={task} />)
-    expect(screen.getByText('张')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '张三' })).toHaveAttribute('src', expect.stringMatching(/^data:image\/svg\+xml/))
   })
 
   it('超过3人时显示 +N', () => {
@@ -90,6 +94,35 @@ describe('TaskCard', () => {
     render(<TaskCard task={baseTask} onClick={onClick} />)
     screen.getByText('设计首页').click()
     expect(onClick).toHaveBeenCalled()
+  })
+
+  it('不可拖拽时禁用 sortable 传感器但保留按钮交互', () => {
+    const onClick = vi.fn()
+    render(<TaskCard task={baseTask} onClick={onClick} canDrag={false} />)
+
+    expect(useSortableMock).toHaveBeenLastCalledWith({ id: 't1', disabled: true })
+    const card = screen.getByRole('button', { name: /设计首页/ })
+    card.click()
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('可拖拽时启用 sortable', () => {
+    render(<TaskCard task={baseTask} canDrag />)
+    expect(useSortableMock).toHaveBeenLastCalledWith({ id: 't1', disabled: false })
+    expect(screen.getByRole('button', { name: '拖动任务 设计首页' })).toBeInTheDocument()
+  })
+
+  it('点击拖拽手柄不会打开任务详情', () => {
+    const onClick = vi.fn()
+    render(<TaskCard task={baseTask} canDrag onClick={onClick} />)
+
+    screen.getByRole('button', { name: '拖动任务 设计首页' }).click()
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it('不可拖拽时不显示拖拽手柄', () => {
+    render(<TaskCard task={baseTask} canDrag={false} />)
+    expect(screen.queryByRole('button', { name: '拖动任务 设计首页' })).not.toBeInTheDocument()
   })
 })
 

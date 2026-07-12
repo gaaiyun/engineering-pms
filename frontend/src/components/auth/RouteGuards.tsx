@@ -9,6 +9,10 @@ export function PrivateRoute({ children }: GuardProps) {
   return pb.authStore.isValid ? children : <Navigate to="/login" replace />
 }
 
+export function PublicOnlyRoute({ children }: GuardProps) {
+  return pb.authStore.isValid ? <Navigate to="/app" replace /> : children
+}
+
 export function ManagerRoute({ children }: GuardProps) {
   if (!pb.authStore.isValid) return <Navigate to="/login" replace />
   const role = normalizeAppRole((pb.authStore.model as { role?: string } | null)?.role)

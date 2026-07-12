@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Form, Input, Button, Toast, Selector } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
-import { AVATAR_STYLE_GROUPS } from '../lib/avatarOptions'
+import { getProfessionalAvatarOptions } from '../lib/avatar'
 import { motion } from 'framer-motion'
 import { 
   IoPersonOutline, 
@@ -21,7 +21,7 @@ const Register = () => {
   const [form] = Form.useForm()
   const [step, setStep] = useState(1) // 分步注册
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
-  const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
+  const [nickname, setNickname] = useState('新成员')
 
   const departments = [
     { label: '工程部', value: '工程部' },
@@ -31,38 +31,64 @@ const Register = () => {
     { label: '监理部', value: '监理部' },
   ]
 
-  const onFinish = async (values: any) => {
+  type RegisterValues = {
+    nickname: string
+    email: string
+    department?: string[]
+    avatar?: string
+    password: string
+    confirmPassword: string
+  }
+
+  type RegistrationError = {
+    message?: string
+    response?: { data?: Record<string, { message?: string }> }
+    data?: { data?: Record<string, { message?: string }> }
+  }
+
+  const onFinish = async (values: RegisterValues) => {
     if (values.password !== values.confirmPassword) {
       Toast.show({ content: '两次密码不一致', icon: 'fail' })
       return
     }
 
+    let createdAccountIdentity = ''
     setLoading(true)
     try {
-      // 用户名：邮箱前缀，去掉随机后缀
-      const baseUsername = values.email.split('@')[0]
-      let username = baseUsername
-      // 若用户名已存在则追加数字（循环确保唯一）
-      try {
-        let suffix = 0
-        while (true) {
-          const tryName = suffix === 0 ? baseUsername : `${baseUsername}${suffix}`
-          const existing = await pb.collection('users').getList(1, 1, { filter: `username="${tryName}"` })
-          if (existing.totalItems === 0) { username = tryName; break }
-          suffix++
+      // 未登录用户没有 users 列表权限，不能先查重。直接创建并仅在用户名冲突时换后缀重试。
+      const rawPrefix = String(values.email).split('@')[0].toLowerCase()
+      const normalizedPrefix = rawPrefix.replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '')
+      const baseUsername = (normalizedPrefix || 'employee').slice(0, 24).padEnd(3, '0')
+      let record: { id: string } | null = null
+      let lastError: unknown
+      for (let suffix = 0; suffix < 20; suffix += 1) {
+        const username = `${baseUsername}${suffix || ''}`
+        try {
+          record = await pb.collection('users').create({
+            username,
+            email: String(values.email).trim().toLowerCase(),
+            emailVisibility: true,
+            password: values.password,
+            passwordConfirm: values.confirmPassword,
+            name: String(values.nickname).trim(),
+            department: values.department?.[0] || '工程部',
+            role: 'employee',
+            is_active: true,
+          })
+          createdAccountIdentity = username
+          break
+        } catch (error: unknown) {
+          lastError = error
+          const registrationError = error as RegistrationError
+          const fieldData = registrationError.response?.data || registrationError.data?.data
+          if (!fieldData?.username) throw error
         }
-      } catch {}
+      }
+      if (!record) throw lastError || new Error('无法生成可用用户名，请联系管理员')
 
-      const record = await pb.collection('users').create({
-        username,
-        email: values.email,
-        password: values.password,
-        passwordConfirm: values.confirmPassword,
-        name: values.nickname,
-        department: values.department?.[0] || '工程部',
-        role: 'employee',
-        is_active: true,
-      })
+      // 注册成功即保持登录；先认证再更新头像，满足“仅本人可更新资料”的服务端规则。
+      localStorage.setItem('rememberMe', '1')
+      await pb.collection('users').authWithPassword(createdAccountIdentity, values.password)
 
       const avatarUrl = values.avatar || selectedAvatar
       if (avatarUrl && record?.id) {
@@ -73,19 +99,31 @@ const Register = () => {
             const fd = new FormData()
             fd.append('avatar', blob, 'avatar.svg')
             await pb.collection('users').update(record.id, fd)
+            await pb.collection('users').authRefresh()
           }
-        } catch {}
+        } catch (avatarError) {
+          console.warn('avatar upload after registration failed', avatarError)
+          Toast.show({ content: '账号已创建，头像可稍后在“我的资料”中设置', duration: 2500 })
+        }
       }
-
-      await pb.collection('users').authWithPassword(values.email, values.password)
 
       Toast.show({ content: '注册成功', icon: 'success' })
       navigate('/app')
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (createdAccountIdentity) {
+        Toast.show({
+          icon: 'success',
+          content: `账号已创建（登录账号：${createdAccountIdentity}），自动登录失败，请返回登录页重试`,
+          duration: 4000,
+        })
+        navigate('/login', { replace: true })
+        return
+      }
+      const registrationError = error as RegistrationError
       let msg = '注册失败'
-      if (error?.data?.data?.email?.message) msg = `邮箱错误: ${error.data.data.email.message}`
-      else if (error?.data?.data?.username?.message) msg = `用户名错误: ${error.data.data.username.message}`
-      else if (error?.message) msg = error.message
+      if (registrationError.data?.data?.email?.message) msg = `邮箱错误: ${registrationError.data.data.email.message}`
+      else if (registrationError.data?.data?.username?.message) msg = `用户名错误: ${registrationError.data.data.username.message}`
+      else if (registrationError.message) msg = registrationError.message
 
       Toast.show({ content: msg, icon: 'fail', duration: 3000 })
     } finally {
@@ -258,6 +296,7 @@ const Register = () => {
                   <InputWrapper icon={<IoPersonOutline size={20} />}>
                     <Input
                       placeholder='请输入您的真实姓名'
+                      onChange={value => setNickname(value || '新成员')}
                       style={{
                         '--font-size': '15px',
                         '--placeholder-color': '#94A3B8',
@@ -306,32 +345,23 @@ const Register = () => {
               </motion.div>
 
               <motion.div variants={itemVariants}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>选择头像</div>
-                {/* Style Tabs */}
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                  {AVATAR_STYLE_GROUPS.map((g, idx) => (
-                    <div
-                      key={g.key}
-                      onClick={() => setAvatarStyleIdx(idx)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 20,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        background: avatarStyleIdx === idx ? '#10B981' : '#f1f5f9',
-                        color: avatarStyleIdx === idx ? '#fff' : '#64748b',
-                        transition: 'all 0.2s'
-                      }}
-                    >{g.label}</div>
-                  ))}
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 4 }}>企业头像</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10 }}>根据姓名生成统一商务字标，也可注册后上传本人照片</div>
                 <Form.Item name='avatar'>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                    {AVATAR_STYLE_GROUPS[avatarStyleIdx].avatars.map((url) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+                    {getProfessionalAvatarOptions(nickname).map((url, index) => (
                       <div
                         key={url}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`企业头像 ${index + 1}`}
                         onClick={() => { setSelectedAvatar(url); form.setFieldValue('avatar', url) }}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            setSelectedAvatar(url)
+                            form.setFieldValue('avatar', url)
+                          }
+                        }}
                         style={{
                           aspectRatio: 1,
                           borderRadius: 12,
@@ -355,7 +385,9 @@ const Register = () => {
                     try {
                       await form.validateFields(['nickname', 'email'])
                       setStep(2)
-                    } catch {}
+                    } catch {
+                      return
+                    }
                   }}
                   style={{
                     background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',

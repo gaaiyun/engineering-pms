@@ -42,7 +42,7 @@ function resultIcon(kind: GlobalSearchResult['kind']) {
 
 function notificationPath(record: SearchRecord) {
   if (!record.link_id) return '/notifications'
-  if (record.link_type === 'project') return `/project/${record.link_id}/timeline`
+  if (record.link_type === 'project') return `/project/${record.link_id}`
   if (record.link_type === 'handoff' || record.type?.startsWith('handoff')) return '/review-center?tab=handoff'
   return `/task/${record.link_id}`
 }
@@ -82,7 +82,7 @@ async function searchAll(query: string): Promise<GlobalSearchResult[]> {
       kind: 'project' as const,
       title: record.name || '未命名项目',
       subtitle: record.code,
-      path: `/project/${record.id}/timeline`,
+      path: `/project/${record.id}`,
     })))
   }
   if (notifications.status === 'fulfilled') {

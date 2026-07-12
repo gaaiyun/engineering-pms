@@ -19,11 +19,12 @@ interface UserRow {
 }
 
 const USER_TEMPLATE = `[
-  { "username": "zhangsan", "name": "张三", "email": "zhangsan@example.com", "password": "12345678", "role": "employee", "department": "工程部" },
-  { "username": "lisi", "name": "李四", "email": "lisi@example.com", "password": "12345678", "role": "manager", "department": "管理层" }
+  { "username": "zhangsan", "name": "张三", "email": "zhangsan@example.com", "password": "ChangeMe_2026", "role": "employee", "department": "工程部" },
+  { "username": "lisi", "name": "李四", "email": "lisi@example.com", "password": "ChangeMe_2026", "role": "manager", "department": "管理层" }
 ]`
 
 function UserImportTab() {
+  const queryClient = useQueryClient()
   const [text, setText] = useState('')
   const [rows, setRows] = useState<UserRow[]>([])
   const [status, setStatus] = useState<ImportStatus>('idle')
@@ -36,14 +37,15 @@ function UserImportTab() {
       if (!Array.isArray(parsed) || parsed.length === 0) {
         Toast.show({ icon: 'fail', content: '请输入 JSON 数组' }); return
       }
-      const validated = parsed.map((r: any, i: number) => ({
-        username: r.username || `user_${i + 1}`,
-        name: r.name || '',
-        email: r.email || '',
-        password: r.password || '12345678',
-        role: r.role || 'employee',
-        department: r.department || '',
-      }))
+      const validated = parsed.map((value: unknown, i: number) => {
+        const r = value as Partial<UserRow>
+        if (!r.username || !/^[a-zA-Z0-9_]{3,30}$/.test(r.username)) throw new Error(`#${i + 1} 登录账号格式不正确`)
+        if (!r.name?.trim()) throw new Error(`#${i + 1} 缺少姓名`)
+        if (!r.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email)) throw new Error(`#${i + 1} 邮箱格式不正确`)
+        if (!r.password || r.password.length < 8) throw new Error(`#${i + 1} 密码至少 8 位`)
+        if (!['employee', 'manager', 'admin'].includes(r.role || '')) throw new Error(`#${i + 1} 角色不正确`)
+        return r as UserRow
+      })
       setRows(validated)
       setStatus('previewing')
     } catch {
@@ -60,16 +62,19 @@ function UserImportTab() {
       try {
         await pb.collection('users').create({
           ...rows[i],
+          emailVisibility: true,
           passwordConfirm: rows[i].password,
+          is_active: true,
         })
         ok.push(i)
-      } catch (e: any) {
-        errors.push(`#${i + 1} ${rows[i].username}: ${e?.message || '创建失败'}`)
+      } catch (error: unknown) {
+        errors.push(`#${i + 1} ${rows[i].username}: ${getPocketBaseErrorMessage(error, '创建失败')}`)
       }
       setProgress(Math.round(((i + 1) / rows.length) * 100))
     }
     setResults({ ok: ok.length, fail: errors.length, errors })
     setStatus('done')
+    await queryClient.invalidateQueries({ queryKey: ['users'] })
   }
 
   const reset = () => { setText(''); setRows([]); setStatus('idle'); setProgress(0); setResults({ ok: 0, fail: 0, errors: [] }) }
@@ -157,6 +162,14 @@ interface ProjectRow {
   memberIds: string[]
 }
 
+interface ProjectImportInput {
+  name?: unknown
+  code?: unknown
+  status?: unknown
+  manager?: unknown
+  members?: unknown
+}
+
 const PROJECT_TEMPLATE = `[
   { "name": "凤凰山大桥工程", "code": "FHS-2026", "status": "active", "manager": "王经理", "members": ["张工长", "赵工长", "李工长"] }
 ]`
@@ -178,17 +191,20 @@ function ProjectImportTab() {
       if (!Array.isArray(parsed) || parsed.length === 0) {
         Toast.show({ icon: 'fail', content: '请输入 JSON 数组' }); return
       }
-      const validated: ProjectRow[] = parsed.map((r: any) => {
-        const mgr = resolveUser(r.manager || '')
-        const members = (r.members || []).map((m: string) => resolveUser(m)).filter(Boolean)
+      const validated: ProjectRow[] = parsed.map((value: unknown) => {
+        const r = value as ProjectImportInput
+        const managerName = typeof r.manager === 'string' ? r.manager : ''
+        const memberNames = Array.isArray(r.members) ? r.members.filter((member): member is string => typeof member === 'string') : []
+        const mgr = resolveUser(managerName)
+        const members = memberNames.map(resolveUser).filter((member): member is NonNullable<typeof member> => member !== undefined)
         return {
-          name: r.name || '',
-          code: r.code || '',
-          status: r.status || 'active',
-          managerName: r.manager || '',
+          name: typeof r.name === 'string' ? r.name : '',
+          code: typeof r.code === 'string' ? r.code : '',
+          status: typeof r.status === 'string' ? r.status : 'active',
+          managerName,
           managerId: mgr?.id || '',
-          memberNames: (r.members || []) as string[],
-          memberIds: members.map((m: any) => m.id),
+          memberNames,
+          memberIds: members.map(member => member.id),
         }
       })
       setRows(validated)
@@ -218,8 +234,8 @@ function ProjectImportTab() {
           created_by: pb.authStore.model?.id,
         })
         ok.push(i)
-      } catch (e: any) {
-        errors.push(`#${i + 1} ${r.name}: ${e?.message || '创建失败'}`)
+      } catch (error: unknown) {
+        errors.push(`#${i + 1} ${r.name}: ${getPocketBaseErrorMessage(error, '创建失败')}`)
       }
       setProgress(Math.round(((i + 1) / rows.length) * 100))
     }
@@ -322,6 +338,15 @@ interface TaskRow {
   priority: NonNullable<Task['priority']>
 }
 
+interface TaskImportInput {
+  stage_name?: unknown
+  project?: unknown
+  assignees?: unknown
+  deadline?: unknown
+  status?: unknown
+  priority?: unknown
+}
+
 function TaskImportTab() {
   const queryClient = useQueryClient()
   const { data: users = [] } = useUsers()
@@ -341,18 +366,21 @@ function TaskImportTab() {
       if (!Array.isArray(parsed) || parsed.length === 0) {
         Toast.show({ icon: 'fail', content: '请输入 JSON 数组' }); return
       }
-      const validated: TaskRow[] = parsed.map((r: any) => {
-        const proj = resolveProject(r.project || '')
-        const assignees = (r.assignees || []).map((a: string) => resolveUser(a)).filter(Boolean)
+      const validated: TaskRow[] = parsed.map((value: unknown) => {
+        const r = value as TaskImportInput
+        const projectName = typeof r.project === 'string' ? r.project : ''
+        const assigneeNames = Array.isArray(r.assignees) ? r.assignees.filter((assignee): assignee is string => typeof assignee === 'string') : []
+        const proj = resolveProject(projectName)
+        const assignees = assigneeNames.map(resolveUser).filter((assignee): assignee is NonNullable<typeof assignee> => assignee !== undefined)
         return {
-          stage_name: r.stage_name || '',
-          projectName: r.project || '',
+          stage_name: typeof r.stage_name === 'string' ? r.stage_name : '',
+          projectName,
           projectId: proj?.id || '',
-          assigneeNames: (r.assignees || []) as string[],
-          assigneeIds: assignees.map((a: any) => a.id),
-          deadline: r.deadline || '',
-          status: (r.status || 'pending') as TaskStatus,
-          priority: (r.priority || 'normal') as NonNullable<Task['priority']>,
+          assigneeNames,
+          assigneeIds: assignees.map(assignee => assignee.id),
+          deadline: typeof r.deadline === 'string' ? r.deadline : '',
+          status: (typeof r.status === 'string' ? r.status : 'pending') as TaskStatus,
+          priority: (typeof r.priority === 'string' ? r.priority : 'normal') as NonNullable<Task['priority']>,
         }
       })
       setRows(validated)

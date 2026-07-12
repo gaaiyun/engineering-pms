@@ -6,11 +6,13 @@ import { isManager, useUsers, useProject, useTasks, useNotifications } from '../
 import { queryKeys } from '../lib/queryClient'
 import dayjs from 'dayjs'
 import isBetween from 'dayjs/plugin/isBetween'
-import { IoArrowBack, IoExpand, IoContract, IoCreateOutline, IoChevronUp, IoChevronDown } from 'react-icons/io5'
+import 'dayjs/locale/zh-cn'
+import { IoArrowBack, IoAdd, IoCreateOutline, IoChevronUp, IoChevronDown, IoRemove } from 'react-icons/io5'
 import { Button, Toast, Avatar, Badge } from 'antd-mobile'
 import BatchTaskEditor from '../components/BatchTaskEditor'
 import { motion } from 'framer-motion'
 import { SkeletonTimeline } from '../components/Skeleton'
+import { getUserAvatarUrl } from '../lib/avatar'
 
 dayjs.extend(isBetween)
 
@@ -26,6 +28,10 @@ interface Task {
   next_steps?: string
   priority?: 'low' | 'normal' | 'high'
   description?: string // Added for blocker reason parsing
+  blocker?: {
+    reason_detail?: string
+    reason_type?: string
+  } | null
   expand?: {
     assignees?: TimelineUser[]
   }
@@ -61,26 +67,26 @@ interface TaskLayout extends Task {
 // --- Constants ---
 const BASE_CELL_WIDTH = 60
 const MOBILE_MIN_CELL_WIDTH = 44 // 手机端最小宽度，防止过于拥挤
-const HEADER_HEIGHT = 48
-const SIDEBAR_WIDTH = 90
-const TASK_HEIGHT = 56
-const TASK_GAP_PC = 12
-const TASK_GAP_MOBILE = 20
-const ROW_PADDING_TOP_PC = 16
-const ROW_PADDING_TOP_MOBILE = 24
-const ROW_PADDING_BOTTOM_PC = 16
-const ROW_PADDING_BOTTOM_MOBILE = 24
+const DESKTOP_SIDEBAR_WIDTH = 104
+const MOBILE_SIDEBAR_WIDTH = 64
+const TASK_HEIGHT_PC = 52
+const TASK_HEIGHT_MOBILE = 44
+const TASK_GAP_PC = 10
+const TASK_GAP_MOBILE = 6
+const ROW_PADDING_TOP_PC = 14
+const ROW_PADDING_TOP_MOBILE = 8
+const ROW_PADDING_BOTTOM_PC = 14
+const ROW_PADDING_BOTTOM_MOBILE = 8
 
-// --- Helper: Avatar URL ---
-const getAvatarUrl = (user: TimelineUser | null) => {
-  if (!user) return ''
-  try {
-    if (user.collectionId && user.id && user.avatar) {
-      return pb.files.getUrl(user as Parameters<typeof pb.files.getUrl>[0], user.avatar)
-    }
-    return ''
-  } catch { return '' }
-}
+type TimelineFilter = 'all' | 'active' | 'blocked' | 'overdue' | 'completed'
+
+const FILTERS: { value: TimelineFilter; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'active', label: '进行中' },
+  { value: 'blocked', label: '阻塞' },
+  { value: 'overdue', label: '逾期' },
+  { value: 'completed', label: '完成' },
+]
 
 export default function ProjectTimeline() {
   const { id } = useParams()
@@ -98,6 +104,7 @@ export default function ProjectTimeline() {
   const [timelineStart, setTimelineStart] = useState(dayjs().subtract(7, 'day'))
   const [timelineDays, setTimelineDays] = useState(45)
   const [scale, setScale] = useState(1.0) // 0.5 - 2.0
+  const [statusFilter, setStatusFilter] = useState<TimelineFilter>('all')
   
   // Responsive Check
   const checkIsPC = () => {
@@ -116,8 +123,7 @@ export default function ProjectTimeline() {
     window.innerWidth > window.innerHeight
   )
   const [showBatchEditor, setShowBatchEditor] = useState(false)
-  const isPhoneLandscape = !isPC && window.innerHeight < 500 && window.innerWidth > window.innerHeight
-  const [summaryCollapsed, setSummaryCollapsed] = useState(isPhoneLandscape)
+  const [summaryCollapsed, setSummaryCollapsed] = useState(() => !checkIsPC())
 
   const { data: allUsers = [] } = useUsers()
   const userId = pb.authStore.model?.id || ''
@@ -136,11 +142,13 @@ export default function ProjectTimeline() {
 
   // 移动端动态间距
   const TASK_GAP = isPC ? TASK_GAP_PC : TASK_GAP_MOBILE
+  const TASK_HEIGHT = isPC ? TASK_HEIGHT_PC : TASK_HEIGHT_MOBILE
   const ROW_PADDING_TOP = isPC ? ROW_PADDING_TOP_PC : ROW_PADDING_TOP_MOBILE
   const ROW_PADDING_BOTTOM = isPC ? ROW_PADDING_BOTTOM_PC : ROW_PADDING_BOTTOM_MOBILE
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null)
+  const focusedDateRef = useRef<string | null>(null)
 
   // Detect PC/Mobile resize + natural orientation + landscape collapse
   useEffect(() => {
@@ -148,7 +156,7 @@ export default function ProjectTimeline() {
       setIsPC(checkIsPC())
       setIsNaturalLandscape(window.innerWidth > window.innerHeight)
       const nowPhoneLandscape = window.innerHeight < 500 && window.innerWidth > window.innerHeight
-      if (nowPhoneLandscape) setSummaryCollapsed(true)
+      if (nowPhoneLandscape || !checkIsPC()) setSummaryCollapsed(true)
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
@@ -260,26 +268,53 @@ export default function ProjectTimeline() {
       })
 
       setTimelineStart(minT)
-      setTimelineDays(maxT.diff(minT, 'day'))
+      setTimelineDays(Math.max(1, maxT.diff(minT, 'day')))
     }
 
     setGroups(finalGroups)
-  }, [ROW_PADDING_BOTTOM, ROW_PADDING_TOP, TASK_GAP])
+  }, [ROW_PADDING_BOTTOM, ROW_PADDING_TOP, TASK_GAP, TASK_HEIGHT])
+
+  const visibleTasks = useMemo(() => {
+    const now = dayjs()
+    return (rqTasks as unknown as Task[]).filter((task) => {
+      const isOverdue = task.status !== 'completed' && !!task.deadline && dayjs(task.deadline).isBefore(now)
+      if (statusFilter === 'all') return true
+      if (statusFilter === 'active') return task.status === 'in_progress' || task.status === 'processing' || task.status === 'pending'
+      if (statusFilter === 'overdue') return isOverdue
+      return task.status === statusFilter
+    })
+  }, [rqTasks, statusFilter])
 
   useEffect(() => {
     if (tasksLoading) {
       setLoading(true)
       return
     }
-    processGroups(rqTasks as unknown as Task[])
+    processGroups(visibleTasks)
     setLoading(false)
-  }, [rqTasks, tasksLoading, processGroups])
+  }, [visibleTasks, tasksLoading, processGroups])
 
   // --- Geometry Calc ---
-  // 横屏时自动放大单元格宽度以利用更多水平空间
-  const landscapeMultiplier = isNaturalLandscape && !isPC ? 1.3 : 1.0
-  const rawCellWidth = BASE_CELL_WIDTH * scale * landscapeMultiplier
+  const rawCellWidth = BASE_CELL_WIDTH * scale
   const CELL_WIDTH = Math.round(isPC ? rawCellWidth : Math.max(rawCellWidth, MOBILE_MIN_CELL_WIDTH))
+  const sidebarWidth = isPC ? DESKTOP_SIDEBAR_WIDTH : MOBILE_SIDEBAR_WIDTH
+
+  const scrollToDate = useCallback((date: dayjs.Dayjs, behavior: ScrollBehavior = 'smooth') => {
+    const container = containerRef.current
+    if (!container) return
+    const diff = date.diff(timelineStart, 'day', true)
+    const visibleTimelineWidth = Math.max(0, container.clientWidth - sidebarWidth)
+    container.scrollTo({
+      left: Math.max(0, diff * CELL_WIDTH - visibleTimelineWidth / 2),
+      behavior,
+    })
+  }, [CELL_WIDTH, sidebarWidth, timelineStart])
+
+  useEffect(() => {
+    if (!focusedDateRef.current) return
+    const frame = requestAnimationFrame(() => scrollToDate(dayjs(focusedDateRef.current!), 'auto'))
+    return () => cancelAnimationFrame(frame)
+  }, [isNaturalLandscape, scrollToDate])
 
   const getTaskStyle = (task: Task) => {
     const start = dayjs(task.start_date || task.created)
@@ -322,9 +357,9 @@ export default function ProjectTimeline() {
       group.tasks[0];
 
     if (pendingTask) {
-      const diff = dayjs(pendingTask.start_date).diff(timelineStart, 'day');
       if (containerRef.current) {
-        containerRef.current.scrollTo({ left: Math.max(0, diff * CELL_WIDTH - 100), behavior: 'smooth' }); // -100 for padding
+        focusedDateRef.current = pendingTask.start_date
+        scrollToDate(dayjs(pendingTask.start_date))
         Toast.show(`定位到 ${group.user?.name || '未知'} 的任务`);
       }
     } else {
@@ -340,27 +375,28 @@ export default function ProjectTimeline() {
         background: '#f8fafc',
         display: 'flex',
         flexDirection: 'column',
-        height: '100dvh',
-        width: '100vw',
+        height: '100%',
+        minHeight: 0,
+        width: '100%',
       }}
     >
       {/* 1. Navbar */}
       <div className="timeline-header" style={{
-        padding: '16px 24px',
+        padding: isPC ? '14px 20px' : '9px 10px',
         background: '#ffffff',
-        borderBottom: '2px solid #cbd5e1',
+        borderBottom: '1px solid #dbe3ea',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        zIndex: 1000,
+        zIndex: 60,
         position: 'sticky',
         top: 0,
         flexShrink: 0,
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-          <Button fill='none' onClick={() => navigate(-1)} style={{ padding: 4 }}>
-            <IoArrowBack size={24} color="#334155" />
+          <Button fill='none' onClick={() => navigate(`/project/${id}`)} style={{ padding: 4 }}>
+            <IoArrowBack size={isPC ? 22 : 19} color="#334155" />
           </Button>
           <div style={{ minWidth: 0, overflow: 'hidden' }}>
             {isPC && <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 2 }}>项目进度看板</div>}
@@ -376,40 +412,68 @@ export default function ProjectTimeline() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           <Button size='small' style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => {
-            const diff = dayjs().diff(timelineStart, 'day');
-            if (containerRef.current) containerRef.current.scrollTo({ left: Math.max(0, diff * CELL_WIDTH), behavior: 'smooth' })
+            focusedDateRef.current = dayjs().toISOString()
+            scrollToDate(dayjs(), 'auto')
             Toast.show('已回到今天');
           }}>
             {isPC ? '回到今天' : '今天'}
           </Button>
 
-          {isPC && (
-            <div style={{ background: '#f1f5f9', padding: 4, borderRadius: 8, display: 'flex', alignItems: 'center' }}>
-              <Button size='small' fill='none' onClick={() => setScale(s => Math.max(0.2, s - 0.2))}>
-                <IoContract size={18} />
+          <div style={{ background: '#f1f5f9', padding: 2, borderRadius: 7, display: 'flex', alignItems: 'center' }}>
+              <Button aria-label="缩小时间轴" size='small' fill='none' onClick={() => setScale(s => Math.max(0.2, s - 0.2))} style={{ minWidth: 28, padding: 2 }}>
+                <IoRemove size={16} />
               </Button>
-              <div style={{ fontSize: 14, fontWeight: 'bold', width: 48, textAlign: 'center', color: '#334155' }}>
-                {Math.round(scale * 100)}%
+              <div style={{ fontSize: 11, fontWeight: 700, width: isPC ? 40 : 30, textAlign: 'center', color: '#475569' }}>
+                {Math.round(scale * 100)}
               </div>
-              <Button size='small' fill='none' onClick={() => setScale(s => Math.min(2.0, s + 0.2))}>
-                <IoExpand size={18} />
+              <Button aria-label="放大时间轴" size='small' fill='none' onClick={() => setScale(s => Math.min(2.0, s + 0.2))} style={{ minWidth: 28, padding: 2 }}>
+                <IoAdd size={16} />
               </Button>
-            </div>
+          </div>
+
+          {isManager() && (
+            <Button
+              size="small"
+              color="primary"
+              aria-label="批量编辑任务"
+              onClick={() => setShowBatchEditor(true)}
+              style={{ minWidth: 40, minHeight: 36, padding: isPC ? '4px 10px' : '4px 8px' }}
+            >
+              <IoCreateOutline size={17} />{isPC ? '编辑任务' : ''}
+            </Button>
           )}
 
-          {!isPC && isNaturalLandscape && (
-            <div style={{ 
-              fontSize: 11, 
-              color: '#059669', 
-              fontWeight: 600,
-              background: '#ecfdf5',
-              padding: '4px 8px',
-              borderRadius: 6
-            }}>
-              横屏模式
-            </div>
-          )}
         </div>
+      </div>
+
+      <div
+        aria-label="时间轴任务筛选"
+        style={{
+          display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', flexShrink: 0,
+          padding: isPC ? '8px 20px' : '6px 10px', background: '#fff', borderBottom: '1px solid #e7ebef',
+        }}
+      >
+        {FILTERS.map((filter) => {
+          const selected = statusFilter === filter.value
+          return (
+            <button
+              key={filter.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setStatusFilter(filter.value)}
+              style={{
+                flex: '0 0 auto', border: `1px solid ${selected ? '#315f86' : '#dce3e9'}`,
+                borderRadius: 6, background: selected ? '#315f86' : '#fff', color: selected ? '#fff' : '#5e6b7c',
+                padding: isPC ? '5px 10px' : '4px 8px', fontSize: isPC ? 12 : 11, fontWeight: 650,
+              }}
+            >
+              {filter.label}
+            </button>
+          )
+        })}
+        <span style={{ marginLeft: 'auto', flex: '0 0 auto', color: '#8692a2', fontSize: 10 }}>
+          {visibleTasks.length}/{rqTasks.length} 项
+        </span>
       </div>
 
       {/* 2. Main Scroll Area with Inertia */}
@@ -423,7 +487,7 @@ export default function ProjectTimeline() {
           position: 'relative',
           overscrollBehavior: 'none', // Prevent bounce
           cursor: 'grab',
-          paddingBottom: 40,
+          paddingBottom: isPC ? 32 : 16,
           WebkitOverflowScrolling: 'touch'
         }}
         onMouseDown={(e) => {
@@ -458,7 +522,6 @@ export default function ProjectTimeline() {
         }}
       >
         <div style={{
-          paddingLeft: SIDEBAR_WIDTH, // Use padding instead of position trick
           minWidth: '100%',
           width: 'max-content', // Allow growing
           position: 'relative'
@@ -467,13 +530,13 @@ export default function ProjectTimeline() {
           {/* A. Time Axis Header (Sticky Top) */}
           <div style={{
             position: 'sticky', top: 0, zIndex: 40, background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
-            height: HEADER_HEIGHT, display: 'flex'
+            height: isPC ? 48 : 40, display: 'flex'
           }}>
-            {/* Frozen Corner Overlay */}
+            {/* Frozen assignee header */}
             <div style={{
-              position: 'fixed', left: 0, width: SIDEBAR_WIDTH, height: HEADER_HEIGHT, background: '#fff',
+              position: 'sticky', left: 0, width: sidebarWidth, height: isPC ? 48 : 40, background: '#fff',
               zIndex: 51, borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, color: '#64748b'
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isPC ? 12 : 10, fontWeight: 650, color: '#64748b', flexShrink: 0,
             }}>
               执行人
             </div>
@@ -490,7 +553,7 @@ export default function ProjectTimeline() {
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                 }}>
                   <span style={{ fontSize: 10, color: '#94a3b8' }}>{d.format('MM/DD')}</span>
-                  <span style={{ fontSize: 12, fontWeight: isToday ? 800 : 500, color: isToday ? '#2563eb' : '#475569', marginTop: 2 }}>{d.format('ddd')}</span>
+                  <span style={{ fontSize: 12, fontWeight: isToday ? 800 : 500, color: isToday ? '#2563eb' : '#475569', marginTop: 2 }}>{d.locale('zh-cn').format('ddd')}</span>
                 </div>
               )
             })}
@@ -499,7 +562,7 @@ export default function ProjectTimeline() {
           {/* B. Swimlanes */}
           <div style={{ position: 'relative' }}>
             {/* Background Grid */}
-            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, display: 'flex' }}>
+            <div style={{ position: 'absolute', inset: 0, left: sidebarWidth, pointerEvents: 'none', zIndex: 0, display: 'flex' }}>
               {Array.from({ length: timelineDays }).map((_, i) => (
                 <div key={i} style={{ width: CELL_WIDTH, borderRight: '1px dashed #f1f5f9', height: '100%', flexShrink: 0 }} />
               ))}
@@ -518,13 +581,13 @@ export default function ProjectTimeline() {
                 <div
                   onClick={() => handleLocateUser(group)}
                   style={{
-                    position: 'sticky', left: 0, width: SIDEBAR_WIDTH, height: '100%', background: '#fff',
+                    position: 'sticky', left: 0, width: sidebarWidth, height: '100%', background: '#fff',
                     borderRight: '1px solid #e2e8f0', zIndex: 30, display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', paddingTop: 16, boxShadow: '2px 0 5px rgba(0,0,0,0.02)', cursor: 'pointer',
+                    alignItems: 'center', paddingTop: isPC ? 14 : 8, boxShadow: '2px 0 5px rgba(0,0,0,0.02)', cursor: 'pointer',
                     flexShrink: 0
                   }}>
-                  <Avatar src={getAvatarUrl(group.user)} style={{ '--size': '36px' }} />
-                  <span style={{ fontSize: 11, marginTop: 4, textAlign: 'center', color: '#334155', padding: '0 4px' }}>
+                  <Avatar src={getUserAvatarUrl(group.user)} style={{ '--size': isPC ? '34px' : '28px' }} />
+                  <span style={{ fontSize: isPC ? 11 : 10, marginTop: 3, textAlign: 'center', color: '#334155', padding: '0 3px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {group.user?.name || '待分配'}
                   </span>
                   <span style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>{group.tasks.length} 任务</span>
@@ -539,11 +602,10 @@ export default function ProjectTimeline() {
                     const isDone = task.status === 'completed'
                     const isOverdue = !isDone && !!task.deadline && dayjs(task.deadline).isBefore(dayjs())
 
-                    // Parse blocker reason if available (basic regex from description if blocker field missing in type)
-                    let blockerReason = "阻塞中";
-                    if (isBlocked && task.description && task.description.includes('BLOCKER')) {
+                    let blockerReason = task.blocker?.reason_detail || '阻塞中'
+                    if (isBlocked && blockerReason === '阻塞中' && task.description && task.description.includes('BLOCKER')) {
                       const match = task.description.match(/BLOCKER\]: (.*)/);
-                      if (match) blockerReason = match[1].trim();
+                      if (match) blockerReason = match[1].trim()
                     }
 
                     return (
@@ -561,25 +623,22 @@ export default function ProjectTimeline() {
                           top,
                           height: TASK_HEIGHT,
                           background: isDone ? '#ecfdf5' : isBlocked ? '#fff1f2' : isOverdue ? '#fff7ed' : '#eff6ff',
-                          borderLeft: `4px solid ${isDone ? '#34d399' : isBlocked ? '#f43f5e' : isOverdue ? '#f97316' : '#3b82f6'}`,
-                          borderTop: '1px solid #e2e8f0',
-                          borderRight: '1px solid #e2e8f0',
-                          borderBottom: '1px solid #e2e8f0',
+                          border: `1px solid ${isDone ? '#86efac' : isBlocked ? '#fda4af' : isOverdue ? '#fdba74' : '#93c5fd'}`,
                           borderRadius: 4,
-                          padding: '4px 8px',
+                          padding: isPC ? '4px 8px' : '3px 6px',
                           display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                          cursor: 'pointer', zIndex: 10, overflow: 'hidden'
+                          cursor: 'pointer', zIndex: 10, overflow: 'visible'
                         }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ background: isDone ? '#34d399' : isBlocked ? '#f43f5e' : '#3b82f6', color: '#fff', borderRadius: '50%', width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                        <div style={{ position: 'sticky', left: sidebarWidth + 6, width: 'fit-content', maxWidth: isPC ? 180 : 150, fontSize: isPC ? 11 : 10, fontWeight: 650, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ background: isDone ? '#34d399' : isBlocked ? '#f43f5e' : '#3b82f6', color: '#fff', borderRadius: '50%', width: isPC ? 16 : 14, height: isPC ? 16 : 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, flexShrink: 0 }}>
                             {group.tasks.indexOf(task) + 1}
                           </span>
                           {task.stage_name}
                         </div>
                         {scale > 0.6 && (
-                          <div style={{ fontSize: 9, color: '#64748b', display: 'flex', gap: 6, marginTop: 2 }}>
-                            {isBlocked && <span style={{ color: '#e11d48', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockerReason.slice(0, 6)}...</span>}
+                          <div style={{ position: 'sticky', left: sidebarWidth + 6, width: 'fit-content', maxWidth: isPC ? 180 : 150, fontSize: 8, color: '#64748b', display: 'flex', gap: 5, marginTop: 1 }}>
+                            {isBlocked && <span style={{ color: '#e11d48', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockerReason.slice(0, isPC ? 10 : 6)}{blockerReason.length > (isPC ? 10 : 6) ? '…' : ''}</span>}
                             {isOverdue && !isBlocked && <span style={{ color: '#c2410c', whiteSpace: 'nowrap' }}>逾期</span>}
                             {!isBlocked && !isOverdue && task.deadline && <span style={{ whiteSpace: 'nowrap' }}>{dayjs(task.deadline).format('MM/DD')}</span>}
                           </div>
@@ -593,23 +652,6 @@ export default function ProjectTimeline() {
           </div>
         </div>
       </div>
-
-      {/* Floating Action - 批量编辑任务（经理可用） */}
-      {isManager() && (
-        <div style={{ position: 'fixed', bottom: 'calc(32px + env(safe-area-inset-bottom))', right: 32, zIndex: 100 }}>
-          <div
-            onClick={() => setShowBatchEditor(true)}
-            style={{
-              width: 56, height: 56, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)', color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 8px 16px rgba(37, 99, 235, 0.3)', cursor: 'pointer'
-            }}
-          >
-            <IoCreateOutline size={28} />
-          </div>
-        </div>
-      )}
 
       {/* 批量任务编辑器 */}
       {project && isManager() && (
@@ -631,7 +673,7 @@ export default function ProjectTimeline() {
             padding: '10px 24px', cursor: 'pointer', userSelect: 'none'
           }}
         >
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#334155' }}>项目概览 & 关键节点</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#334155' }}>项目概览</h3>
           {summaryCollapsed ? <IoChevronUp size={18} color="#94a3b8" /> : <IoChevronDown size={18} color="#94a3b8" />}
         </div>
         {!summaryCollapsed && (
@@ -652,7 +694,7 @@ export default function ProjectTimeline() {
                 boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <Avatar src={getAvatarUrl(g.user)} style={{ '--size': '24px' }} />
+                  <Avatar src={getUserAvatarUrl(g.user)} style={{ '--size': '24px' }} />
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{g.user?.name || '待分配'}</div>
                 </div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>

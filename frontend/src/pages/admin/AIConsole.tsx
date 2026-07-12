@@ -4,6 +4,23 @@ import { Card, Button, Input, Toast, Tag } from 'antd-mobile'
 import { IoSparkles, IoSend, IoChatbubbleEllipsesOutline } from 'react-icons/io5'
 import { aggregateProjectData, generateAIReport, chatWithAI } from '../../lib/ai-service'
 import { pb } from '../../lib/pocketbase'
+import { getLlmConfig, updateLlmConfig, type LlmConfig } from '../../lib/llm-config'
+
+type ProjectStats = Awaited<ReturnType<typeof aggregateProjectData>>
+
+interface AiReport {
+    content: string
+    risk_level: string
+    date: string
+    model_used?: string
+}
+
+interface ChatMessage {
+    role: 'user' | 'assistant'
+    content: string
+}
+
+const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback
 
 // Reuse the simple parser from AISummaryCard logic for consistency and no extra deps
 const MarkdownRenderer = ({ content }: { content: string }) => {
@@ -33,26 +50,35 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
 }
 
 const AIConsole = () => {
-    const [stats, setStats] = useState<any>(null)
-    const [report, setReport] = useState<any>(null)
+    const [stats, setStats] = useState<ProjectStats | null>(null)
+    const [report, setReport] = useState<AiReport | null>(null)
     const [loading, setLoading] = useState(false)
-    const [chatHistory, setChatHistory] = useState<any[]>([])
+    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
     const [input, setInput] = useState('')
     const [chatLoading, setChatLoading] = useState(false)
-    // Model Selection
-    const MODELS = [
-        { label: 'DeepSeek-V3.2 (推荐)', value: 'deepseek-ai/DeepSeek-V3' }, // Mapped to valid API model name, user requested V3.2 name but API likely V3 or custom. Using V3 for safety or as per user instruction if they insist on V3.2 name for UI but valid param for API. 
-        // User said: "deepseek-ai/DeepSeek-V3.2 (列表中DeepSeek系列的最高版本号)" -> If the API supports it. I will use the user provided string.
-        { label: 'DeepSeek-V3.2 (旗舰)', value: 'deepseek-ai/DeepSeek-V3.2' },
-        { label: 'DeepSeek-V3', value: 'deepseek-ai/DeepSeek-V3' },
-        { label: 'Baidu Ernie 4.0', value: 'baidu/ERNIE-4.0-8K' }, // Correcting based on common names, user gave specific ID: baidu/ERNIE-4.5-300B-A47B. I will use exact user string.
-        { label: 'Baidu ERNIE-4.5 (300B)', value: 'baidu/ERNIE-4.5-300B-A47B' },
-        { label: 'Qwen3 (235B)', value: 'Qwen/Qwen3-235B-A22B-Instruct-2507' },
-        { label: 'GLM 4.6', value: 'zai-org/GLM-4.6' }
-    ]
     const [selectedModel, setSelectedModel] = useState(localStorage.getItem('ai_model') || 'deepseek-ai/DeepSeek-V3')
+    const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(null)
+    const [configDraft, setConfigDraft] = useState({ provider: '', base_url: '', default_model: '' })
+    const [newApiKey, setNewApiKey] = useState('')
+    const [configSaving, setConfigSaving] = useState(false)
+    const [debugInfo, setDebugInfo] = useState<string>('')
 
     useEffect(() => {
+        getLlmConfig()
+            .then(config => {
+                setLlmConfig(config)
+                setConfigDraft({
+                    provider: config.provider,
+                    base_url: config.base_url,
+                    default_model: config.default_model,
+                })
+                setSelectedModel(config.default_model)
+                localStorage.setItem('ai_model', config.default_model)
+            })
+            .catch(error => {
+                setDebugInfo(`AI 配置读取失败: ${error.message}`)
+            })
+
         // Load stats
         aggregateProjectData().then(setStats).catch(console.error)
 
@@ -61,7 +87,7 @@ const AIConsole = () => {
         if (cachedReport) {
             try {
                 const parsed = JSON.parse(cachedReport)
-                setReport(parsed)
+                setReport(parsed as AiReport)
             } catch (e) {
                 console.warn('解析缓存报告失败', e)
             }
@@ -73,7 +99,7 @@ const AIConsole = () => {
             pb.collection('ai_summaries').getList(1, 1, { filter: `target_user="${userId}"`, sort: '-created' })
                 .then(res => {
                     if (res.items.length > 0) {
-                        setReport(res.items[0])
+                        setReport(res.items[0] as unknown as AiReport)
                         // 同时更新缓存
                         localStorage.setItem('ai_report_cache', JSON.stringify(res.items[0]))
                     }
@@ -88,7 +114,7 @@ const AIConsole = () => {
         const savedHistory = localStorage.getItem('ai_chat_history');
         if (savedHistory) {
             try {
-                setChatHistory(JSON.parse(savedHistory));
+                setChatHistory(JSON.parse(savedHistory) as ChatMessage[]);
             } catch {
                 // Ignore parse errors - start with empty history
             }
@@ -100,9 +126,39 @@ const AIConsole = () => {
         localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
     }, [chatHistory]);
 
-    const [debugInfo, setDebugInfo] = useState<string>('')
+    const handleSaveConfig = async () => {
+        if (!configDraft.provider.trim() || !configDraft.base_url.trim() || !configDraft.default_model.trim()) {
+            Toast.show({ icon: 'fail', content: '请完整填写供应商、Base URL 和默认模型' })
+            return
+        }
+        setConfigSaving(true)
+        try {
+            const saved = await updateLlmConfig({ ...configDraft, api_key: newApiKey })
+            setLlmConfig(saved)
+            setConfigDraft({
+                provider: saved.provider,
+                base_url: saved.base_url,
+                default_model: saved.default_model,
+            })
+            setNewApiKey('')
+            setSelectedModel(saved.default_model)
+            localStorage.setItem('ai_model', saved.default_model)
+            setDebugInfo('AI 服务配置已保存')
+            Toast.show({ icon: 'success', content: 'AI 服务配置已保存' })
+        } catch (error: unknown) {
+            const message = errorMessage(error, '配置保存失败')
+            setDebugInfo(`AI 配置保存失败: ${message}`)
+            Toast.show({ icon: 'fail', content: message })
+        } finally {
+            setConfigSaving(false)
+        }
+    }
     
     const handleUpdate = async () => {
+        if (!selectedModel.trim()) {
+            Toast.show({ icon: 'fail', content: '请先填写调用模型' })
+            return
+        }
         setLoading(true)
         setDebugInfo('正在聚合数据...')
         
@@ -137,11 +193,11 @@ const AIConsole = () => {
                         risk_level: aiRes.risk_level,
                         model_used: selectedModel
                     })
-                    setReport(saveRes)
+                    setReport(saveRes as unknown as AiReport)
                     // 更新缓存
                     localStorage.setItem('ai_report_cache', JSON.stringify(saveRes))
                     setDebugInfo('保存成功！')
-                } catch (dbError: any) {
+                } catch (dbError: unknown) {
                     console.warn('数据库保存失败（可能是collection不存在）:', dbError)
                     // 数据库保存失败，使用本地缓存的报告
                     setReport(reportData)
@@ -152,20 +208,21 @@ const AIConsole = () => {
                 setReport(reportData)
             }
             Toast.show({ icon: 'success', content: '分析已更新' })
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('AI Update Error:', error)
-            setDebugInfo(`错误: ${error.message}`)
+            const message = errorMessage(error, '未知错误')
+            setDebugInfo(`错误: ${message}`)
             
             // 更详细的错误提示
             let errorMsg = '更新失败'
-            if (error.message?.includes('401')) {
+            if (message.includes('401')) {
                 errorMsg = 'API Key 无效或已过期'
-            } else if (error.message?.includes('429')) {
+            } else if (message.includes('429')) {
                 errorMsg = 'API 请求过于频繁，请稍后再试'
-            } else if (error.message?.includes('fetch')) {
+            } else if (message.includes('fetch')) {
                 errorMsg = '网络连接失败，请检查网络'
             } else {
-                errorMsg = error.message || '未知错误'
+                errorMsg = message
             }
             
             Toast.show({ icon: 'fail', content: errorMsg, duration: 3000 })
@@ -176,10 +233,14 @@ const AIConsole = () => {
 
     const handleSend = async () => {
         if (!input.trim()) return
+        if (!selectedModel.trim()) {
+            Toast.show({ icon: 'fail', content: '请先填写调用模型' })
+            return
+        }
         const msg = input
         setInput('')
 
-        const newHistory = [...chatHistory, { role: 'user', content: msg }]
+        const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: msg }]
         setChatHistory(newHistory)
         setChatLoading(true)
 
@@ -187,9 +248,9 @@ const AIConsole = () => {
             const context = stats || await aggregateProjectData()
             const reply = await chatWithAI(msg, context, newHistory.slice(-10), undefined, selectedModel)
             setChatHistory(prev => [...prev, { role: 'assistant', content: reply }])
-        } catch (error: any) {
+        } catch (error: unknown) {
             Toast.show('发送失败')
-            setChatHistory(prev => [...prev, { role: 'assistant', content: 'Error: ' + error.message }])
+            setChatHistory(prev => [...prev, { role: 'assistant', content: 'Error: ' + errorMessage(error, '未知错误') }])
         } finally {
             setChatLoading(false)
         }
@@ -203,26 +264,59 @@ const AIConsole = () => {
 
     return (
         <div style={{ padding: '20px', height: '100%', overflowY: 'auto', background: '#f8fafc' }}>
-            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <div>
                     <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 8px 0', color: '#0f172a' }}>AI 智能决策台</h2>
                     <div style={{ fontSize: 13, color: '#64748b' }}>基于实时数据的全局项目诊断与问答系统</div>
                 </div>
-                {/* Model Selector */}
-                <select
+                <div style={{ minWidth: 220, flex: '0 1 320px' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5 }}>本次调用模型</div>
+                    <Input
                     value={selectedModel}
-                    onChange={e => {
-                        setSelectedModel(e.target.value);
-                        localStorage.setItem('ai_model', e.target.value);
+                    onChange={value => {
+                        setSelectedModel(value)
+                        localStorage.setItem('ai_model', value)
                     }}
-                    style={{
-                        padding: '6px 12px', borderRadius: 8, border: '1px solid #cbd5e1',
-                        fontSize: 12, background: 'white', color: '#334155', outline: 'none'
-                    }}
-                >
-                    {MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
+                    placeholder="例如 glm-5.2"
+                    style={{ '--font-size': '13px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 10px' }}
+                    />
+                </div>
             </div>
+
+            <Card style={{ marginBottom: 16, borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+                    <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>AI 服务设置</div>
+                        <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>兼容 OpenAI Chat Completions；密钥只保存在 PocketBase 服务器。</div>
+                    </div>
+                    <Tag color={llmConfig?.has_api_key ? 'success' : 'warning'}>
+                        {llmConfig?.has_api_key ? '密钥已配置' : '尚未配置密钥'}
+                    </Tag>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                    <label style={{ fontSize: 12, color: '#475569' }}>
+                        供应商名称
+                        <Input value={configDraft.provider} onChange={value => setConfigDraft(prev => ({ ...prev, provider: value }))} placeholder="例如 火山方舟" style={{ marginTop: 5, background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }} />
+                    </label>
+                    <label style={{ fontSize: 12, color: '#475569' }}>
+                        Base URL
+                        <Input value={configDraft.base_url} onChange={value => setConfigDraft(prev => ({ ...prev, base_url: value }))} placeholder="https://.../v1" style={{ marginTop: 5, background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }} />
+                    </label>
+                    <label style={{ fontSize: 12, color: '#475569' }}>
+                        默认模型
+                        <Input value={configDraft.default_model} onChange={value => setConfigDraft(prev => ({ ...prev, default_model: value }))} placeholder="例如 glm-5.2" style={{ marginTop: 5, background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }} />
+                    </label>
+                    <label style={{ fontSize: 12, color: '#475569' }}>
+                        API Key
+                        <Input type="password" value={newApiKey} onChange={setNewApiKey} placeholder={llmConfig?.has_api_key ? '留空则保留现有密钥' : '请输入 API Key'} style={{ marginTop: 5, background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }} />
+                    </label>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+                    <Button color="primary" size="small" loading={configSaving} disabled={configSaving} onClick={handleSaveConfig} style={{ borderRadius: 20, padding: '0 18px' }}>
+                        保存服务配置
+                    </Button>
+                </div>
+            </Card>
 
             {/* API状态指示器 */}
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

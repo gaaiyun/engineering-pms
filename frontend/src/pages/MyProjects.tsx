@@ -1,24 +1,27 @@
 import { useMemo, useState } from 'react'
 import { pb } from '../lib/pocketbase'
-import { IoArrowBackOutline, IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoTrashOutline, IoPeopleOutline, IoReturnUpBackOutline, IoDocumentTextOutline } from 'react-icons/io5'
+import { IoFolderOpenOutline, IoArchiveOutline, IoTimeOutline, IoWarningOutline, IoPeopleOutline, IoReturnUpBackOutline, IoDocumentTextOutline, IoEllipsisHorizontalOutline } from 'react-icons/io5'
 import { useNavigate } from 'react-router-dom'
-import { useProjects, useTasks, useUsers, useArchiveProject, useDeleteProject, useUpdateProjectMembers, useNotifications, isManager } from '../lib/api'
+import { useProjects, useProjectPortfolioTasks, useUsers, useArchiveProject, useUpdateProjectMembers, useNotifications, isManager } from '../lib/api'
 import { Dialog, Popup, SearchBar, SpinLoading } from 'antd-mobile'
 import dayjs from 'dayjs'
 import BatchProjectCreator from '../components/BatchProjectCreator'
 import { ThreeColumnImport } from '../components/admin/ThreeColumnImport'
+import './MyProjects.css'
+import { buildProjectMetrics } from '../lib/project-metrics'
 
 type FilterTab = 'all' | 'active' | 'blocked' | 'archived'
 
 export default function MyProjects() {
   const navigate = useNavigate()
   const { data: projects = [], isLoading } = useProjects()
-  const { data: allTasks = [] } = useTasks()
+  const projectIds = useMemo(() => projects.map(project => project.id), [projects])
+  const { data: allTasks = [] } = useProjectPortfolioTasks(projectIds)
   const { data: allUsers = [] } = useUsers()
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
   const [sortBy, setSortBy] = useState<'newest' | 'deadline'>('newest')
+  const [projectSearch, setProjectSearch] = useState('')
   const archiveProject = useArchiveProject()
-  const deleteProject = useDeleteProject()
   const updateMembers = useUpdateProjectMembers()
   const managerUser = isManager()
   const userId = pb.authStore.model?.id || ''
@@ -26,7 +29,7 @@ export default function MyProjects() {
   const projectNotifCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     const taskProjectMap: Record<string, string> = {}
-    allTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+    allTasks.forEach(t => { if (t.project) taskProjectMap[t.id] = t.project })
     for (const n of allNotifs) {
       if (n.is_read) continue
       let projectId: string | undefined
@@ -57,18 +60,36 @@ export default function MyProjects() {
     return ids
   }, [allTasks])
 
+  const projectMetrics = useMemo(() => buildProjectMetrics(allTasks), [allTasks])
+
   const filtered = useMemo(() => {
     let list = [...projects]
     if (activeTab === 'active') list = list.filter(p => p.status === 'active' && !blockedProjectIds.has(p.id))
     else if (activeTab === 'archived') list = list.filter(p => p.status === 'archived')
     else if (activeTab === 'blocked') list = list.filter(p => p.status === 'active' && blockedProjectIds.has(p.id))
+    if (projectSearch.trim()) {
+      const keyword = projectSearch.trim().toLowerCase()
+      list = list.filter(project => `${project.name} ${project.description || ''}`.toLowerCase().includes(keyword))
+    }
 
     list.sort((a, b) => {
       if (sortBy === 'deadline') return (a.deadline || '').localeCompare(b.deadline || '')
       return (b.created || '').localeCompare(a.created || '')
     })
     return list
-  }, [projects, activeTab, sortBy, blockedProjectIds])
+  }, [projects, activeTab, sortBy, blockedProjectIds, projectSearch])
+
+  const openProjectActions = (project: typeof projects[0]) => {
+    Dialog.show({
+      title: project.name,
+      content: '选择项目管理操作',
+      actions: [
+        [{ key: 'members', text: '成员管理', onClick: () => setMemberPopup({ visible: true, projectId: project.id, members: project.members || [], originalMembers: [...(project.members || [])] }) }],
+        [{ key: 'archive', text: project.status === 'archived' ? '取消归档' : '归档项目', onClick: () => archiveProject.mutate({ projectId: project.id, archived: project.status !== 'archived' }) }],
+        [{ key: 'cancel', text: '取消' }],
+      ],
+    })
+  }
 
   const tabs: { key: FilterTab; label: string; count: number }[] = [
     { key: 'all', label: '全部', count: projects.length },
@@ -91,15 +112,8 @@ export default function MyProjects() {
   )
 
   return (
-    <div className="page">
-      <div className="page-header" style={{ borderBottom: 'none', marginBottom: 16 }}>
-        <button onClick={() => navigate(-1)} style={{
-          background: 'none', border: '1px solid var(--border-color)', color: '#64748B',
-          borderRadius: '4px', width: '36px', height: '36px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-        }}>
-          <IoArrowBackOutline size={20} />
-        </button>
+    <div className="page my-projects-page">
+      <div className="page-header my-projects-header" style={{ borderBottom: 'none', marginBottom: 16 }}>
         <div style={{ flex: 1 }}>
           <div className="page-subtitle">PROJECTS</div>
           <h2 className="page-title">项目列表</h2>
@@ -107,13 +121,13 @@ export default function MyProjects() {
         {/* 新建项目按钮 */}
         {managerUser && (
           <>
-            <button onClick={() => setShowBatchCreator(true)} style={{
+            <button className="my-projects-primary" onClick={() => setShowBatchCreator(true)} style={{
               background: 'var(--primary-color)', border: 'none', borderRadius: 8, padding: '8px 16px',
               fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: 600, marginRight: 8
             }}>
               + 新建项目
             </button>
-            <button onClick={() => setShowExcelImport(true)} style={{
+            <button className="my-projects-import" onClick={() => setShowExcelImport(true)} style={{
               background: '#16a34a', border: 'none', borderRadius: 8, padding: '8px 16px',
               fontSize: 13, color: 'white', cursor: 'pointer', fontWeight: 600, marginRight: 8,
               display: 'flex', alignItems: 'center', gap: 4
@@ -123,7 +137,7 @@ export default function MyProjects() {
           </>
         )}
         {/* 排序切换 */}
-        <button onClick={() => setSortBy(s => s === 'newest' ? 'deadline' : 'newest')} style={{
+        <button className="my-projects-sort" onClick={() => setSortBy(s => s === 'newest' ? 'deadline' : 'newest')} style={{
           background: 'var(--neutral-100)', border: 'none', borderRadius: 8, padding: '6px 10px',
           fontSize: 11, color: 'var(--neutral-600)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
         }}>
@@ -131,6 +145,8 @@ export default function MyProjects() {
           {sortBy === 'newest' ? '最新创建' : '截止日期'}
         </button>
       </div>
+
+      <div className="my-projects-search"><SearchBar value={projectSearch} onChange={setProjectSearch} placeholder="搜索项目名称或说明" /></div>
 
       {/* 筛选 Tabs */}
       <div style={{ display: 'flex', gap: 8, padding: '0 16px', marginBottom: 20, overflowX: 'auto' }}>
@@ -151,8 +167,12 @@ export default function MyProjects() {
       <div style={{ padding: '0 16px' }}>
         {filtered.map(p => {
           const badge = statusBadge(p)
+          const progress = projectMetrics[p.id]?.progress ?? p.progress ?? 0
           return (
-            <div key={p.id} className="project-card" style={{
+            <div key={p.id} className="project-card my-project-row" role="button" tabIndex={0}
+              onClick={() => navigate(`/project/${p.id}`)}
+              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') navigate(`/project/${p.id}`) }}
+              style={{
               display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12,
               opacity: p.status === 'archived' ? 0.7 : 1,
               position: 'relative'
@@ -168,8 +188,7 @@ export default function MyProjects() {
                   {projectNotifCounts[p.id] > 99 ? '99+' : projectNotifCounts[p.id]}
                 </div>
               )}
-              <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}
-                onClick={() => navigate(`/project/${p.id}/timeline`)}>
+              <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: 12,
                   background: p.status === 'archived' ? '#f1f5f9' : 'var(--neutral-100)',
@@ -187,14 +206,14 @@ export default function MyProjects() {
                     }}>
                       {badge.icon} {badge.label}
                     </span>
-                    <span>进度 {p.progress || 0}%</span>
+                    <span>进度 {progress}%</span>
                     {p.deadline && <span>截止 {dayjs(p.deadline).format('MM/DD')}</span>}
                   </div>
                 </div>
               </div>
               {/* 经理操作按钮 */}
               {managerUser && (
-                <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                <div className="project-actions" style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                   <button title="成员管理" onClick={() => setMemberPopup({ visible: true, projectId: p.id, members: p.members || [], originalMembers: [...(p.members || [])] })} style={{
                     background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 6
                   }}><IoPeopleOutline size={18} /></button>
@@ -210,13 +229,12 @@ export default function MyProjects() {
                       background: 'none', border: 'none', cursor: 'pointer', color: '#d97706', padding: 6
                     }}><IoArchiveOutline size={18} /></button>
                   )}
-                  <button title="删除" onClick={() => Dialog.confirm({
-                    title: '删除项目', content: `确认删除「${p.name}」？此操作不可恢复！`,
-                    onConfirm: () => deleteProject.mutate(p.id)
-                  })} style={{
-                    background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 6
-                  }}><IoTrashOutline size={18} /></button>
                 </div>
+              )}
+              {managerUser && (
+                <button className="project-more" aria-label={`管理项目 ${p.name}`} onClick={event => { event.stopPropagation(); openProjectActions(p) }}>
+                  <IoEllipsisHorizontalOutline />
+                </button>
               )}
             </div>
           )

@@ -8,12 +8,13 @@ import {
     DragOverlay,
     closestCorners,
     KeyboardSensor,
-    PointerSensor,
+    MouseSensor,
     TouchSensor,
     useSensor,
     useSensors,
     type DragEndEvent,
     type DragStartEvent,
+    type CollisionDetection,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'
 import { NavBar, Toast, Popup } from 'antd-mobile'
@@ -61,17 +62,28 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
     const { setDraggingTaskId } = useUIStore()
     const canDrag = isManagerRole()
 
+    // Sortable 卡片本身也是 droppable。跨列拖动时如果保留当前卡片，
+    // closestCorners 会持续命中自己，表现为“刚拖动就回弹/中断”。
+    const collisionDetectionStrategy = useCallback<CollisionDetection>((args) => {
+        return closestCorners({
+            ...args,
+            droppableContainers: args.droppableContainers.filter(
+                container => container.id !== args.active.id,
+            ),
+        })
+    }, [])
+
     // 配置传感器：员工禁用拖拽，经理使用长按触发
     const sensors = useSensors(
-        useSensor(PointerSensor, {
+        useSensor(MouseSensor, {
             activationConstraint: {
-                distance: canDrag ? 8 : Infinity,
+                distance: canDrag ? 6 : Infinity,
             },
         }),
         useSensor(TouchSensor, {
             activationConstraint: {
-                delay: canDrag ? 250 : 99999999,
-                tolerance: 5,
+                delay: canDrag ? 180 : 99999999,
+                tolerance: 10,
             },
         }),
         useSensor(KeyboardSensor, {
@@ -145,6 +157,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
         const normalizedDragStatus = normalizeStatus(draggedTask.status)
         // 如果状态改变，更新任务
         if (normalizedDragStatus !== targetStatus) {
+            if (targetStatus === 'completed' || targetStatus === 'blocked') {
+                setSelectedTask(draggedTask)
+                setDrawerVisible(true)
+                Toast.show(targetStatus === 'completed' ? '请在任务详情中填写交接信息' : '请在任务详情中填写卡点原因')
+                return
+            }
             try {
                 await updateTask.mutateAsync({
                     id: activeId,
@@ -196,7 +214,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
         <div className="kanban-container">
             {!isDesktop && (
                 <NavBar
-                    onBack={() => navigate(-1)}
+                    onBack={() => navigate(`/project/${projectId}`)}
                     className="kanban-navbar"
                 >
                     {projectName || '项目看板'}
@@ -213,7 +231,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
 
             <DndContext
                 sensors={sensors}
-                collisionDetection={closestCorners}
+                collisionDetection={collisionDetectionStrategy}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
             >
@@ -226,6 +244,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
                             color={column.color}
                             tasks={tasksByStatus[column.id] || []}
                             onTaskClick={handleTaskClick}
+                            canDrag={canDrag}
                         />
                     ))}
                 </div>

@@ -73,6 +73,15 @@ export async function installMockSession(page: Page, role: MockRole) {
       return
     }
 
+    if (url.pathname.endsWith('/api/collections/users/auth-refresh')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ token: fakeToken(), record: model }),
+      })
+      return
+    }
+
     if (route.request().method() === 'GET' && url.pathname.includes('/records/')) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(model) })
       return

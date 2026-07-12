@@ -12,11 +12,12 @@ import {
   LegacyAdminRedirect,
   ManagerRoute,
   PrivateRoute,
+  PublicOnlyRoute,
 } from './components/auth/RouteGuards'
 import { initRealtimeBridge } from './lib/realtimeBridge'
 import { useQueryClient } from '@tanstack/react-query'
 
-// ⚠️ Bundle optimization（Agent D 建议 — 路由级 React.lazy）：
+// 路由级 React.lazy，避免首屏加载管理端和图表模块。
 // 把 admin-only / 低频访问的页面切成动态 chunk，员工端首屏不再白载这些代码。
 // 预估 gzip 减少约 100-200 KB（依实际 chunk 体积）。
 // Login/Register/Home 保持同步 import（首屏关键路径）。
@@ -26,6 +27,7 @@ const TaskCreate = React.lazy(() => import('./pages/TaskCreate'))
 const TaskDetail = React.lazy(() => import('./pages/TaskDetail'))
 const ProjectTimeline = React.lazy(() => import('./pages/ProjectTimeline'))
 const ProjectKanban = React.lazy(() => import('./pages/ProjectKanban'))
+const ProjectDetail = React.lazy(() => import('./pages/ProjectDetail'))
 const MyProjects = React.lazy(() => import('./pages/MyProjects'))
 const MyTasks = React.lazy(() => import('./pages/MyTasks'))
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage'))
@@ -122,8 +124,8 @@ function App() {
       <RealtimeBridgeProvider />
       <Suspense fallback={<PageFallback />}>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+        <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
 
         {/* 受保护路由统一由 AppShell 提供桌面侧栏或 compact 底栏 */}
         <Route element={<AppShell />}>
@@ -203,6 +205,15 @@ function App() {
               <ManagerRoute>
                 <TaskCreate />
               </ManagerRoute>
+            }
+          />
+
+          <Route
+            path="/project/:id"
+            element={
+              <PrivateRoute>
+                <ProjectDetail />
+              </PrivateRoute>
             }
           />
 

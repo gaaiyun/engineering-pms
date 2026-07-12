@@ -26,11 +26,11 @@ interface SettingRowProps {
 
 const SettingRow: React.FC<SettingRowProps> = ({ icon, color, label, value, onClick, rightContent }) => (
   <div className="profile-row" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
       <div style={{ 
-        width: 32, 
-        height: 32, 
-        borderRadius: 8, 
+        width: 29,
+        height: 29,
+        borderRadius: 7,
         background: color, 
         display: 'flex', 
         alignItems: 'center', 
@@ -39,7 +39,7 @@ const SettingRow: React.FC<SettingRowProps> = ({ icon, color, label, value, onCl
       }}>
         {icon}
       </div>
-      <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{label}</span>
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       {value && <span style={{ fontSize: 13, color: 'var(--neutral-400)' }}>{value}</span>}
@@ -139,12 +139,15 @@ export default function SettingsPage() {
 
     if (result) {
       // 保留登录信息
-      const authData = localStorage.getItem('pocketbase_auth')
+      const localKeys = ['pocketbase_auth', 'rememberMe', 'savedUsername', 'pb_url', 'push_device_id', 'notification_enabled']
+      const preservedLocal = localKeys
+        .map(key => [key, localStorage.getItem(key)] as const)
+        .filter((entry): entry is readonly [string, string] => entry[1] !== null)
+      const sessionAuth = sessionStorage.getItem('pocketbase_auth')
       localStorage.clear()
       sessionStorage.clear()
-      if (authData) {
-        localStorage.setItem('pocketbase_auth', authData)
-      }
+      preservedLocal.forEach(([key, value]) => localStorage.setItem(key, value))
+      if (sessionAuth) sessionStorage.setItem('pocketbase_auth', sessionAuth)
 
       // 同时清理 Service Worker 缓存（避免“仍然是老界面”）
       try {
@@ -189,12 +192,12 @@ export default function SettingsPage() {
       title: '关于版本',
       content: (
         <div style={{ fontSize: 14, lineHeight: 1.8, color: '#64748b', textAlign: 'center' }}>
-          <p style={{ fontSize: 24, marginBottom: 8 }}>PM</p>
+          <img src="/icons/icon-96x96.png" alt="EngineeringPMS" width={56} height={56} style={{ display: 'block', margin: '0 auto 10px', borderRadius: 13 }} />
           <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{APP_NAME}</p>
           <p>版本 v{APP_VERSION}</p>
           <br />
           <p>基于 React + PocketBase</p>
-          <p>AI 驱动的项目管理工具</p>
+          <p>工程项目协作与进度管理工具</p>
           <br />
           <p style={{ fontSize: 12 }}>© 2026 Engineering Settlement System</p>
         </div>
@@ -204,22 +207,22 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="page" style={{ padding: 20 }}>
+    <div className="page" style={{ padding: isCompact ? 12 : 20 }}>
       {/* Bug fix J-1: 仅 mobile 渲染 page header */}
       {isCompact && (
       <div className="glass-header" style={{
-        padding: '16px 20px',
+        padding: '9px 10px',
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        marginBottom: 24,
+        marginBottom: 14,
         position: 'sticky',
         top: 0,
         zIndex: 10,
         background: 'rgba(255,255,255,0.9)',
         backdropFilter: 'blur(12px)',
-        borderRadius: 16,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+        borderRadius: 9,
+        boxShadow: 'none'
       }}>
         <button
           onClick={() => navigate(-1)}
@@ -227,13 +230,13 @@ export default function SettingsPage() {
         >
           <IoArrowBackOutline size={24} />
         </button>
-        <div style={{ fontSize: 18, fontWeight: 800 }}>系统设置</div>
+        <div style={{ fontSize: 16, fontWeight: 760 }}>系统设置</div>
       </div>
       )}
 
       {/* 通用设置 */}
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>通用</div>
-      <div className="profile-table" style={{ marginBottom: 24 }}>
+      <div className="profile-table" style={{ marginBottom: isCompact ? 15 : 24 }}>
         <SettingRow
           icon={<IoNotificationsOutline size={18} />}
           color="#EF4444"
@@ -264,24 +267,13 @@ export default function SettingsPage() {
       {user?.role === 'admin' && (
         <>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>AI 设置</div>
-          <div className="profile-table" style={{ marginBottom: 24 }}>
+          <div className="profile-table" style={{ marginBottom: isCompact ? 15 : 24 }}>
             <SettingRow
               icon={<IoCloudOutline size={18} />}
               color="#06B6D4"
               label="AI 模型"
-              value={localStorage.getItem('ai_model')?.replace('deepseek-ai/', '') || 'DeepSeek-V3'}
-              onClick={() => {
-                Dialog.alert({
-                  title: 'AI 模型设置',
-                  content: (
-                    <div style={{ fontSize: 14, lineHeight: 1.8, color: '#64748b' }}>
-                      <p>当前使用模型：<strong>DeepSeek-V3</strong></p>
-                      <p style={{ marginTop: 8 }}>模型切换功能请前往管理控制台的「AI决策」页面配置。</p>
-                    </div>
-                  ),
-                  confirmText: '知道了',
-                })
-              }}
+              value={localStorage.getItem('ai_model') || '服务端配置'}
+              onClick={() => navigate('/system/ai')}
             />
           </div>
         </>
