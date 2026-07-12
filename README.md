@@ -2,6 +2,8 @@
 
 > 基于 React + PocketBase 的移动优先项目管理系统，专为工程结算场景设计。
 
+> 当前交付状态（2026-07-12）：功能分支已完成统一导航、数据流与响应式测试；生产 Web 仍是 2026-05-18 版本，尚未切换到本分支。PocketBase 已由 systemd 稳定运行。APK 当前是内部测试 debug 包，不是正式 release。生产操作以 [宝塔部署与运维手册](docs/宝塔部署操作手册.md) 为准。
+
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite)
@@ -21,10 +23,10 @@
 - **Android 后台通知** *(v3.0+)* — 原生前台服务保活，不依赖 Firebase/FCM，国产 ROM 友好
 - **变更审计中心** — 所有变动可追溯，支持已阅/通过复核
 - **全员消息通知** — 项目内任何变动自动通知全体成员
-- **AI 智能分析** — 基于 SiliconFlow / DeepSeek，**v3.04 起 API key 服务端代理**（不暴露浏览器）
+- **AI 智能分析** — 基于 SiliconFlow / DeepSeek，本分支已移除浏览器密钥与直连 fallback，服务端代理待随本分支上线
 - **HybridAuthStore** *(v3.04)* — "不记住登录"时 token 走 sessionStorage（关浏览器即清）
-- **5 个 PB hooks 兜底层** *(v3.0+)* — handoff 状态同步 / audit reject 回滚 / project.progress 自动重算 / LLM proxy / SSE
-- **自动备份** — 每 12 小时备份，保留 60 天
+- **服务端可信命令** — 通知创建与 LLM 调用先在生产数据库副本验收，再逐文件部署
+- **一致性备份** — PocketBase 内置备份 + 发布前冷备；必须检查实际文件时间和 `quick_check`
 - **移动端适配** — Capacitor 打包 Android APK，PWA 支持
 
 ## 系统架构
@@ -55,7 +57,7 @@ flowchart TB
 
     subgraph 后端服务
         PB["PocketBase 0.22<br/>(单二进制)"]
-        Hooks5["PB Hooks (5 个)<br/>project_progress / handoffs<br/>audit_reject / llm_proxy / sse"]
+        Hooks5["已审查服务端扩展<br/>notifications_api / llm_proxy<br/>其余 hooks 待重构"]
         SQLite[("SQLite<br/>+ WAL")]
     end
 
@@ -112,8 +114,7 @@ flowchart LR
         Static["静态文件<br/>/www/wwwroot/&lt;site&gt;/<br/>(frontend/dist)"]
         PB["pocketbase serve<br/>:8090"]
         DB[("pb_data/<br/>SQLite + WAL")]
-        Cron["crontab<br/>每 12h backup"]
-        Backup["backups/<br/>保留 60 天"]
+        Backup["PB 内置备份<br/>当前周一/周三，最多 10 份"]
     end
 
     subgraph 外部["外部服务"]
@@ -123,11 +124,10 @@ flowchart LR
     Android["📱 Android APK<br/>(直连 :8090)"]
 
     User -->|"https://your-domain/"| Nginx
-    Nginx -->|"/"| Static
-    Nginx -->|"/pb/*<br/>反代"| PB
+    Nginx -->|"当前仅静态 Web"| Static
     Android -->|"VITE_PB_URL<br/>:8090"| PB
     PB --> DB
-    Cron -->|".backup<br/>+ gzip"| Backup
+    PB -->|"内置一致性备份"| Backup
     PB -. "llm-proxy<br/>(api_key 服务端)" .-> SiliconFlow
 ```
 
@@ -140,9 +140,9 @@ flowchart LR
 - **PR 3**：响应式 AppShell 三断点（mobile/tablet/desktop），桌面 Sidebar+TopBar 布局
 - **PR 4**：桌面任务表格视图 + 批量操作（标记完成/删除）
 - **PR 5**：看板桌面体验提升，拖拽脉冲呼吸动画
-- **v3.04 安全收尾**：C1 LLM API key 服务端代理 / C2 HybridAuthStore / 6 PB hooks 兜底 / Bundle gzip -90%
+- **v3.04 安全收尾**：HybridAuthStore、服务端 AI/通知命令与权限 reconciliation、Bundle 拆分
 
-**当前 APK**：`EngineeringPMS_v3.04_production_ready.apk`（versionCode 44 / 6.94 MB）
+**当前 APK**：`frontend/android/app/build/outputs/apk/debug/app-debug.apk`（versionCode 44，Debug 签名，仅内部测试）
 
 ## 快速开始
 
@@ -163,7 +163,9 @@ cd backend
 启动后端.bat
 ```
 
-### 2. 初始化数据库
+### 2. 初始化本地演示数据库
+
+> 以下命令会重建集合和演示数据，只允许全新本地/隔离测试库，严禁连接生产。
 
 ```bash
 cd scripts
@@ -187,7 +189,9 @@ npm run dev
 START.bat
 ```
 
-## 测试账号
+## 本地演示账号
+
+以下账号由本地初始化脚本创建，不是生产账号；生产密码不能从仓库推断。
 
 | 角色 | 账号 | 密码 |
 |------|------|------|
@@ -201,13 +205,13 @@ START.bat
 ├── frontend/          # React 前端应用
 │   ├── src/
 │   │   ├── lib/       # 核心库（API、PocketBase、状态管理）
-│   │   ├── pages/     # 页面组件（18 个）
-│   │   └── components/# 可复用组件（12 个）
+│   │   ├── pages/     # 页面组件
+│   │   └── components/# 可复用组件
 │   └── public/        # 静态资源
 ├── backend/           # PocketBase 后端配置
 │   ├── pb_data/       # 数据库（运行时生成）
-│   ├── pb_migrations/ # 数据库迁移文件（36 个）
-│   └── pb_hooks/      # 服务端 JS hooks（5 个文件 / 8 handler）
+│   ├── pb_migrations/ # 数据库迁移（生产只能逐文件审查上线）
+│   └── pb_hooks/      # 服务端 JS 扩展（生产不能整目录覆盖）
 ├── pocketbase/        # PocketBase 可执行文件
 ├── scripts/           # 运维脚本（备份、数据库重建等）
 └── docs/              # 项目文档
@@ -278,42 +282,15 @@ erDiagram
 
 ## 部署
 
-**首次部署：** 详见 [宝塔部署操作手册](docs/宝塔部署操作手册.md)（含 PocketBase Linux 二进制上传、前端站点配置、Nginx 反代等）。
+**生产部署：** 详见 [宝塔部署与生产运维手册](docs/宝塔部署操作手册.md)。线上已是 systemd + 专用账户，禁止再使用 `nohup/pkill`。
 
-**已上线后增量升级（最常见）：** 见同文档"⭐ v3.04 增量升级流程"章节。最常用场景是**只更新前端**：
-1. 本地 `npm run build`
-2. 上传 `frontend/dist/` 内容覆盖 `/www/wwwroot/<站点>/`
-3. 浏览器强刷 — 不需要重启 PocketBase
+Web 发布必须经过本地测试、服务器 staging、当前版本备份、受控目录切换和深链接验证；不能先删除线上文件，也不能对站点根目录裸用 `rsync --delete`。
 
-**APK 安装：** 把 `EngineeringPMS_v3.04_production_ready.apk` 发到手机安装；按 [docs/android-background-keepalive.md](docs/android-background-keepalive.md) 加电池白名单 + 自启动权限。
+**APK：** 当前 debug 产物用于内部测试；构建、签名与真机清单见 [docs/android-apk.md](docs/android-apk.md)。仓库尚无 release keystore 时，不得把 APK 标成 production-ready。
 
-### 自动备份
+### 生产备份
 
-数据库每 12 小时自动备份一次，保留 60 天（约 120 份），使用 sqlite3 `.backup` 确保 WAL 数据完整。
-
-**Linux（crontab）：**
-
-```bash
-# 方式一：Node 脚本（跨平台，支持 gzip 压缩）
-0 */12 * * * cd /path/to/project && node scripts/auto_backup.mjs >> /var/log/pb_backup.log 2>&1
-
-# 方式二：Shell 脚本（轻量）
-0 */12 * * * /path/to/backend/backup.sh >> /var/log/pb_backup.log 2>&1
-```
-
-**Windows（计划任务）：**
-
-```powershell
-schtasks /create /tn "PB_Backup" /tr "powershell -File C:\path\to\backend\backup.ps1" /sc hourly /mo 12
-```
-
-**环境变量（可选，用于 `auto_backup.mjs`）：**
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `PB_DATA_DIR` | pb_data 目录路径 | Linux: `/www/server/pocketbase/pb_data`，其他: `../backend/pb_data` |
-| `BACKUP_DIR` | 备份存放目录 | `../backups` |
-| `KEEP_DAYS` | 保留天数 | `60` |
+线上当前 PocketBase 内置计划是周一/周三 00:00、最多 10 份。配置存在不等于备份有效，必须检查最新文件时间；每次发布还要停服务做冷备并对备份库执行 `PRAGMA quick_check`。完整命令见生产手册。
 
 ### Android APK 打包
 
