@@ -8,13 +8,8 @@ migrate((db) => {
   const dao = new Dao(db)
   const users = dao.findCollectionByNameOrId('_pb_users_auth_')
 
-  // is_active 是后加字段，历史记录的 false 代表“尚未回填”而非明确停用。
-  // 本迁移上线后，停用动作才由管理员界面显式产生。
-  const existingUsers = dao.findRecordsByFilter('users', 'is_active = false', '', 10000, 0)
-  existingUsers.forEach((record) => {
-    record.set('is_active', true)
-    dao.saveRecord(record)
-  })
+  // 不在结构迁移中猜测历史 false 的含义。生产库可能已有明确停用账号；
+  // 如旧环境需要回填，必须依据私有账号清单单独执行并逐项验收。
 
   const activeAdmin = '@request.auth.id != "" && @request.auth.is_active = true && @request.auth.role = "admin"'
   users.createRule = activeAdmin + ' || (@request.auth.id = "" && @request.data.role = "employee" && @request.data.is_active = true && @request.data.flower_count:isset = false && @request.data.phone:isset = false)'
