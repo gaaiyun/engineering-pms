@@ -23,17 +23,17 @@ describe('isManagerRole', () => {
   })
 
   it('当 role 为 admin 时返回 true', () => {
-    mockAuthStore.model = { role: 'admin' } as any
+    mockAuthStore.model = { role: 'admin' }
     expect(isManagerRole()).toBe(true)
   })
 
   it('当 role 为 manager 时返回 true', () => {
-    mockAuthStore.model = { role: 'manager' } as any
+    mockAuthStore.model = { role: 'manager' }
     expect(isManagerRole()).toBe(true)
   })
 
   it('当 role 为 employee 时返回 false', () => {
-    mockAuthStore.model = { role: 'employee' } as any
+    mockAuthStore.model = { role: 'employee' }
     expect(isManagerRole()).toBe(false)
   })
 
@@ -72,7 +72,7 @@ describe('getAddedAssigneeIds', () => {
   })
 
   it('忽略重复与空值', () => {
-    expect(getAddedAssigneeIds(['u1'], ['u1', 'u2', 'u2', '' as any, undefined as any])).toEqual(['u2'])
+    expect(getAddedAssigneeIds(['u1'], ['u1', 'u2', 'u2', '', undefined])).toEqual(['u2'])
   })
 
   it('没有新增时返回空数组', () => {

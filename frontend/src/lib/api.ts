@@ -185,7 +185,10 @@ function uniqueUserIds(ids: Array<string | null | undefined>) {
     return [...new Set(ids.filter((id): id is string => !!id))]
 }
 
-export function getAddedAssigneeIds(before: string[] = [], after: string[] = []) {
+export function getAddedAssigneeIds(
+    before: Array<string | null | undefined> = [],
+    after: Array<string | null | undefined> = [],
+) {
     const prev = new Set(before.filter(Boolean))
     return uniqueUserIds(after).filter((id) => !prev.has(id))
 }

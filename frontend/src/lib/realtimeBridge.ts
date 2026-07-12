@@ -123,9 +123,9 @@ export function initRealtimeBridge(queryClient: QueryClient): { stop: () => void
 
   return {
     stop: () => {
-      try { authUnsub?.() } catch {}
-      try { notifListener?.remove() } catch {}
-      try { statusListener?.remove() } catch {}
+      try { authUnsub?.() } catch (error) { void error }
+      try { notifListener?.remove() } catch (error) { void error }
+      try { statusListener?.remove() } catch (error) { void error }
       authUnsub = null
       notifListener = null
       statusListener = null

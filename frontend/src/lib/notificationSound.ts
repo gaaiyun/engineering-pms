@@ -5,10 +5,16 @@
 
 let audioCtx: AudioContext | null = null
 
+type WindowWithWebkitAudio = Window & {
+  webkitAudioContext?: typeof AudioContext
+}
+
 function getAudioContext(): AudioContext | null {
   try {
     if (!audioCtx) {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const AudioContextConstructor = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext
+      if (!AudioContextConstructor) return null
+      audioCtx = new AudioContextConstructor()
     }
     return audioCtx
   } catch {
