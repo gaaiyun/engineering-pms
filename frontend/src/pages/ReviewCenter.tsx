@@ -6,11 +6,11 @@
 import React, { useState, useMemo } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useBreakpoint } from '../lib/useBreakpoint'
+import { useAppSurface } from '../lib/useAppSurface'
 import {
   useAuditLogs, useUpdateAuditLogStatus, useUnreadAuditCount,
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
-  type Handoff, type User
+  type AuditLog, type Handoff, type User
 } from '../lib/api'
 import { getPocketBaseErrorMessage } from '../lib/pocketbase'
 import dayjs from 'dayjs'
@@ -157,7 +157,7 @@ const ReviewCenter: React.FC = () => {
     }
   }
 
-  const formatChange = (log: any) => {
+  const formatChange = (log: AuditLog) => {
     const before = log.before_data || {}
     const after = log.after_data || {}
     const parts: string[] = []
@@ -166,7 +166,7 @@ const ReviewCenter: React.FC = () => {
     if (after.assignees) parts.push('人员变更')
     if (after.deadline) parts.push('时间变更')
     if (after.count) parts.push(`${after.count} 个任务`)
-    if (after.members) parts.push(`成员: ${after.members.length} 人`)
+    if (Array.isArray(after.members)) parts.push(`成员: ${after.members.length} 人`)
     if (after.handoff_id) parts.push('提交交接提案')
     if (log.note) parts.push(log.note)
     return parts.length > 0 ? parts.join(' | ') : log.action_type
@@ -175,12 +175,11 @@ const ReviewCenter: React.FC = () => {
   const { data: unreadCount = 0 } = useUnreadAuditCount()
 
   // Bug fix J-1: 桌面端 AppShell TopBar 已有标题，移动版 NavBar 重复
-  const bp = useBreakpoint()
-  const isMobile = bp === 'mobile'
+  const isCompact = useAppSurface() === 'compact'
 
   return (
     <div className="review-center">
-      {isMobile ? (
+      {isCompact ? (
         <NavBar onBack={() => navigate(-1)} right={
           <div onClick={() => setShowFilter(!showFilter)} style={{ padding: '4px 8px', cursor: 'pointer' }}>
             <IoFunnelOutline size={20} color={filterAction ? '#3b82f6' : '#64748b'} />
@@ -254,7 +253,7 @@ const ReviewCenter: React.FC = () => {
               <Empty style={{ padding: '48px 0' }} description="暂无记录" />
             ) : (
               <div className="audit-list">
-                {displayLogs.map((log: any) => {
+                {displayLogs.map((log: AuditLog) => {
                   const actionInfo = ACTION_LABELS[log.action_type] || { label: log.action_type, color: '#94a3b8' }
                   const status = log.review_status || 'unread'
                   return (

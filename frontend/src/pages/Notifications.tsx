@@ -19,7 +19,7 @@ import {
   useUnreadNotificationCount,
 } from '../lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useBreakpoint } from '../lib/useBreakpoint'
+import { useAppSurface } from '../lib/useAppSurface'
 
 interface Notification {
   id: string
@@ -51,8 +51,7 @@ export default function Notifications() {
   const totalPages = Math.max(1, notificationPage?.totalPages || 1)
   // Bug fix J-1: 桌面端 AppShell 已有 Sidebar/TopBar，移动版 page header
   // 重复且 ← 在桌面端无意义。仅 mobile 渲染顶部 header。
-  const bp = useBreakpoint()
-  const isMobile = bp === 'mobile'
+  const isCompact = useAppSurface() === 'compact'
 
   const unreadCount = Number(unreadTotal || 0)
 
@@ -305,7 +304,7 @@ export default function Notifications() {
       </motion.div>
     )
 
-    if (!isMobile) {
+    if (!isCompact) {
       return <div key={notif.id}>{card}</div>
     }
 
@@ -336,7 +335,7 @@ export default function Notifications() {
   return (
     <div className="page" style={{ background: '#f8fafc' }}>
       {/* Header — Bug fix J-1: 仅 mobile 渲染（桌面 AppShell 已有 TopBar） */}
-      {isMobile && (
+      {isCompact && (
       <div style={{
         background: 'white',
         padding: '16px 20px',
@@ -409,7 +408,7 @@ export default function Notifications() {
         </Tabs>
       </div>
       )}
-      {!isMobile && (
+      {!isCompact && (
         // 桌面端：仅渲染 Tabs（标题由 AppShell TopBar 接管）
         <div style={{
           background: 'white',

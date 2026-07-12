@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom'
-import { IoNotificationsOutline, IoSearchOutline, IoPersonCircleOutline } from 'react-icons/io5'
+import { IoNotificationsOutline, IoPersonCircleOutline } from 'react-icons/io5'
 import { Badge } from 'antd-mobile'
 import { useNotificationAlerts } from '../../lib/useNotificationAlerts'
 import { pb } from '../../lib/pocketbase'
+import { GlobalSearch } from './GlobalSearch'
 
 export function TopBar() {
   const navigate = useNavigate()
@@ -24,22 +25,7 @@ export function TopBar() {
         boxShadow: '0 1px 2px rgba(0,0,0,.04)',
       }}
     >
-      {/* 搜索占位（后续 PR 接 cmdk） */}
-      <div
-        style={{
-          flex: '0 1 480px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
-          background: '#f1f5f9',
-          borderRadius: 8,
-          color: '#94a3b8',
-        }}
-      >
-        <IoSearchOutline size={18} />
-        <span style={{ fontSize: 13 }}>搜索任务、项目、通知…（敬请期待）</span>
-      </div>
+      <GlobalSearch />
 
       <div style={{ flex: 1 }} />
 

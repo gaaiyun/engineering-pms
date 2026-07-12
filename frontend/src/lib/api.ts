@@ -425,7 +425,7 @@ export function useMyTasks(userId: string) {
             const records = await pb.collection('tasks').getFullList<Task>({
                 filter: `assignees~"${userId}"`,
                 sort: '-deadline',
-                expand: 'project',
+                expand: 'project,assignees',
             })
             return records
         },
@@ -1661,7 +1661,7 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
               parts.push(`(note ~ "${escaped}" || action_type ~ "${escaped}")`)
             }
             const filter = parts.length > 0 ? parts.join(' && ') : ''
-            return await pb.collection('audit_logs').getFullList({
+            return await pb.collection('audit_logs').getFullList<AuditLog>({
                 filter,
                 sort: '-created',
                 expand: 'operator,project,task',

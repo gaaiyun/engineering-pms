@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import React from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 vi.mock('../lib/useAppSurface', () => ({
   useAppSurface: () => 'sidebar-expanded',
@@ -41,14 +42,17 @@ describe('Home in AppShell', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
 
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
-      <MemoryRouter initialEntries={['/app']}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="/app" element={<Home />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/app']}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/app" element={<Home />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     expect(screen.getByLabelText('桌面主导航')).toBeInTheDocument()

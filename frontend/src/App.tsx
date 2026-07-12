@@ -5,6 +5,7 @@ import Register from './pages/Register'
 import Home from './pages/Home'
 import { useNotificationAlerts } from './lib/useNotificationAlerts'
 import { AppShell } from './components/layout'
+import { SystemSectionLayout } from './components/layout/SystemSectionLayout'
 import {
   AdminOnlyRoute,
   DefaultRedirect,
@@ -157,7 +158,7 @@ function App() {
             path="/system/users"
             element={
               <AdminOnlyRoute>
-                <AdminDashboard section="users" />
+                <SystemSectionLayout><AdminDashboard section="users" /></SystemSectionLayout>
               </AdminOnlyRoute>
             }
           />
@@ -165,7 +166,7 @@ function App() {
             path="/system/ai"
             element={
               <AdminOnlyRoute>
-                <AdminDashboard section="ai" />
+                <SystemSectionLayout><AdminDashboard section="ai" /></SystemSectionLayout>
               </AdminOnlyRoute>
             }
           />
@@ -173,7 +174,7 @@ function App() {
             path="/system/import"
             element={
               <AdminOnlyRoute>
-                <DataImportCenter />
+                <SystemSectionLayout><DataImportCenter /></SystemSectionLayout>
               </AdminOnlyRoute>
             }
           />
@@ -181,7 +182,7 @@ function App() {
             path="/system/settings"
             element={
               <AdminOnlyRoute>
-                <SettingsPage />
+                <SystemSectionLayout><SettingsPage /></SystemSectionLayout>
               </AdminOnlyRoute>
             }
           />

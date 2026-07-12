@@ -16,6 +16,7 @@ import Tasks from './Tasks'
 import { pb } from '../lib/pocketbase'
 import { useNotifications, useTasks, useUnreadNotificationCount } from '../lib/api'
 import { useAppSurface } from '../lib/useAppSurface'
+import { GlobalSearch } from '../components/layout/GlobalSearch'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -88,7 +89,13 @@ export default function Home() {
         </header>
       )}
 
-      <main style={{ width: '100%', maxWidth: 1200, margin: '0 auto', padding: isCompact ? '0 20px 28px' : '28px 40px 40px' }}>
+      {isCompact && (
+        <div style={{ padding: '12px 20px 0', position: 'relative', zIndex: 15 }}>
+          <GlobalSearch />
+        </div>
+      )}
+
+      <main style={{ width: '100%', maxWidth: 1200, boxSizing: 'border-box', margin: '0 auto', padding: isCompact ? '0 20px 28px' : '28px 40px 40px' }}>
         {isManager ? (
           <ManagerWorkbench isAdmin={isAdmin} onNavigate={navigate} />
         ) : (

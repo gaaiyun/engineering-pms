@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
@@ -27,8 +27,17 @@ interface Task {
   priority?: 'low' | 'normal' | 'high'
   description?: string // Added for blocker reason parsing
   expand?: {
-    assignees?: { id: string, name: string, avatar: string, department?: string }[]
+    assignees?: TimelineUser[]
   }
+}
+
+interface TimelineUser {
+  id: string
+  name: string
+  avatar: string
+  department?: string
+  collectionId?: string
+  collectionName?: string
 }
 
 interface Project {
@@ -63,11 +72,11 @@ const ROW_PADDING_BOTTOM_PC = 16
 const ROW_PADDING_BOTTOM_MOBILE = 24
 
 // --- Helper: Avatar URL ---
-const getAvatarUrl = (user: any) => {
+const getAvatarUrl = (user: TimelineUser | null) => {
   if (!user) return ''
   try {
     if (user.collectionId && user.id && user.avatar) {
-      return pb.files.getUrl(user, user.avatar)
+      return pb.files.getUrl(user as Parameters<typeof pb.files.getUrl>[0], user.avatar)
     }
     return ''
   } catch { return '' }
@@ -115,7 +124,7 @@ export default function ProjectTimeline() {
   const { data: allNotifs = [] } = useNotifications(userId)
   const projectNotifCount = useMemo(() => {
     if (!id) return 0
-    const taskIds = new Set(rqTasks.map((t: any) => t.id))
+    const taskIds = new Set(rqTasks.map(t => t.id))
     let count = 0
     for (const n of allNotifs) {
       if (n.is_read) continue
@@ -146,17 +155,6 @@ export default function ProjectTimeline() {
   }, [])
 
   useEffect(() => {
-    if (tasksLoading) {
-      setLoading(true)
-      return
-    }
-    if (rqTasks.length > 0 || !tasksLoading) {
-      processGroups(rqTasks as unknown as Task[])
-      setLoading(false)
-    }
-  }, [rqTasks, tasksLoading, isPC])
-
-  useEffect(() => {
     if (!id) return
     pb.collection('tasks').subscribe('*', (e) => {
       if (e.record.project === id) {
@@ -167,7 +165,7 @@ export default function ProjectTimeline() {
   }, [id, queryClient])
 
   // --- Core Layout Logic ---
-  const processGroups = (allTasks: Task[]) => {
+  const processGroups = useCallback((allTasks: Task[]) => {
     const tempGroups: Record<string, TimelineGroup> = {}
     const unassignedTasks: Task[] = []
 
@@ -266,7 +264,16 @@ export default function ProjectTimeline() {
     }
 
     setGroups(finalGroups)
-  }
+  }, [ROW_PADDING_BOTTOM, ROW_PADDING_TOP, TASK_GAP])
+
+  useEffect(() => {
+    if (tasksLoading) {
+      setLoading(true)
+      return
+    }
+    processGroups(rqTasks as unknown as Task[])
+    setLoading(false)
+  }, [rqTasks, tasksLoading, processGroups])
 
   // --- Geometry Calc ---
   // 横屏时自动放大单元格宽度以利用更多水平空间
@@ -356,7 +363,7 @@ export default function ProjectTimeline() {
             <IoArrowBack size={24} color="#334155" />
           </Button>
           <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            {isPC && <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 2 }}>项目进度看板 (v2.2)</div>}
+            {isPC && <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 2 }}>项目进度看板</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <span style={{ fontSize: isPC ? 18 : 16, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {project?.name || '加载中...'}

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import React from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const mockSurface = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/useAppSurface', () => ({
@@ -25,14 +26,17 @@ vi.mock('antd-mobile', () => ({
 import { AppShell } from './AppShell'
 
 function renderShell(initialEntries: string[] = ['/app']) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route path="/app" element={<div data-testid="content">CONTENT</div>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/app" element={<div data-testid="content">CONTENT</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   )
 }
 

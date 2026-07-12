@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useBreakpoint } from '../lib/useBreakpoint'
+import { useAppSurface } from '../lib/useAppSurface'
+import { APP_NAME, APP_VERSION } from '../lib/appMeta'
 import { Toast, Dialog, Input, Switch } from 'antd-mobile'
 import { 
   IoArrowBackOutline, 
@@ -53,8 +54,7 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const user = pb.authStore.model
   // Bug fix J-1: 桌面端不渲染 mobile page header（与 AppShell TopBar 重复）
-  const bp = useBreakpoint()
-  const isMobile = bp === 'mobile'
+  const isCompact = useAppSurface() === 'compact'
 
   // 通知设置
   const [notificationEnabled, setNotificationEnabled] = useState(() => {
@@ -206,8 +206,8 @@ export default function SettingsPage() {
       content: (
         <div style={{ fontSize: 14, lineHeight: 1.8, color: '#64748b', textAlign: 'center' }}>
           <p style={{ fontSize: 24, marginBottom: 8 }}>PM</p>
-          <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>工程结算管理系统</p>
-          <p>版本 v2.1.0</p>
+          <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{APP_NAME}</p>
+          <p>版本 v{APP_VERSION}</p>
           <br />
           <p>基于 React + PocketBase</p>
           <p>AI 驱动的项目管理工具</p>
@@ -222,7 +222,7 @@ export default function SettingsPage() {
   return (
     <div className="page" style={{ padding: 20 }}>
       {/* Bug fix J-1: 仅 mobile 渲染 page header */}
-      {isMobile && (
+      {isCompact && (
       <div className="glass-header" style={{
         padding: '16px 20px',
         display: 'flex',
@@ -323,7 +323,7 @@ export default function SettingsPage() {
           icon={<IoInformationCircleOutline size={18} />}
           color="#64748B"
           label="关于版本"
-          value="v2.1.0"
+          value={`v${APP_VERSION}`}
           onClick={handleAbout}
         />
       </div>
