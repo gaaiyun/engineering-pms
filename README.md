@@ -2,7 +2,7 @@
 
 > 基于 React + PocketBase 的移动优先项目管理系统，专为工程结算场景设计。
 
-> 当前交付状态（2026-07-12）：功能分支已完成统一导航、数据流与响应式测试，并于 17:02 发布生产 Web；PocketBase systemd、生产权限 reconciliation、可信通知和 LLM 代理已上线。AI 还需要在 PB Admin UI 配置新的有效 SiliconFlow Key。APK 当前是内部测试 debug 包，不是正式 release。生产操作以 [宝塔部署与运维手册](docs/宝塔部署操作手册.md) 为准。
+> 当前交付状态（2026-07-12）：功能分支已完成统一导航、数据流与响应式测试，并于 17:52 二次发布生产 Web；PocketBase systemd、生产权限 reconciliation、可信通知和 LLM 代理已上线。手机通知分类裁切已修复并完成真实生产回归。AI 还需要在 PB Admin UI 配置新的有效 SiliconFlow Key。APK 当前是内部测试 debug 包，不是正式 release。生产操作以 [宝塔部署与运维手册](docs/宝塔部署操作手册.md) 为准。
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
