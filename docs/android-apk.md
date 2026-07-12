@@ -27,12 +27,12 @@ APK 输出：`frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
 
 2026-07-13 最终候选产物：
 
-- 大小：`7,210,664` bytes
-- SHA-256：`12ED43E875B2B29741934E762C605CE3D6A15904F4C8018950F6D048F784ADE5`
+- 大小：`7,210,637` bytes
+- SHA-256：`7D78A618DCCD13498F3C3A6EAB279AE3823B5D4B8AECEFE460D15DD6FB8A6447`
 - `aapt dump badging`：`com.engineering.pms` / versionName `3.05` / versionCode `45`
 - 内嵌后端：直接生产 PocketBase URL；实际值不在公开文档重复记录
 
-该产物包含最新姓名字标头像与看板拖拽修复。手机在最终重建前已断开，因此最终候选包已完成构建与静态校验，尚待下次 USB 连接后覆盖安装复验。
+该产物包含最新姓名字标头像与看板拖拽修复，并指向已完成 3.05 后端增量发布的生产 PocketBase。手机在最终重建前已断开，因此最终候选包已完成构建与静态校验，尚待下次 USB 连接后覆盖安装复验；不能用 Web 已发布替代 APK 真机验收。
 
 ## 安装
 

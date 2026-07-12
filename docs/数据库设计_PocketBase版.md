@@ -45,11 +45,13 @@
 | `1783838000_add_user_department.js` | 补齐用户部门字段 |
 | `1783841000_reconcile_ai_security.js` | AI 设置与权限 reconciliation |
 | `1783841100_harden_production_rules.js` | 收紧用户、项目、任务、通知和业务集合规则 |
-| `1783841200_fix_user_account_rules.js` | 账号启用回填、注册和管理员 CRUD 规则 |
+| `1783841200_fix_user_account_rules.js` | 注册和管理员 CRUD 规则；不改写既有账号启停状态 |
 | `1783841300_backfill_project_members.js` | 把经理和任务负责人补入项目成员 |
 | `1783841400_lock_transactional_workflows.js` | 锁住直接审批/删除和通用审计回滚入口 |
 
 迁移是前向的。生产回滚使用发布前冷备，不通过可能覆盖环境规则的 down migration。
+
+结构迁移不能推断业务数据语义，尤其不能把既有 `is_active=false` 批量改成 true。旧环境缺少启用状态时，应根据不入库的私有账号清单单独对账、逐项更新并保留冷备。
 
 ## 当前 Hook
 
@@ -75,3 +77,10 @@ sqlite3 -readonly pb_data/logs.db 'PRAGMA quick_check;'
 `data.db` 不是 `ok` 时中止维护并恢复原服务。损坏的 `logs.db*` 可在冷备后隔离，让 PocketBase 重建；不得移动或删除 `data.db*` 和 `storage`。
 
 生产账号同步不写 migration：真实姓名、用户名和初始密码属于私有部署数据，必须通过管理员界面或忽略的私有脚本幂等写入。
+
+## 当前生产状态（2026-07-13）
+
+- `1783841000` 至 `1783841400` 均已记录在生产 `_migrations`。
+- 本文列出的 hooks 已部署并由 systemd 加载；未认证访问自定义路由返回 401，说明路由存在且鉴权生效。
+- `data.db`、重建后的 `logs.db` 均通过 `PRAGMA quick_check`。
+- 生产迁移历史与仓库早期历史存在分叉，后续只允许按 `_migrations` 差异增量发布，禁止整目录覆盖。
