@@ -1,0 +1,7 @@
+.app-topbar__user-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 1024px) {
+  .app-topbar { padding: 0 14px !important; gap: 8px !important; }
+  .app-topbar__user-name { display: none; }
+  .app-topbar__user { padding-inline: 3px !important; }
+}

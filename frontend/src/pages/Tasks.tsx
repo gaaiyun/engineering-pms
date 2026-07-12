@@ -1,49 +1,44 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { ProgressBar, Tag, Popup, Badge } from 'antd-mobile'
 import { pb } from '../lib/pocketbase'
 import { IoTimeOutline, IoCheckmarkCircleOutline, IoBriefcaseOutline, IoAddCircle, IoCloseCircle, IoNotificationsOutline, IoChevronForward } from 'react-icons/io5'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, type NavigateFunction } from 'react-router-dom'
 import { SkeletonCard } from '../components/Skeleton'
 import { motion } from 'framer-motion'
-import { useTasks, useProjects, useNotifications, useUsers, isManager, type Task, type User } from '../lib/api'
+import { useTasks, useProjects, useNotifications, useUsers, isManager, type Notification, type Project as ApiProject, type Task, type User } from '../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../lib/queryClient'
 import BatchProjectCreator from '../components/BatchProjectCreator'
 
-interface Project {
-  id: string
-  name: string
-  code: string
-  status: 'active' | 'completed' | 'archived'
-  progress?: number
-  updated?: string
-  deadline?: string
+type Project = ApiProject & { code?: string; progress?: number }
+
+type StatusConfig = {
+  color: 'default' | 'success' | 'primary'
+  text: string
+  icon: ReactNode
 }
 
 // 项目卡片组件
 const ProjectCard = ({ 
   project, 
-  index, 
   onNotifClick, 
   navigate, 
   getStatusConfig, 
   getNotificationCount 
 }: { 
   project: Project
-  index: number
   onNotifClick: (p: Project) => void
-  navigate: any
-  getStatusConfig: any
-  getNotificationCount: any
+  navigate: NavigateFunction
+  getStatusConfig: (status: string, progress: number) => StatusConfig
+  getNotificationCount: (projectId: string) => number
 }) => {
   const config = getStatusConfig(project.status, project.progress || 0)
   const notifCount = getNotificationCount(project.id)
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      initial={false}
+      animate={{ opacity: 1 }}
       className="project-card"
       style={{
         cursor: 'pointer',
@@ -51,42 +46,15 @@ const ProjectCard = ({
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        minHeight: 160
+        minHeight: 112,
+        padding: 16,
+        borderRadius: 12,
+        border: '1px solid #dbe4ef',
+        boxShadow: 'none',
       }}
-      onClick={() => navigate(`/project/${project.id}/timeline`)}
+      onClick={() => navigate(`/project/${project.id}`)}
     >
-      {/* 红点提醒 - 可点击 */}
-      {notifCount > 0 && (
-        <div 
-          onClick={(e) => {
-            e.stopPropagation()
-            onNotifClick(project)
-          }}
-          style={{
-            position: 'absolute', 
-            top: -8, 
-            right: -8,
-            background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', 
-            color: 'white',
-            borderRadius: '50%', 
-            width: 24, 
-            height: 24,
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            fontSize: 11, 
-            fontWeight: 'bold',
-            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
-            zIndex: 10,
-            cursor: 'pointer',
-            transition: 'transform 0.2s'
-          }}
-        >
-          {notifCount}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div style={{ flex: 1, marginRight: 12 }}>
           <h3 style={{
             margin: '0 0 6px 0',
@@ -99,27 +67,42 @@ const ProjectCard = ({
             {project.name}
           </h3>
           <div style={{ fontSize: 12, color: 'var(--neutral-500)', fontFamily: 'monospace' }}>
-            {project.code}
+            {project.code || '未设置项目编号'}
           </div>
         </div>
-        <Tag
-          color={config.color}
-          fill='outline'
-          style={{ 
-            borderRadius: 8, 
-            padding: '4px 10px', 
-            fontSize: 11, 
-            fontWeight: 600, 
-            border: 'none', 
-            background: config.color === 'primary' ? '#EFF6FF' : config.color === 'success' ? '#ECFDF5' : '#F1F5F9',
-            color: config.color === 'primary' ? '#2563EB' : config.color === 'success' ? '#059669' : '#64748B',
-            whiteSpace: 'nowrap' 
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {config.icon} {config.text}
-          </span>
-        </Tag>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Tag
+            color={config.color}
+            fill='outline'
+            style={{
+              borderRadius: 8,
+              padding: '4px 10px',
+              fontSize: 11,
+              fontWeight: 600,
+              border: 'none',
+              background: config.color === 'primary' ? '#EFF6FF' : config.color === 'success' ? '#ECFDF5' : '#F1F5F9',
+              color: config.color === 'primary' ? '#2563EB' : config.color === 'success' ? '#059669' : '#64748B',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {config.icon} {config.text}
+            </span>
+          </Tag>
+          {notifCount > 0 && (
+            <button
+              type="button"
+              aria-label={`${project.name} ${notifCount} 条未读通知`}
+              onClick={(event) => {
+                event.stopPropagation()
+                onNotifClick(project)
+              }}
+              style={{ minWidth: 20, height: 20, padding: '0 5px', color: '#fff', fontSize: 11, fontWeight: 700, background: '#dc2626', border: 0, borderRadius: 10, cursor: 'pointer' }}
+            >
+              {notifCount > 99 ? '99+' : notifCount}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 进度部分 */}
@@ -131,11 +114,11 @@ const ProjectCard = ({
         <ProgressBar
           percent={project.progress || 0}
           style={{
-            '--track-width': '8px',
-            '--fill-color': 'linear-gradient(90deg, #3B82F6 0%, #2563EB 100%)',
+            '--track-width': '6px',
+            '--fill-color': '#2563eb',
             '--track-color': '#F1F5F9',
             borderRadius: 4
-          } as any}
+          } as CSSProperties & Record<'--track-width' | '--fill-color' | '--track-color', string>}
         />
       </div>
     </motion.div>
@@ -154,14 +137,14 @@ export default function Tasks() {
   const { data: projectsRaw = [], isLoading: loading } = useProjects()
   const userId = pb.authStore.model?.id
   const { data: allNotifs = [] } = useNotifications(userId || '')
-  const unreadNotifs = useMemo(() => allNotifs.filter((n: any) => !n.is_read).slice(0, 5), [allNotifs])
+  const unreadNotifs = useMemo(() => allNotifs.filter((n: Notification) => !n.is_read).slice(0, 5), [allNotifs])
 
   // 获取员工的任务
   const { data: myTasks = [] } = useTasks()
 
   const projects = useMemo(() => projectsRaw
-    .filter((p: any) => p.status !== 'archived')
-    .map((p: any) => {
+    .filter((p) => p.status !== 'archived')
+    .map((p) => {
       const pTasks = myTasks.filter((t: Task) => t.project === p.id)
       const completed = pTasks.filter((t: Task) => t.status === 'completed').length
       const computedProgress = pTasks.length > 0 ? Math.round((completed / pTasks.length) * 100) : 0
@@ -199,7 +182,7 @@ export default function Tasks() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const getStatusConfig = (status: string, progress: number) => {
+  const getStatusConfig = (status: string, progress: number): StatusConfig => {
     if (status === 'archived') return { color: 'default', text: '已归档', icon: <IoBriefcaseOutline /> }
     if (status === 'completed') return { color: 'success', text: '已完成', icon: <IoCheckmarkCircleOutline /> }
     if (progress >= 100) return { color: 'success', text: '已完成', icon: <IoCheckmarkCircleOutline /> }
@@ -211,7 +194,7 @@ export default function Tasks() {
     const counts: Record<string, number> = {}
     // 通过已加载的任务数据建立 taskId → projectId 映射
     const taskProjectMap: Record<string, string> = {}
-    myTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+    myTasks.forEach((t) => { if (t.project) taskProjectMap[t.id] = t.project })
 
     for (const n of allNotifs) {
       if (n.is_read) continue
@@ -241,18 +224,18 @@ export default function Tasks() {
 
 
   return (
-    <div style={{ paddingBottom: 40 }}>
-      <div style={{ padding: '24px 20px 0 20px', marginBottom: 20 }}>
-        <h1 className="page-title" style={{ marginBottom: 4 }}>工作进展</h1>
-        <div className="page-subtitle">项目与进度</div>
+    <div style={{ paddingBottom: isManagerUser ? 120 : 40 }}>
+      <div style={{ padding: '20px 20px 0 20px', marginBottom: 16 }}>
+        <h2 style={{ margin: 0, color: '#0f172a', fontSize: 20, letterSpacing: '-0.02em' }}>项目进展</h2>
+        <div style={{ marginTop: 4, color: '#64748b', fontSize: 12 }}>按项目查看当前完成度与最新提醒</div>
       </div>
 
       {/* 未读消息摘要 */}
       {unreadNotifs.length > 0 && (
         <div style={{ padding: '0 20px', marginBottom: 16 }}>
           <div onClick={() => navigate('/notifications')} style={{
-            background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-            borderRadius: 14, padding: '12px 16px', cursor: 'pointer',
+            background: '#eff6ff',
+            borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
             border: '1px solid #bfdbfe'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -263,7 +246,7 @@ export default function Tasks() {
               </div>
               <span style={{ fontSize: 12, color: '#3b82f6' }}>查看全部 <IoChevronForward size={12} /></span>
             </div>
-            {unreadNotifs.slice(0, 3).map((n: any) => (
+            {unreadNotifs.slice(0, 3).map((n) => (
               <div key={n.id} style={{ fontSize: 12, color: '#475569', padding: '3px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 • {n.title || n.content}
               </div>
@@ -344,11 +327,10 @@ export default function Tasks() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
             gap: 20
           }}>
-            {projects.map((project, index) => (
+            {projects.map((project) => (
               <ProjectCard 
                 key={project.id} 
                 project={project} 
-                index={index}
                 onNotifClick={(p) => {
                   setSelectedProjectNotif(p)
                   setShowNotifications(true)
@@ -361,11 +343,10 @@ export default function Tasks() {
           </div>
         ) : (
           // 移动端使用列表布局
-          projects.map((project, index) => (
+          projects.map((project) => (
             <ProjectCard 
               key={project.id} 
               project={project} 
-              index={index}
               onNotifClick={(p) => {
                 setSelectedProjectNotif(p)
                 setShowNotifications(true)
@@ -392,13 +373,13 @@ export default function Tasks() {
             <IoCloseCircle size={24} color="#94A3B8" onClick={() => setShowNotifications(false)} style={{ cursor: 'pointer' }} />
           </div>
           
-          {unreadNotifs.filter((n: any) => {
+          {unreadNotifs.filter((n) => {
             if (!selectedProjectNotif) return true
             // 通过 taskProjectMap 反查通知所属项目
             if (n.link_type === 'project') return n.link_id === selectedProjectNotif.id
             if (n.link_type === 'task' && n.link_id) {
               const taskProjectMap: Record<string, string> = {}
-              myTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+              myTasks.forEach((t) => { if (t.project) taskProjectMap[t.id] = t.project })
               return taskProjectMap[n.link_id] === selectedProjectNotif.id
             }
             return false
@@ -407,19 +388,19 @@ export default function Tasks() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {unreadNotifs
-                .filter((n: any) => {
+                .filter((n) => {
                   if (!selectedProjectNotif) return true
                   if (n.link_type === 'project') return n.link_id === selectedProjectNotif.id
                   if (n.link_type === 'task' && n.link_id) {
                     const taskProjectMap: Record<string, string> = {}
-                    myTasks.forEach((t: any) => { if (t.project) taskProjectMap[t.id] = t.project })
+                    myTasks.forEach((t) => { if (t.project) taskProjectMap[t.id] = t.project })
                     return taskProjectMap[n.link_id] === selectedProjectNotif.id
                   }
                   return false
                 })
                 .slice(0, 5)
-                .map((n: any) => (
-                  <div key={n.id} style={{ padding: 16, background: '#f8fafc', borderRadius: 12, borderLeft: '4px solid #3b82f6' }}>
+                .map((n) => (
+                  <div key={n.id} style={{ padding: 16, background: '#f8fafc', borderRadius: 10, border: '1px solid #dbeafe' }}>
                     <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4, fontSize: 14 }}>{n.title}</div>
                     <div style={{ fontSize: 13, color: '#64748b' }}>{n.content}</div>
                   </div>
@@ -442,17 +423,17 @@ export default function Tasks() {
           onClick={() => setShowAddProject(true)}
           style={{
             position: 'fixed',
-            bottom: 'calc(80px + env(safe-area-inset-bottom))',
+            bottom: isPC ? 24 : 'calc(80px + env(safe-area-inset-bottom))',
             right: 20,
             width: 56,
             height: 56,
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            background: '#2563eb',
             color: 'white',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 8px 24px rgba(59, 130, 246, 0.4)',
+            boxShadow: '0 4px 8px rgba(37, 99, 235, 0.28)',
             cursor: 'pointer',
             zIndex: 100
           }}

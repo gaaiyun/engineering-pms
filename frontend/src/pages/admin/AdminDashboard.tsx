@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { TabBar, Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Grid, Dialog, Form, Input, Selector, Toast, Button, Avatar, ProgressBar, Tag, SpinLoading, Popup } from 'antd-mobile'
 import { pb, getPocketBaseErrorMessage } from '../../lib/pocketbase'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUsers, useProjects, useTasks as useAllTasks, useUnreadAuditCount, useUpdateProject, useDeleteTask } from '../../lib/api'
@@ -19,17 +19,19 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
-  IoSparkles, IoGridOutline, IoPeopleOutline, IoBriefcaseOutline, 
+  IoSparkles, IoPeopleOutline, IoBriefcaseOutline,
   IoCheckmarkCircleOutline, IoFolderOutline, IoAddCircleOutline, IoWarningOutline,
-  IoTimeOutline, IoPersonOutline, IoSettingsOutline, IoNotificationsOutline,
-  IoLogOutOutline, IoChevronForwardOutline, IoCalendarOutline, IoCloudUploadOutline
+  IoTimeOutline, IoSettingsOutline, IoNotificationsOutline,
+  IoLogOutOutline, IoChevronForwardOutline, IoCalendarOutline, IoCloudUploadOutline,
+  IoSearchOutline, IoTrashOutline
 } from 'react-icons/io5'
 import AIConsole from './AIConsole'
 import BatchProjectCreator from '../../components/BatchProjectCreator'
 import BatchTaskEditor from '../../components/BatchTaskEditor'
-import { AVATAR_STYLE_GROUPS } from '../../lib/avatarOptions'
+import { getProfessionalAvatarOptions, getUserAvatarUrl } from '../../lib/avatar'
 import { IoCameraOutline, IoClose } from 'react-icons/io5'
 import { logoutWithDeviceCleanup } from '../../lib/pushNotifications'
+import './AdminDashboard.css'
 
 interface User {
   id: string
@@ -40,6 +42,7 @@ interface User {
   department?: '工程部' | '审计部' | '财务部' | '管理层'
   avatar?: string
   created?: string
+  is_active?: boolean
 }
 
 interface Project {
@@ -59,6 +62,8 @@ interface Task {
   approved?: boolean
   score?: number
   stage_name: string
+  start_date?: string
+  deadline?: string
   expand?: {
     project?: { id: string; name: string }
     assignees?: Array<{ id: string; name: string; username: string }>
@@ -68,32 +73,53 @@ interface Task {
 
 const VALID_TABS = ['dashboard', 'users', 'projects', 'ai', 'timeline', 'profile'] as const
 type TabKey = typeof VALID_TABS[number]
+const USER_ROLE_LABELS: Record<string, string> = { employee: '普通员工', manager: '项目经理', admin: '管理员' }
 
-const AdminDashboard = () => {
+interface AdminDashboardProps {
+  section?: 'users' | 'ai'
+}
+
+interface UserFormValues {
+  username: string
+  name: string
+  email: string
+  role: string[] | string
+  department: string[] | string
+  is_active?: string[] | string
+  password?: string
+  passwordConfirm?: string
+}
+
+const AdminDashboard = ({ section }: AdminDashboardProps) => {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabFromUrl = searchParams.get('tab') as TabKey | null
-  const activeKey: TabKey = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'dashboard'
+  const activeKey: TabKey = section || (tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'dashboard')
   const setActiveKey = (key: TabKey) => {
+    if (section) {
+      const routeByKey: Record<TabKey, string> = {
+        dashboard: '/app',
+        users: '/system/users',
+        projects: '/my-projects',
+        ai: '/system/ai',
+        timeline: '/my-projects',
+        profile: '/me',
+      }
+      navigate(routeByKey[key])
+      return
+    }
     setSearchParams({ tab: key }, { replace: true })
   }
   
   // 处理无效 tab：如果 URL 中的 tab 无效，重定向到 dashboard
   useEffect(() => {
-    if (tabFromUrl && !VALID_TABS.includes(tabFromUrl)) {
+    if (!section && tabFromUrl && !VALID_TABS.includes(tabFromUrl)) {
       setSearchParams({ tab: 'dashboard' }, { replace: true })
     }
-  }, [tabFromUrl, setSearchParams])
+  }, [section, tabFromUrl, setSearchParams])
   const authUser = pb.authStore.model
 
-  const tabs = [
-    { key: 'dashboard', title: '概览', icon: <IoGridOutline /> },
-    { key: 'timeline', title: '时间轴', icon: <IoTimeOutline /> },
-    { key: 'projects', title: '项目', icon: <IoBriefcaseOutline /> },
-    { key: 'ai', title: 'AI', icon: <IoSparkles /> },
-    { key: 'profile', title: '我的', icon: <IoPersonOutline /> },
-  ]
-
-  // Bug fix P0-2 (Agent C 数据流审计)：用 mutation hook 取代直接 PB 调用
+  // 使用统一 mutation hook，避免页面直接拼装删除副作用。
   const updateProject = useUpdateProject()
   const deleteTaskMutation = useDeleteTask()
 
@@ -106,7 +132,7 @@ const AdminDashboard = () => {
   const tasks = rqTasks as unknown as Task[]
   const loading = usersLoading || projectsLoading || tasksLoading
   const loadError = (usersError || projectsError || tasksError)
-    ? ((usersError || projectsError || tasksError) as any)?.status === 403
+    ? ((usersError || projectsError || tasksError) as { status?: number })?.status === 403
       ? '权限不足，请确认账号角色'
       : '网络异常，数据加载失败'
     : null
@@ -118,6 +144,8 @@ const AdminDashboard = () => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [projectTasks, setProjectTasks] = useState<Task[]>([])
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [userSaving, setUserSaving] = useState(false)
   const [userForm] = Form.useForm()
   const [addUserForm] = Form.useForm()
 
@@ -126,11 +154,9 @@ const AdminDashboard = () => {
   const [editName, setEditName] = useState(authUser?.name || '')
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
-  const [avatarStyleIdx, setAvatarStyleIdx] = useState(0)
   const [profileSaving, setProfileSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const refreshAll = () => {
@@ -141,7 +167,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const role = pb.authStore.model?.role?.toLowerCase()
-    if (!pb.authStore.isValid || (role !== 'admin' && role !== 'manager')) {
+    if (!pb.authStore.isValid || role !== 'admin') {
       Toast.show({ icon: 'fail', content: '没有权限访问管理员后台' })
       navigate('/app')
     }
@@ -266,42 +292,79 @@ const AdminDashboard = () => {
 
   const handleEditUser = (user: User) => {
     setCurrentUser(user)
+    userForm.resetFields()
     userForm.setFieldsValue({
       name: user.name,
+      username: user.username,
       email: user.email,
       role: user.role ? [user.role] : [],
       department: user.department ? [user.department] : [],
+      is_active: [user.is_active === false ? 'disabled' : 'enabled'],
     })
     setShowUserModal(true)
   }
 
-  const handleUserUpdate = async (values: any) => {
+  const handleUserUpdate = async (values: UserFormValues) => {
     if (!currentUser) return
+    const isActive = (Array.isArray(values.is_active) ? values.is_active[0] : values.is_active) !== 'disabled'
+    const nextRole = Array.isArray(values.role) ? values.role[0] : values.role
+    if (currentUser.id === authUser?.id && !isActive) {
+      Toast.show({ icon: 'fail', content: '不能停用当前登录账号' })
+      return
+    }
+    if (currentUser.id === authUser?.id && nextRole !== 'admin') {
+      Toast.show({ icon: 'fail', content: '不能降低当前登录管理员的角色' })
+      return
+    }
+    if (values.password && values.password !== values.passwordConfirm) {
+      Toast.show({ icon: 'fail', content: '两次输入的新密码不一致' })
+      return
+    }
+    setUserSaving(true)
     try {
-      await pb.collection('users').update(currentUser.id, {
-        ...values,
-        role: Array.isArray(values.role) ? values.role[0] : values.role,
+      const updateData: Record<string, unknown> = {
+        username: values.username.trim(),
+        name: values.name.trim(),
+        email: values.email.trim().toLowerCase(),
+        emailVisibility: true,
+        role: nextRole,
         department: Array.isArray(values.department) ? values.department[0] : values.department,
-      })
+        is_active: isActive,
+      }
+      if (values.password) {
+        updateData.password = values.password
+        updateData.passwordConfirm = values.passwordConfirm
+      }
+      await pb.collection('users').update(currentUser.id, updateData)
+      if (currentUser.id === authUser?.id) await pb.collection('users').authRefresh()
       Toast.show({ icon: 'success', content: '用户已更新' })
       setShowUserModal(false)
       refreshAll()
     } catch (error: unknown) {
       console.error('update user failed', error)
       Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '更新失败') })
+    } finally {
+      setUserSaving(false)
     }
   }
 
-  const handleAddUser = async (values: any) => {
+  const handleAddUser = async (values: UserFormValues) => {
+    if (values.password !== values.passwordConfirm) {
+      Toast.show({ icon: 'fail', content: '两次输入的密码不一致' })
+      return
+    }
+    setUserSaving(true)
     try {
       await pb.collection('users').create({
         username: values.username.trim(),
-        email: values.email,
+        email: values.email.trim().toLowerCase(),
+        emailVisibility: true,
         password: values.password,
-        passwordConfirm: values.password,
-        name: values.name,
+        passwordConfirm: values.passwordConfirm,
+        name: values.name.trim(),
         role: Array.isArray(values.role) ? values.role[0] : values.role,
         department: Array.isArray(values.department) ? values.department[0] : values.department,
+        is_active: true,
       })
       Toast.show({ icon: 'success', content: '新用户已创建' })
       setShowAddUserModal(false)
@@ -310,8 +373,42 @@ const AdminDashboard = () => {
     } catch (error: unknown) {
       console.error('add user failed', error)
       Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '创建失败') })
+    } finally {
+      setUserSaving(false)
     }
   }
+
+  const handleDeleteUser = async () => {
+    if (!currentUser || currentUser.id === authUser?.id) {
+      Toast.show({ icon: 'fail', content: '不能删除当前登录账号' })
+      return
+    }
+    const confirmed = await Dialog.confirm({
+      title: '永久删除账号',
+      content: `仅无任何业务记录的测试账号可以永久删除“${currentUser.name || currentUser.username}”。已有项目、任务、审计、通知或评论时，系统会要求改为停用。`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+    })
+    if (!confirmed) return
+    setUserSaving(true)
+    try {
+      await pb.collection('users').delete(currentUser.id)
+      Toast.show({ icon: 'success', content: '账号已删除' })
+      setShowUserModal(false)
+      refreshAll()
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: `${getPocketBaseErrorMessage(error, '删除失败')}；有关联业务数据时请使用“停用账号”` })
+    } finally {
+      setUserSaving(false)
+    }
+  }
+
+  const filteredUsers = useMemo(() => {
+    const keyword = userSearch.trim().toLowerCase()
+    if (!keyword) return users
+    return users.filter(user => [user.name, user.username, user.email, user.department, user.role]
+      .some(value => String(value || '').toLowerCase().includes(keyword)))
+  }, [userSearch, users])
 
   // ---- 项目状态 ----
 
@@ -387,7 +484,7 @@ const AdminDashboard = () => {
     try {
       const formData = new FormData()
       formData.append('name', editName)
-      if (selectedAvatar && selectedAvatar.startsWith('http')) {
+      if (selectedAvatar) {
         const response = await fetch(selectedAvatar)
         if (!response.ok) throw new Error('头像下载失败')
         const blob = await response.blob()
@@ -426,7 +523,7 @@ const AdminDashboard = () => {
     }
   }
 
-  const currentAvatarUrl = authUser?.avatar ? pb.files.getUrl(authUser, authUser.avatar) : ''
+  const currentAvatarUrl = getUserAvatarUrl(authUser)
 
   const handleDeleteTask = async (taskId: string) => {
     Dialog.confirm({
@@ -455,7 +552,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+    <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
       <div style={{ flex: 1, overflow: 'auto' }}>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60dvh', gap: 16 }}>
@@ -617,7 +714,7 @@ const AdminDashboard = () => {
                   <Tooltip 
                     cursor={{ fill: '#f8fafc' }} 
                     contentStyle={{ borderRadius: 10, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12 }} 
-                    formatter={(value: any, name: string) => [value, name === 'total' ? '总任务' : name === 'blocked' ? '卡点' : '逾期']}
+                    formatter={(value: number | string, name: string) => [value, name === 'total' ? '总任务' : name === 'blocked' ? '卡点' : '逾期']}
                   />
                   <Bar dataKey="total" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={16} name="总任务" />
                   <Bar dataKey="blocked" fill="#F59E0B" radius={[0, 4, 4, 0]} barSize={16} name="卡点" />
@@ -855,7 +952,7 @@ const AdminDashboard = () => {
                 {projects.slice(0, 4).map((project, index) => (
                   <div 
                     key={project.id}
-                    onClick={() => navigate(`/project/${project.id}/timeline`)}
+                    onClick={() => navigate(`/project/${project.id}`)}
                     style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
@@ -909,7 +1006,12 @@ const AdminDashboard = () => {
                 <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: '#0f172a' }}>用户管理</h2>
               </div>
               <Button
-                onClick={() => setShowAddUserModal(true)}
+                aria-label="新增成员账号"
+                onClick={() => {
+                  addUserForm.resetFields()
+                  addUserForm.setFieldsValue({ department: ['工程部'], role: ['employee'] })
+                  setShowAddUserModal(true)
+                }}
                 style={{
                   background: '#0f172a', color: 'white', border: 'none',
                   borderRadius: '50%', width: 44, height: 44,
@@ -921,9 +1023,17 @@ const AdminDashboard = () => {
               </Button>
             </div>
 
+            <div className="admin-user-search">
+              <IoSearchOutline aria-hidden />
+              <Input value={userSearch} onChange={setUserSearch} placeholder="搜索姓名、账号、邮箱、部门或角色" clearable />
+              <span>{filteredUsers.length} / {users.length}</span>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {users.map((user, i) => (
-                <div key={user.id} className="fade-in" onClick={() => handleEditUser(user)}
+              {filteredUsers.map((user, i) => (
+                <div key={user.id} className="fade-in admin-user-row" role="button" tabIndex={0}
+                  onClick={() => handleEditUser(user)}
+                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') handleEditUser(user) }}
                   style={{
                     animationDelay: `${i * 0.05}s`,
                     background: 'white', padding: 16, borderRadius: 16,
@@ -933,7 +1043,7 @@ const AdminDashboard = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <Avatar
-                      src={user.avatar ? pb.files.getUrl(user as any, user.avatar) : ''}
+                      src={getUserAvatarUrl(user)}
                       style={{ '--size': '48px', '--border-radius': '12px' }}
                     />
                     <div>
@@ -943,12 +1053,17 @@ const AdminDashboard = () => {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', background: '#eff6ff', padding: '4px 10px', borderRadius: 20, display: 'inline-block', marginBottom: 4 }}>
-                      {user.role?.toUpperCase()}
+                      {USER_ROLE_LABELS[user.role || ''] || '未设置'}
                     </div>
-                    <div style={{ fontSize: 12, color: '#94a3b8' }}>{user.department}</div>
+                    <div style={{ fontSize: 12, color: user.is_active === false ? '#b45309' : '#94a3b8' }}>
+                      {user.department}{user.is_active === false ? ' · 已停用' : ''}
+                    </div>
                   </div>
                 </div>
               ))}
+              {filteredUsers.length === 0 && (
+                <div className="admin-user-empty">没有符合条件的成员</div>
+              )}
             </div>
           </div>
         )}
@@ -1018,7 +1133,7 @@ const AdminDashboard = () => {
                         '--fill-color': 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',
                         '--track-color': '#f1f5f9',
                         borderRadius: 4
-                      } as any}
+                      } as CSSProperties}
                     />
                   </div>
 
@@ -1069,7 +1184,7 @@ const AdminDashboard = () => {
                                       : task.status === 'overdue'
                                         ? '逾期'
                                         : '待处理'}
-                                  {task.expand?.assignees?.[0] && ` · ${(task.expand.assignees as any)[0].name || (task.expand.assignees as any)[0].username}`}
+                                  {task.expand?.assignees?.[0] && ` · ${task.expand.assignees[0].name || task.expand.assignees[0].username}`}
                                 </div>
                               </div>
                               <div style={{ display: 'flex', gap: 6 }}>
@@ -1109,7 +1224,7 @@ const AdminDashboard = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  onClick={() => navigate(`/project/${project.id}/timeline`)}
+                  onClick={() => navigate(`/project/${project.id}`)}
                   style={{
                     background: 'white',
                     borderRadius: 20,
@@ -1151,7 +1266,7 @@ const AdminDashboard = () => {
                         '--fill-color': 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',
                         '--track-color': '#f1f5f9',
                         borderRadius: 4
-                      } as any}
+                      } as CSSProperties}
                     />
                   </div>
 
@@ -1295,7 +1410,7 @@ const AdminDashboard = () => {
               </div>
 
               <div
-                onClick={() => setActiveKey('users' as any)}
+                onClick={() => setActiveKey('users')}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: 16, cursor: 'pointer', borderRadius: 12
@@ -1350,7 +1465,7 @@ const AdminDashboard = () => {
               </div>
 
               <div
-                onClick={() => navigate('/admin/import')}
+                onClick={() => navigate('/system/import')}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: 16, cursor: 'pointer', borderRadius: 12
@@ -1397,63 +1512,84 @@ const AdminDashboard = () => {
         </>)}
       </div>
 
-      <TabBar
-        activeKey={activeKey}
-        onChange={key => setActiveKey(key as any)}
-        style={{
-          background: 'rgba(255,255,255,0.9)',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(0,0,0,0.05)',
-          paddingBottom: 'env(safe-area-inset-bottom)'
-        }}
-      >
-        {tabs.map(item => (
-          <TabBar.Item key={item.key} icon={item.icon} title={item.title} />
-        ))}
-      </TabBar>
-      <Dialog
+      <Popup
         visible={showUserModal}
-        title="编辑用户"
-        content={
-          <Form form={userForm} layout='horizontal' onFinish={handleUserUpdate} footer={null}>
-            <Form.Item name='name' label='姓名' rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name='email' label='邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input /></Form.Item>
-            <Form.Item name='department' label='部门'>
-              <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '管理层', value: '管理层' }]} />
+        onMaskClick={() => setShowUserModal(false)}
+        bodyClassName="admin-user-sheet"
+      >
+        <div className="admin-user-sheet__content">
+          <header>
+            <div><h2>编辑成员账号</h2><p>修改身份信息、权限范围和账号状态</p></div>
+            <button type="button" className="admin-user-sheet__close" onClick={() => setShowUserModal(false)}><IoClose /></button>
+          </header>
+          <Form form={userForm} layout='vertical' onFinish={handleUserUpdate} footer={null}>
+            <div className="admin-user-form-grid">
+              <Form.Item name='name' label='姓名' rules={[{ required: true, message: '请输入姓名' }]}><Input placeholder="真实姓名" maxLength={30} /></Form.Item>
+              <Form.Item name='username' label='登录账号' rules={[{ required: true }, { pattern: /^[a-zA-Z0-9_]{3,30}$/, message: '3-30 位英文、数字或下划线' }]}><Input placeholder="例如 chen_kaiyuan" /></Form.Item>
+            </div>
+            <Form.Item name='email' label='工作邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input placeholder="name@company.com" /></Form.Item>
+            <Form.Item name='department' label='所属部门' rules={[{ required: true, message: '请选择部门' }]}>
+              <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '设计院', value: '设计院' }, { label: '监理部', value: '监理部' }, { label: '管理层', value: '管理层' }]} />
             </Form.Item>
-            <Form.Item name='role' label='角色'>
-              <Selector options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
+            <Form.Item name='role' label='系统角色' rules={[{ required: true, message: '请选择角色' }]}>
+              <Selector disabled={currentUser?.id === authUser?.id} options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
             </Form.Item>
+            <Form.Item name='is_active' label='账号状态' rules={[{ required: true }]}>
+              <Selector options={[{ label: '正常使用', value: 'enabled' }, { label: '停用账号', value: 'disabled' }]} />
+            </Form.Item>
+            {currentUser?.id !== authUser?.id && (
+              <div className="admin-user-form-grid">
+                <Form.Item name='password' label='重置密码' rules={[{ min: 8, message: '新密码至少 8 位' }]}><Input type='password' placeholder="不修改请留空" /></Form.Item>
+                <Form.Item name='passwordConfirm' label='确认新密码'><Input type='password' placeholder="再次输入新密码" /></Form.Item>
+              </div>
+            )}
           </Form>
-        }
-        actions={[
-          { key: 'cancel', text: '取消', onClick: () => setShowUserModal(false) },
-          { key: 'confirm', text: '保存', bold: true, onClick: () => userForm.submit() },
-        ]}
-      />
+          <footer>
+            {currentUser?.id !== authUser?.id && currentUser?.is_active === false && (
+              <Button fill="none" className="admin-user-delete" onClick={handleDeleteUser}><IoTrashOutline />永久删除</Button>
+            )}
+            <span />
+            <Button fill="outline" onClick={() => setShowUserModal(false)}>取消</Button>
+            <Button color="primary" loading={userSaving} onClick={() => userForm.submit()}>保存修改</Button>
+          </footer>
+        </div>
+      </Popup>
 
-      <Dialog
+      <Popup
         visible={showAddUserModal}
-        title="新增用户"
-        content={
-          <Form form={addUserForm} layout='horizontal' onFinish={handleAddUser} footer={null}>
-            <Form.Item name='username' label='用户名' rules={[{ required: true, message: '请输入登录用户名' }, { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]{2,20}$/, message: '2-20位，支持中英文、数字、下划线' }]}><Input placeholder='登录时使用的用户名' /></Form.Item>
-            <Form.Item name='name' label='姓名' rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name='email' label='邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input /></Form.Item>
-            <Form.Item name='password' label='密码' rules={[{ required: true, min: 8, message: '密码至少8位' }]}><Input type='password' /></Form.Item>
-            <Form.Item name='department' label='部门' initialValue={['工程部']}>
-              <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '管理层', value: '管理层' }]} />
+        onMaskClick={() => setShowAddUserModal(false)}
+        bodyClassName="admin-user-sheet"
+      >
+        <div className="admin-user-sheet__content">
+          <header>
+            <div><h2>新增成员账号</h2><p>创建后即可用登录账号或邮箱进入系统</p></div>
+            <button type="button" className="admin-user-sheet__close" onClick={() => setShowAddUserModal(false)}><IoClose /></button>
+          </header>
+          <Form form={addUserForm} layout='vertical' onFinish={handleAddUser} footer={null}>
+            <div className="admin-user-form-grid">
+              <Form.Item name='name' label='姓名' rules={[{ required: true, message: '请输入姓名' }]}><Input placeholder="员工真实姓名" maxLength={30} /></Form.Item>
+              <Form.Item name='username' label='登录账号' rules={[{ required: true, message: '请输入登录账号' }, { pattern: /^[a-zA-Z0-9_]{3,30}$/, message: '3-30 位英文、数字或下划线' }]}><Input placeholder="例如 chen_kaiyuan" /></Form.Item>
+            </div>
+            <Form.Item name='email' label='工作邮箱' rules={[{ required: true, message: '请输入邮箱' }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input placeholder="name@company.com" /></Form.Item>
+            <div className="admin-user-form-grid">
+              <Form.Item name='password' label='初始密码' rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}><Input type='password' placeholder="至少 8 位" /></Form.Item>
+              <Form.Item name='passwordConfirm' label='确认密码' dependencies={['password']} rules={[{ required: true, message: '请再次输入密码' }]}><Input type='password' placeholder="再次输入" /></Form.Item>
+            </div>
+            <Form.Item name='department' label='所属部门' rules={[{ required: true, message: '请选择部门' }]}>
+              <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '设计院', value: '设计院' }, { label: '监理部', value: '监理部' }, { label: '管理层', value: '管理层' }]} />
             </Form.Item>
-            <Form.Item name='role' label='角色' initialValue={['employee']}>
+            <Form.Item name='role' label='系统角色' rules={[{ required: true, message: '请选择角色' }]}>
               <Selector options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
             </Form.Item>
+            <div className="admin-user-form-note">新账号默认启用。建议将初始密码通过安全渠道单独发送给员工，并要求首次登录后修改。</div>
           </Form>
-        }
-        actions={[
-          { key: 'cancel', text: '取消', onClick: () => setShowAddUserModal(false) },
-          { key: 'confirm', text: '创建', bold: true, onClick: () => addUserForm.submit() },
-        ]}
-      />
+          <footer>
+            <span />
+            <Button fill="outline" onClick={() => setShowAddUserModal(false)}>取消</Button>
+            <Button color="primary" loading={userSaving} onClick={() => addUserForm.submit()}>创建账号</Button>
+          </footer>
+        </div>
+      </Popup>
 
       <BatchProjectCreator 
         visible={showAddProjectModal} 
@@ -1477,8 +1613,8 @@ const AdminDashboard = () => {
             id: t.id,
             stage_name: t.stage_name,
             assignees: t.assignees || [],
-            start_date: (t as any).start_date || '',
-            deadline: (t as any).deadline || ''
+            start_date: t.start_date || '',
+            deadline: t.deadline || ''
           }))}
         />
       )}
@@ -1508,26 +1644,9 @@ const AdminDashboard = () => {
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfileFileUpload} />
 
-          {/* 风格切换 */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
-            {AVATAR_STYLE_GROUPS.map((group, idx) => (
-              <div
-                key={group.label}
-                onClick={() => setAvatarStyleIdx(idx)}
-                style={{
-                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
-                  background: avatarStyleIdx === idx ? '#0f172a' : '#f1f5f9',
-                  color: avatarStyleIdx === idx ? 'white' : '#64748b', cursor: 'pointer'
-                }}
-              >
-                {group.label}
-              </div>
-            ))}
-          </div>
-
           {/* 头像网格 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            {AVATAR_STYLE_GROUPS[avatarStyleIdx]?.avatars.map((url, i) => (
+            {getProfessionalAvatarOptions(editName || authUser?.name || authUser?.username).map((url, i) => (
               <div
                 key={i}
                 onClick={() => setSelectedAvatar(url)}

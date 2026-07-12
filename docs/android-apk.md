@@ -1,63 +1,63 @@
-# Android APK 构建说明
+# Android APK 构建与验收
 
-## 日常分发给手机安装（推荐）
+当前应用：`EngineeringPMS`，applicationId `com.engineering.pms`，versionName `3.05`，versionCode `45`。
 
-未配置 release 签名时，**不要**依赖 `assembleRelease`：产物常为未签名包，安装时可能出现「解析软件包失败 / packageInfo is null」等错误。
+## Debug APK
 
-使用 **Debug 构建**（自带 debug 签名，可直接安装）：
-
-```bash
-cd frontend
-npm run build
-npx cap sync android
-cd android
-./gradlew assembleDebug
-```
-
-Windows（PowerShell）也可用仓库脚本：
+要求：Node.js、Android SDK、JDK 17。缓存放在 G 盘：
 
 ```powershell
-cd frontend
-.\scripts\build-debug-apk.ps1
+Set-Location frontend
+$env:npm_config_cache = 'G:\dev-cache\npm'
+$env:GRADLE_USER_HOME = 'G:\dev-cache\gradle'
+$env:JAVA_HOME = 'G:\dev-cache\jdks\jdk-17.0.19+10'
+$env:PLAYWRIGHT_BROWSERS_PATH = 'G:\ClaudeData\ms-playwright'
+
+npm ci
+npm test -- --run
+npm run build
+npx cap sync android
+
+.\scripts\build-debug-apk.ps1 -PocketBaseUrl 'https://<server-host>/pb'
 ```
 
-安装包路径：
+构建脚本要求显式后端 URL，并检查产物 JS 包含该 URL，防止误打包 localhost 或旧地址。脚本会检测 JDK 主版本；系统默认 JDK 不是 17 时，会优先使用 `JAVA17_HOME` 或 G 盘现有 JDK 17，避免 JDK 23 在 Android 33 `JdkImageTransform` 阶段失败。
 
-`frontend/android/app/build/outputs/apk/debug/app-debug.apk`
+APK 输出：`frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
 
-可复制并重命名为带版本号的文件名后分发。
+2026-07-13 最终候选产物：
 
-## Release 构建（可选）
+- 大小：`7,210,637` bytes
+- SHA-256：`7D78A618DCCD13498F3C3A6EAB279AE3823B5D4B8AECEFE460D15DD6FB8A6447`
+- `aapt dump badging`：`com.engineering.pms` / versionName `3.05` / versionCode `45`
+- 内嵌后端：直接生产 PocketBase URL；实际值不在公开文档重复记录
 
-1. 在 `frontend/android/` 下复制 `keystore.properties.example` 为 `keystore.properties`，填写真实 keystore 路径与口令（**勿提交** `keystore.properties` 与 `.jks` 到 git）。
-2. 执行：
+该产物包含最新姓名字标头像与看板拖拽修复，并指向已完成 3.05 后端增量发布的生产 PocketBase。手机在最终重建前已断开，因此最终候选包已完成构建与静态校验，尚待下次 USB 连接后覆盖安装复验；不能用 Web 已发布替代 APK 真机验收。
 
-```bash
-cd frontend/android
-./gradlew assembleRelease
+## 安装
+
+```powershell
+$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+& $adb devices -l
+& $adb install -r '.\android\app\build\outputs\apk\debug\app-debug.apk'
 ```
 
-已签名产物一般在：`app/build/outputs/apk/release/app-release.apk`。
+`adb devices` 必须显示状态 `device`。只有 MTP/存储设备、`unauthorized` 或空列表都不算已连接。
 
-## 与 PocketBase 迁移
+## 真机验收
 
-Web/App 功能依赖服务端 schema；部署新前端前请在 PocketBase 服务器执行迁移，至少包含：
+- 登录、保持登录、退出和返回键。
+- 工作台、任务、项目、通知、我的五入口。
+- 项目详情、看板抽屉、时间轴筛选/缩放与横屏。
+- 键盘弹起、系统字体缩放、安全区、底部导航不遮挡内容。
+- 前台 Realtime、后台通知、网络断开恢复和杀进程后恢复。
+- 管理员新增/停用账号，员工任务交接和卡点流程。
+- App icon、启动图、通知小图标在浅色/深色桌面清晰。
 
-- `audit_logs`：`review_status` 含 `rejected`、`reject_note` 字段（如 `1772400000_*.js`）
-- `notifications.type` 含 `audit_rejected`（如 `1772500000_*.js`，否则拒绝复核后给操作人的通知可能创建失败）
+## Release
 
-否则「审核拒绝」或消息链路仍可能在服务端失败。
+Debug 签名不能用于正式发布。Release 需要在未跟踪的 `frontend/android/keystore.properties` 配置私有 keystore。Gradle 会在配置缺失时拒绝伪 Release 构建。
 
-**生产库如何应用迁移**：见 `docs/宝塔部署操作手册.md` 的相关章节（已上线后增量升级流程）。
+发布前还需决定 compile/target SDK 升级策略；当前工程为 SDK 33，升级要同时验证前台服务、通知权限和 Android 14/15 行为。
 
-## 关于二期真推送
-
-当前 APK 默认保留前台本地提醒链路，但**关闭自动 push token 注册**，避免在未配置 Firebase / `google-services.json` 时 Android 登录后直接闪退。
-
-只有当以下条件都满足时，才建议开启：
-
-1. `frontend/android/app/google-services.json` 已放好
-2. Firebase 项目与 `applicationId` 匹配
-3. 构建环境设置了 `VITE_ENABLE_PUSH_REGISTRATION=1`
-
-未满足以上条件时，保持默认关闭即可，App 不会因为 push 注册而崩溃。
+不得提交 `.jks`、`.keystore`、`keystore.properties` 或密码。

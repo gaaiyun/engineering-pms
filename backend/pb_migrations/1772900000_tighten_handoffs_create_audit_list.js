@@ -1,6 +1,6 @@
 /// <reference path="../pb_data/types.d.ts" />
 /**
- * Round 4 / Agent K 发现的 2 个安全漏洞修复
+ * 交接与审计权限漏洞修复。
  *
  * P6（HIGH 越权）：
  *   原 handoffs.createRule = '@request.auth.id != ""'

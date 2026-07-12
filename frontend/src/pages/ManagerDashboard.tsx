@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavBar, Card, Grid, List, Tag, Badge, Button, ProgressBar, Toast, SpinLoading } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
@@ -7,6 +7,16 @@ import { queryClient } from '../lib/queryClient'
 import { AISummaryCard } from '../components/dashboard/AISummaryCard'
 import { IoWarningOutline, IoCalendarOutline, IoBarChartOutline, IoBriefcaseOutline, IoBulbOutline, IoDocumentTextOutline } from 'react-icons/io5'
 import './ManagerDashboard.css'
+import { getLlmConfig } from '../lib/llm-config'
+
+interface ChartTooltipItem {
+    name: string
+    value: number
+    marker: string
+    seriesName: string
+}
+
+const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback
 
 const ManagerDashboard: React.FC = () => {
     const navigate = useNavigate()
@@ -17,6 +27,18 @@ const ManagerDashboard: React.FC = () => {
     const { data: currentUser } = useCurrentUser()
     const { data: aiSummaries = [] } = useAISummaries(currentUser?.id || '')
     const [aiExpanded, setAiExpanded] = useState(false)
+    const [llmLabel, setLlmLabel] = useState('服务端默认模型')
+    const [defaultModel, setDefaultModel] = useState('')
+
+    useEffect(() => {
+        getLlmConfig().then(config => {
+            setDefaultModel(config.default_model)
+            setLlmLabel(`${config.provider} · ${config.default_model}`)
+        }).catch(() => {
+            setDefaultModel('')
+            setLlmLabel('服务端默认模型')
+        })
+    }, [])
 
     const isLoading = tasksLoading || projectsLoading
     const isError = tasksError || projectsError
@@ -117,10 +139,10 @@ const ManagerDashboard: React.FC = () => {
         tooltip: { 
             trigger: 'axis', 
             axisPointer: { type: 'shadow' },
-            formatter: (params: any) => {
+            formatter: (params: ChartTooltipItem[]) => {
                 let result = `<strong>${params[0].name}</strong><br/>`;
                 let total = 0;
-                params.forEach((p: any) => {
+                params.forEach((p) => {
                     if (p.value > 0) {
                         result += `${p.marker} ${p.seriesName}: ${p.value}<br/>`;
                         total += p.value;
@@ -272,7 +294,7 @@ const ManagerDashboard: React.FC = () => {
                             return (
                                 <List.Item
                                     key={project.id}
-                                    onClick={() => navigate(`/project/${project.id}/timeline`)}
+                                    onClick={() => navigate(`/project/${project.id}`)}
                                 >
                                     <div className="project-progress">
                                         <div className="project-name">{project.name}</div>
@@ -309,27 +331,25 @@ const ManagerDashboard: React.FC = () => {
                                             Toast.show({ content: '正在聚合数据...', icon: 'loading', duration: 0 })
                                             const { aggregateProjectData, generateAIReport } = await import('../lib/ai-service')
                                             const data = await aggregateProjectData()
-                                            const apiKey = localStorage.getItem('sf_api_key')
-                                            if (!apiKey) { Toast.clear(); Toast.show({ content: '请先在"AI决策"页面配置API Key', icon: 'fail' }); return }
                                             Toast.show({ content: '正在生成智能分析...', icon: 'loading', duration: 0 })
-                                            const aiRes = await generateAIReport(data, apiKey)
+                                            const aiRes = await generateAIReport(data, undefined, defaultModel)
                                             const { pb } = await import('../lib/pocketbase')
                                             const userId = pb.authStore.model?.id
                                             if (userId && aiRes) {
                                                 await pb.collection('ai_summaries').create({
                                                     target_user: userId, date: new Date().toISOString(),
                                                     content: aiRes.content, risk_level: aiRes.risk_level,
-                                                    model_used: 'deepseek-ai/DeepSeek-V3', input_snapshot: data
+                                                    model_used: defaultModel || '服务端默认模型'
                                                 })
                                             }
                                             Toast.clear(); Toast.show({ content: '分析已更新', icon: 'success' })
                                             queryClient.invalidateQueries({ queryKey: ['ai_summaries'] })
-                                        } catch (e: any) { Toast.clear(); Toast.show({ content: e.message || '生成失败', icon: 'fail' }) }
+                                        } catch (error: unknown) { Toast.clear(); Toast.show({ content: errorMessage(error, '生成失败'), icon: 'fail' }) }
                                     }}
                                 >
                                     立即生成
                                 </Button>
-                                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 8 }}>(调用 SiliconFlow DeepSeek-V3 模型)</div>
+                                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 8 }}>模型：{llmLabel}</div>
                             </div>
                         )
                     )}

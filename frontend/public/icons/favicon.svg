@@ -1,32 +1,44 @@
+
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3B82F6"/>
-      <stop offset="100%" style="stop-color:#1D4ED8"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0%" stop-color="#06152C"/>
+      <stop offset="54%" stop-color="#102F63"/>
+      <stop offset="100%" stop-color="#1F5EDB"/>
     </linearGradient>
+    <radialGradient id="glow" cx="78%" cy="12%" r="78%">
+      <stop offset="0%" stop-color="#60A5FA" stop-opacity="0.42"/>
+      <stop offset="58%" stop-color="#2563EB" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="structure" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#DBEAFE"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="112" y1="382" x2="392" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5EEAD4"/>
+      <stop offset="100%" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="markShadow" x="-30%" y="-30%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#020617" flood-opacity="0.36"/>
+    </filter>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.10"/>
+    </pattern>
+    <clipPath id="clip"><rect width="512" height="512" rx="112"/></clipPath>
   </defs>
-  <!-- 背景 -->
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- 建筑图标 -->
-  <g fill="white">
-    <!-- 主楼 -->
-    <rect x="160" y="200" width="192" height="232" rx="8"/>
-    <!-- 窗户网格 -->
-    <rect x="184" y="224" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="240" y="224" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="296" y="224" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="184" y="280" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="240" y="280" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="296" y="280" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="184" y="336" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="240" y="336" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <rect x="296" y="336" width="32" height="32" rx="4" fill="#3B82F6"/>
-    <!-- 门 -->
-    <rect x="232" y="376" width="48" height="56" rx="4" fill="#3B82F6"/>
-    <!-- 屋顶 -->
-    <path d="M128 200 L256 100 L384 200 Z" fill="white"/>
-    <!-- 进度条 -->
-    <rect x="128" y="80" width="256" height="12" rx="6" fill="rgba(255,255,255,0.3)"/>
-    <rect x="128" y="80" width="180" height="12" rx="6" fill="#10B981"/>
+  <g clip-path="url(#clip)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <rect width="512" height="512" fill="url(#glow)"/>
+    <path d="M512 72V512H68Z" fill="#2F6BFF" opacity="0.28"/>
+    <rect width="512" height="512" fill="url(#grid)"/>
+  </g>
+  <g filter="url(#markShadow)">
+    <rect x="128" y="214" width="82" height="166" rx="14" fill="url(#structure)"/>
+    <rect x="230" y="150" width="86" height="230" rx="14" fill="url(#structure)"/>
+    <rect x="336" y="96" width="66" height="284" rx="14" fill="url(#structure)"/>
+    <path d="M112 392H418" fill="none" stroke="#EAF3FF" stroke-width="24" stroke-linecap="round"/>
+    <path d="M112 314L204 382L392 192" fill="none" stroke="#0B1F3A" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M112 314L204 382L392 192" fill="none" stroke="url(#accent)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>

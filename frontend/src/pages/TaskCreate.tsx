@@ -13,7 +13,7 @@ import {
 import dayjs from 'dayjs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
-import { notifyManagersAboutTaskProgress, type TaskStatus, useCreateTask } from '../lib/api'
+import { notifyManagersAboutTaskProgress, type Task as ApiTask, type TaskStatus, useCreateTask } from '../lib/api'
 import {
   IoArrowBackOutline,
   IoCheckmarkCircle,
@@ -182,13 +182,13 @@ export default function TaskCreate() {
 
     setLoading(true)
     try {
-      const taskData: Record<string, any> = {
+      const taskData: Partial<ApiTask> = {
         project: selectedProject,
         stage_name: stageName,
         status: taskStatus,
         next_steps: progressNote || undefined,
         start_date: new Date().toISOString(),
-        deadline: deadline ? dayjs(deadline).format('YYYY-MM-DD HH:mm:ss') : null,
+        deadline: deadline ? dayjs(deadline).format('YYYY-MM-DD HH:mm:ss') : undefined,
         assignees: selectedAssignees.length > 0 ? selectedAssignees : [currentUser?.id],
         created_by: currentUser?.id,
         sequence: Date.now(),

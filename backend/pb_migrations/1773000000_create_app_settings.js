@@ -2,7 +2,7 @@
 /**
  * C1 安全 — 创建 app_settings collection 服务端存 API key
  *
- * 背景（Agent D v2 HIGH-CRITICAL）：siliconflow API key 明文存
+ * 背景：旧版 API key 曾明文存于
  * localStorage，多处读写（AIConsole / SettingsPage / ManagerDashboard）。
  * 任何 XSS / 装了恶意浏览器插件的用户都能拖走 key。
  *

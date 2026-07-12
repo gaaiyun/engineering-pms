@@ -185,16 +185,24 @@ function uniqueUserIds(ids: Array<string | null | undefined>) {
     return [...new Set(ids.filter((id): id is string => !!id))]
 }
 
-export function getAddedAssigneeIds(before: string[] = [], after: string[] = []) {
+export function getAddedAssigneeIds(
+    before: Array<string | null | undefined> = [],
+    after: Array<string | null | undefined> = [],
+) {
     const prev = new Set(before.filter(Boolean))
     return uniqueUserIds(after).filter((id) => !prev.has(id))
 }
 
 async function createNotificationRecord(input: NotificationCreateInput) {
     try {
-        await pb.collection('notifications').create({
-            ...input,
-            is_read: input.is_read ?? false,
+        await pb.send('/api/custom/notifications/send', {
+            method: 'POST',
+            body: {
+                notification: {
+                    ...input,
+                    is_read: input.is_read ?? false,
+                },
+            },
         })
         return true
     } catch (error) {
@@ -425,7 +433,7 @@ export function useMyTasks(userId: string) {
             const records = await pb.collection('tasks').getFullList<Task>({
                 filter: `assignees~"${userId}"`,
                 sort: '-deadline',
-                expand: 'project',
+                expand: 'project,assignees',
             })
             return records
         },
@@ -441,7 +449,7 @@ export function useUpdateTask() {
         mutationFn: async ({ id, data }: { id: string; data: Partial<Task> }) => {
             const before = await pb.collection('tasks').getOne<Task>(id)
             const result = await pb.collection('tasks').update<Task>(id, data)
-            // 审计日志 — Bug fix H1（Agent D v2 HIGH）：改 console.warn 不要静默
+            // 审计日志失败需要保留 console.warn，不能静默。
             await pb.collection('audit_logs').create({
                 project: before.project,
                 task: id,
@@ -493,7 +501,7 @@ export function useUpdateTaskSequence() {
             )
             const results = await Promise.all(promises)
 
-            // ⚠️ Bug fix #7（Agent B + Agent F E2E 双重确认）：
+            // 浏览器流程验收确认：
             // 原版拖拽改 sequence 完全不写 audit_log，导致经理在看板拖卡片重排
             // 节点先后顺序时，审计中心查不到任何变更记录，合规追溯缺失。
             //
@@ -595,98 +603,18 @@ export function useApproveHandoff() {
 
     return useMutation({
         mutationFn: async ({ id, reviewNote }: { id: string; reviewNote?: string }) => {
-            // 获取 handoff 详情
-            const handoff = await pb.collection('handoffs').getOne<Handoff>(id)
-
-            // 创建新任务，并给新执行人发送统一的 task_assigned 通知
-            const newTask = await createTaskWithSideEffects({
-                project: handoff.project,
-                stage_name: handoff.proposed_title,
-                next_steps: handoff.proposed_description,
-                assignees: handoff.proposed_assignees,
-                start_date: handoff.proposed_start_date,
-                deadline: handoff.proposed_due_date,
-                status: 'pending',
-                sequence: Date.now(),
-                predecessor_tasks: [handoff.from_task],
-            }, {
-                createAuditLog: false,
-            })
-
-            // 更新 handoff 状态
-            await pb.collection('handoffs').update(id, {
-                status: 'approved',
-                reviewer: pb.authStore.model?.id,
-                review_note: reviewNote,
-                approved_task: newTask.id,
-            })
-
-            // ⚠️ Bug fix #1（与 useRejectHandoff Bug A 镜像）：
-            // 批准 handoff 意味着接受"前序任务完成"，强制把 from_task.status
-            // 同步为 completed + 写 completed_at。
-            // 必要性：useMarkTaskComplete 通常已经把 from_task 设为 completed，
-            // 但若中途状态被 useUpdateAuditLogStatus 拒绝过 mark_complete 而回滚成
-            // in_progress / 或 from_task 经历过 blocker → 此时还残留 pending handoff，
-            // 批准时必须把 from_task 强制设回 completed，否则会产生 "前序任务进行中
-            // + 下游任务已创建" 的幽灵状态。
-            try {
-                await pb.collection('tasks').update(handoff.from_task, {
-                    status: 'completed',
-                    completed_at: new Date().toISOString(),
-                })
-            } catch (e) {
-                console.warn('sync from_task to completed failed', e)
-            }
-
-            // 记录审计日志
-            await pb.collection('audit_logs').create({
-                project: handoff.project,
-                task: newTask.id,
-                action_type: 'approve_handoff',
-                operator: pb.authStore.model?.id,
-                after_data: { handoff_id: id, new_task_id: newTask.id },
-                note: reviewNote,
-            }).catch(console.error)
-
-            // 通知提交人 — Bug fix C6（Agent H 通知 E2E 发现）：
-            // createTaskWithSideEffects 在创建新任务时已通过 notifyProjectMembers
-            // 通知项目全员（含 submitter），如果再发一条会让 submitter 收到 2 条
-            // 几乎相同的 task_update 通知。
-            //
-            // 解决：仅在 submitter 不是项目成员（理论罕见，除非项目成员变动）
-            // 才单独发；且 type 改为更精确的 task_update 但内容明确为'审核通过'
-            // 区分。最稳妥：检测项目成员表，submitter 不在其中再发。
-            const reviewer = pb.authStore.model
-            if (handoff.submitter && handoff.submitter !== reviewer?.id) {
-                try {
-                    const project = await pb.collection('projects').getOne<Project>(handoff.project)
-                    const projectMembers = project.members || []
-                    // 仅当 submitter 不在项目成员中（避免与 notifyProjectMembers 重复）
-                    if (!projectMembers.includes(handoff.submitter)) {
-                        await createNotificationRecord({
-                            user: handoff.submitter,
-                            title: '交接审核通过',
-                            content: `${reviewer?.name || reviewer?.username} 批准了您的交接提报「${handoff.proposed_title}」`,
-                            type: 'task_update',
-                            link_type: 'task',
-                            link_id: newTask.id,
-                        })
-                    }
-                } catch (e) {
-                    // 项目读取失败，保守不发重复通知（已有项目成员通知兜底）
-                    console.warn('check submitter membership failed, skip extra notify', e)
-                }
-            }
-
-            return newTask
+            return await pb.send('/api/custom/handoffs/decide', {
+                method: 'POST',
+                body: { handoff_id: id, decision: 'approved', review_note: reviewNote || '' },
+            }) as { approved_task_id?: string }
         },
-        onSuccess: (newTask) => {
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingHandoffs })
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
             queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
-            invalidateNotificationQueries(queryClient, newTask.assignees || [])
+            invalidateNotificationQueries(queryClient)
         },
     })
 }
@@ -696,48 +624,10 @@ export function useRejectHandoff() {
 
     return useMutation({
         mutationFn: async ({ id, reviewNote }: { id: string; reviewNote: string }) => {
-            await pb.collection('handoffs').update(id, {
-                status: 'rejected',
-                reviewer: pb.authStore.model?.id,
-                review_note: reviewNote,
+            await pb.send('/api/custom/handoffs/decide', {
+                method: 'POST',
+                body: { handoff_id: id, decision: 'rejected', review_note: reviewNote },
             })
-
-            const handoff = await pb.collection('handoffs').getOne<Handoff>(id)
-
-            // ⚠️ Bug fix（E2E 测试发现）：回滚 from_task 状态。
-            // 员工标完成时 useMarkTaskComplete 把 task.status 设为 'completed'。
-            // 如果交接被驳回，意味着完成不被认可 — 任务必须回到 in_progress，
-            // 否则会卡在"已完成"列表里，员工不知道要重做。
-            try {
-                await pb.collection('tasks').update(handoff.from_task, {
-                    status: 'in_progress',
-                    completed_at: null,
-                })
-            } catch (e) {
-                console.warn('rollback from_task status failed', e)
-            }
-
-            // 记录审计日志
-            await pb.collection('audit_logs').create({
-                project: handoff.project,
-                task: handoff.from_task,
-                action_type: 'reject_handoff',
-                operator: pb.authStore.model?.id,
-                note: reviewNote,
-            }).catch((err) => console.warn('[audit_logs] reject_handoff create failed:', err))
-
-            // 通知提交人
-            const reviewer = pb.authStore.model
-            if (handoff.submitter && handoff.submitter !== reviewer?.id) {
-                await createNotificationRecord({
-                    user: handoff.submitter,
-                    title: '交接审核驳回',
-                    content: `${reviewer?.name || reviewer?.username} 驳回了您的交接提报「${handoff.proposed_title}」，原因：${reviewNote}`,
-                    type: 'audit_rejected',
-                    link_type: 'task',
-                    link_id: handoff.from_task,
-                })
-            }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.handoffs })
@@ -826,6 +716,59 @@ export function useCurrentUser() {
 }
 
 // ========== 通知 Hooks ==========
+function escapePocketBaseFilterValue(value: string) {
+    return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
+ * 项目列表需要看到每个可访问项目的全部任务，不能复用“我的任务”查询。
+ * 否则员工端只能按自己的任务计算进度，与项目详情展示的全项目进度不一致。
+ */
+export function useProjectPortfolioTasks(projectIds: string[]) {
+    const ids = uniqueUserIds(projectIds).sort()
+    return useQuery({
+        queryKey: queryKeys.projectPortfolioTasks(ids),
+        enabled: pb.authStore.isValid && ids.length > 0,
+        queryFn: async () => pb.collection('tasks').getFullList<Task>({
+            filter: ids.map(id => `project="${id}"`).join(' || '),
+            sort: 'sequence,created',
+            fields: 'id,project,status,deadline,updated',
+        }),
+    })
+}
+
+export function buildNotificationFilter(userId: string, tab = 'all') {
+    const userFilter = `user="${escapePocketBaseFilterValue(userId)}"`
+
+    if (tab === 'all') return userFilter
+    if (tab === 'unread') return `${userFilter} && is_read=false`
+    if (tab === 'task') {
+        return `${userFilter} && (type~"task" || type="step_updated" || type="overdue" || type="audit_rejected" || type="progress_update")`
+    }
+    if (tab === 'handoff') return `${userFilter} && type~"handoff"`
+    if (tab === 'blocker') return `${userFilter} && (type~"blocker" || type="escalation")`
+    if (tab === 'project') return `${userFilter} && type~"project"`
+
+    return `${userFilter} && type="${escapePocketBaseFilterValue(tab)}"`
+}
+
+export function useNotificationPage(userId: string, tab = 'all', page = 1, perPage = 20) {
+    const safePage = Math.max(1, page)
+    const safePerPage = Math.max(1, perPage)
+
+    return useQuery({
+        queryKey: ['notifications', userId, 'page', tab, safePage, safePerPage],
+        queryFn: async () => {
+            return await pb.collection('notifications').getList<Notification>(safePage, safePerPage, {
+                filter: buildNotificationFilter(userId, tab),
+                sort: '-created',
+            })
+        },
+        enabled: !!userId && pb.authStore.isValid,
+        staleTime: 10 * 1000,
+    })
+}
+
 export function useNotifications(userId: string) {
     return useQuery({
         queryKey: queryKeys.notifications(userId),
@@ -890,46 +833,18 @@ export function useMarkTaskComplete() {
                 proposedDueDate: string
             }
         }) => {
-            const task = await pb.collection('tasks').getOne<Task>(taskId)
-
-            // 1. 更新任务状态为完成
-            await pb.collection('tasks').update(taskId, {
-                status: 'completed',
+            return await pb.send('/api/custom/tasks/complete-with-handoff', {
+                method: 'POST',
+                body: {
+                    task_id: taskId,
+                    handoff: {
+                        proposed_title: handoffData.proposedTitle,
+                        proposed_description: handoffData.proposedDescription || '',
+                        proposed_assignees: handoffData.proposedAssignees,
+                        proposed_due_date: handoffData.proposedDueDate,
+                    },
+                },
             })
-
-            // 2. 创建交接记录
-            const handoff = await pb.collection('handoffs').create<Handoff>({
-                project: task.project,
-                from_task: taskId,
-                proposed_title: handoffData.proposedTitle,
-                proposed_description: handoffData.proposedDescription,
-                proposed_assignees: handoffData.proposedAssignees,
-                proposed_due_date: handoffData.proposedDueDate,
-                status: 'pending',
-                submitter: pb.authStore.model?.id,
-            })
-
-            // 3. 记录审计日志
-            await pb.collection('audit_logs').create({
-                project: task.project,
-                task: taskId,
-                action_type: 'mark_complete',
-                operator: pb.authStore.model?.id,
-                after_data: { handoff_id: handoff.id },
-            }).catch(console.error)
-
-            // 4. 通知项目全员
-            const userName = pb.authStore.model?.name || pb.authStore.model?.username
-            notifyProjectMembers(
-                task.project,
-                '任务完成',
-                `${userName} 完成了任务「${task.stage_name}」并提交了交接提案`,
-                'task_update',
-                pb.authStore.model?.id,
-                taskId,
-            ).catch(() => {})
-
-            return handoff
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
@@ -962,78 +877,14 @@ export function useMarkTaskBlocked() {
             }
             rollbackToTaskId?: string
         }) => {
-            const task = await pb.collection('tasks').getOne<Task>(taskId)
-
-            // 更新任务状态和卡点信息
-            const blockerData = { ...blocker }
-            if (rollbackToTaskId) blockerData.rollback_to = rollbackToTaskId
-            await pb.collection('tasks').update(taskId, {
-                status: 'blocked',
-                blocker: blockerData,
+            await pb.send('/api/custom/tasks/block', {
+                method: 'POST',
+                body: {
+                    task_id: taskId,
+                    blocker,
+                    rollback_to_task_id: rollbackToTaskId || '',
+                },
             })
-
-            // 如果指定了回退目标，将目标任务重置为进行中
-            if (rollbackToTaskId) {
-                try {
-                    await pb.collection('tasks').update(rollbackToTaskId, {
-                        status: 'in_progress',
-                        completed_at: null,
-                    })
-                    const rollbackTask = await pb.collection('tasks').getOne<Task>(rollbackToTaskId)
-                    // 通知回退目标任务的负责人
-                    if (rollbackTask.assignees?.length) {
-                        for (const uid of rollbackTask.assignees) {
-                            await createNotificationRecord({
-                                user: uid,
-                                type: 'task_rollback',
-                                title: '任务被回退，需要重新处理',
-                                content: `「${task.stage_name}」遇到卡点，「${rollbackTask.stage_name}」需要重新处理。原因：${blocker.reason_detail}`,
-                                link_type: 'task',
-                                link_id: rollbackToTaskId,
-                            })
-                        }
-                    }
-                } catch (e) { console.warn('回退目标任务失败', e) }
-            }
-
-            // 记录审计日志
-            await pb.collection('audit_logs').create({
-                project: task.project,
-                task: taskId,
-                action_type: 'mark_blocked',
-                operator: pb.authStore.model?.id,
-                after_data: { ...blockerData, rollback_to_task: rollbackToTaskId },
-            }).catch(console.error)
-
-            // 通知项目全员
-            const userName = pb.authStore.model?.name || pb.authStore.model?.username
-            const rollbackNote = rollbackToTaskId ? '（已回退到前序步骤）' : ''
-            notifyProjectMembers(
-                task.project,
-                '卡点上报',
-                `${userName} 上报了「${task.stage_name}」的卡点${rollbackNote}：${blocker.reason_detail}`,
-                'blocker',
-                pb.authStore.model?.id,
-                taskId,
-            ).catch(() => {})
-
-            // 创建通知给需要帮助的人 — Bug fix #10（Agent B LOW-10）：
-            //  - 用 Set 去重（避免选两次同一人导致重复通知）
-            //  - 排除自己（员工选自己当协助人会自通知）
-            //  - 过滤空字符串
-            const operatorId = pb.authStore.model?.id
-            const uniqueHelpers = Array.from(new Set(blocker.need_help_from || []))
-                .filter((uid) => uid && uid !== operatorId)
-            for (const userId of uniqueHelpers) {
-                await createNotificationRecord({
-                    user: userId,
-                    type: 'blocker_reported',
-                    title: '有任务遇到卡点需要您协助',
-                    content: blocker.reason_detail,
-                    link_type: 'task',
-                    link_id: taskId,
-                })
-            }
         },
         onSuccess: (_, { taskId }) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) })
@@ -1162,149 +1013,24 @@ export function useCreateProject() {
     })
 }
 
-// ========== 删除项目 ==========
-export function useDeleteProject() {
-    const queryClient = useQueryClient()
-
-    return useMutation({
-        mutationFn: async (projectId: string) => {
-            try {
-                const project = await pb.collection('projects').getOne(projectId)
-                const userName = pb.authStore.model?.name || pb.authStore.model?.username
-                // 通知项目全员（删除前发送）
-                await notifyProjectMembers(projectId, '项目删除', `${userName} 删除了项目「${project.name}」`, 'project_update', pb.authStore.model?.id).catch(() => {})
-                // 审计日志
-                await pb.collection('audit_logs').create({
-                    project: projectId, action_type: 'delete_project',
-                    operator: pb.authStore.model?.id,
-                    before_data: { name: project.name, status: project.status },
-                }).catch((err) => console.warn('[audit_logs] delete_project failed:', err))
-                // ⚠️ Bug fix P0-5（Agent C 数据流审计发现）：级联清理项目所有关联记录。
-                // PB cascadeDelete=false，仅删 tasks 会留下：
-                //  - handoffs (project=projectId) → ReviewCenter 残留幽灵审批
-                //  - comments (project=projectId) → 评论数据孤儿
-                //  - progress_logs (project=projectId) → 进度日志孤儿
-                //  - notifications (link_type=project && link_id=projectId) → 通知点击 404
-                // 顺序：先清下属业务记录，再删 tasks，最后删 project
-                // audit_logs 保留（合规审计追溯），可作为 orphan 标记
-                try {
-                    const handoffs = await pb.collection('handoffs').getFullList({
-                        filter: `project="${projectId}"`,
-                        fields: 'id',
-                    })
-                    await Promise.allSettled(handoffs.map((h) => pb.collection('handoffs').delete(h.id)))
-                } catch (e) { console.warn('cascade clean handoffs failed', e) }
-
-                try {
-                    const comments = await pb.collection('comments').getFullList({
-                        filter: `project="${projectId}"`,
-                        fields: 'id',
-                    })
-                    await Promise.allSettled(comments.map((c) => pb.collection('comments').delete(c.id)))
-                } catch (e) { console.warn('cascade clean comments failed (collection may not exist)', e) }
-
-                try {
-                    const progressLogs = await pb.collection('progress_logs').getFullList({
-                        filter: `project="${projectId}"`,
-                        fields: 'id',
-                    })
-                    await Promise.allSettled(progressLogs.map((p) => pb.collection('progress_logs').delete(p.id)))
-                } catch (e) { console.warn('cascade clean progress_logs failed (collection may not exist)', e) }
-
-                try {
-                    const notifs = await pb.collection('notifications').getFullList({
-                        filter: `link_type="project" && link_id="${projectId}"`,
-                        fields: 'id',
-                    })
-                    await Promise.allSettled(notifs.map((n) => pb.collection('notifications').delete(n.id)))
-                } catch (e) { console.warn('cascade clean notifications failed', e) }
-
-                // 删除项目下所有任务（使用 allSettled 避免部分失败阻断后续删除）
-                const tasks = await pb.collection('tasks').getFullList({ filter: `project="${projectId}"`, fields: 'id' })
-                await Promise.allSettled(tasks.map(t => pb.collection('tasks').delete(t.id)))
-                await pb.collection('projects').delete(projectId)
-            } catch (e: unknown) {
-                const err = e as { status?: number }
-                if (err?.status === 404) {
-                    queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-                    queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
-                    queryClient.invalidateQueries({ queryKey: ['notifications'] })
-                    queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
-                    return
-                }
-                throw e
-            }
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.projects })
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
-            queryClient.invalidateQueries({ queryKey: ['notifications'] })
-            queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
-        },
-    })
-}
-
 // ========== 删除任务 ==========
 export function useDeleteTask() {
     const queryClient = useQueryClient()
 
     return useMutation({
         mutationFn: async (taskId: string) => {
-            const task = await pb.collection('tasks').getOne<Task>(taskId)
-            const userName = pb.authStore.model?.name || pb.authStore.model?.username
-            // 审计日志
-            await pb.collection('audit_logs').create({
-                project: task.project, task: taskId, action_type: 'delete_task',
-                operator: pb.authStore.model?.id,
-                before_data: { stage_name: task.stage_name, status: task.status, assignees: task.assignees },
-            }).catch((err) => console.warn('[audit_logs] delete_task failed:', err))
-            // 通知项目全员
-            if (task.project) {
-                notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', pb.authStore.model?.id).catch(() => {})
-            }
-
-            // ⚠️ Bug fix P0-4（Agent C 数据流审计发现）：级联清理关联记录。
-            // PB 端 cascadeDelete=false，仅删 task 会留下 handoffs / notifications /
-            // 下游任务的 predecessor_tasks 引用 → ReviewCenter 出现 expand 失败的
-            // 幽灵记录、通知点击 404、时间轴断链。
-            try {
-                // 1) 关联 handoffs（from_task 或 approved_task 引用此任务）
-                const hs = await pb.collection('handoffs').getFullList({
-                    filter: `from_task="${taskId}" || approved_task="${taskId}"`,
-                    fields: 'id',
-                })
-                await Promise.allSettled(hs.map((h) => pb.collection('handoffs').delete(h.id)))
-
-                // 2) 下游任务的 predecessor_tasks 中清掉此 id
-                const downstream = await pb.collection('tasks').getFullList<Task>({
-                    filter: `predecessor_tasks ~ "${taskId}"`,
-                    fields: 'id,predecessor_tasks',
-                })
-                await Promise.allSettled(downstream.map((d) => {
-                    const next = (d.predecessor_tasks || []).filter((p: string) => p !== taskId)
-                    return pb.collection('tasks').update(d.id, { predecessor_tasks: next })
-                }))
-
-                // 3) link_id=taskId 的 notifications（避免点击 404）
-                const ns = await pb.collection('notifications').getFullList({
-                    filter: `link_type="task" && link_id="${taskId}"`,
-                    fields: 'id',
-                })
-                await Promise.allSettled(ns.map((n) => pb.collection('notifications').delete(n.id)))
-            } catch (e) {
-                console.warn('cascade cleanup for deleted task failed', e)
-            }
-
-            await pb.collection('tasks').delete(taskId)
-            return task
+            return await pb.send<{ task_id: string; project_id: string; deleted: boolean }>('/api/custom/tasks/delete', {
+                method: 'POST',
+                body: { task_id: taskId },
+            })
         },
-        onSuccess: (task) => {
+        onSuccess: (result) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
             queryClient.invalidateQueries({ queryKey: queryKeys.projects })
             queryClient.invalidateQueries({ queryKey: ['notifications'] })
-            if (task?.project) {
-                queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(task.project) })
-                queryClient.invalidateQueries({ queryKey: queryKeys.project(task.project) })
+            if (result?.project_id) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks(result.project_id) })
+                queryClient.invalidateQueries({ queryKey: queryKeys.project(result.project_id) })
             }
         },
     })
@@ -1352,50 +1078,10 @@ export function useUnblockTask() {
     return useMutation({
         mutationFn: async ({ taskId, newStatus }: { taskId: string; newStatus: 'in_progress' | 'completed' }) => {
             const task = await pb.collection('tasks').getOne<Task>(taskId)
-            // ⚠️ Bug fix E-2（Agent E MED）：先读 rollback_to，解除卡点后联动恢复
-            const rollbackToTaskId = task.blocker?.rollback_to
-            await pb.collection('tasks').update(taskId, {
-                status: newStatus,
-                blocker: null,
+            await pb.send('/api/custom/tasks/unblock', {
+                method: 'POST',
+                body: { task_id: taskId, status: newStatus },
             })
-            await pb.collection('audit_logs').create({
-                project: task.project,
-                task: taskId,
-                action_type: 'unblock_task',
-                operator: pb.authStore.model?.id,
-                before_data: { status: 'blocked', rollback_to: rollbackToTaskId },
-                after_data: { status: newStatus },
-            }).catch((err) => console.warn('[audit_logs] unblock_task failed:', err))
-
-            // ⚠️ Bug fix E-2：若 mark_blocked 时回退过某任务 X，现在 unblock 把 X 设回 completed
-            if (rollbackToTaskId) {
-                try {
-                    const rollbackTask = await pb.collection('tasks').getOne<Task>(rollbackToTaskId)
-                    // 仅当 X 现在还是 in_progress 时回设 completed（避免覆盖用户后续修改）
-                    if (rollbackTask.status === 'in_progress') {
-                        await pb.collection('tasks').update(rollbackToTaskId, {
-                            status: 'completed',
-                            completed_at: new Date().toISOString(),
-                        })
-                        // 通知 X 的 assignees：上游卡点已解除，您的任务恢复完成
-                        const xAssignees = rollbackTask.assignees || []
-                        for (const uid of xAssignees) {
-                            if (uid && uid !== pb.authStore.model?.id) {
-                                await createNotificationRecord({
-                                    user: uid,
-                                    type: 'task_update',
-                                    title: '上游卡点已解除',
-                                    content: `任务「${rollbackTask.stage_name}」恢复完成状态`,
-                                    link_type: 'task',
-                                    link_id: rollbackToTaskId,
-                                })
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn('rollback_to recovery failed', e)
-                }
-            }
 
             // 通知项目全员
             const userName = pb.authStore.model?.name || pb.authStore.model?.username
@@ -1625,7 +1311,7 @@ export function useAuditLogs(filters?: { project?: string; action_type?: string;
               parts.push(`(note ~ "${escaped}" || action_type ~ "${escaped}")`)
             }
             const filter = parts.length > 0 ? parts.join(' && ') : ''
-            return await pb.collection('audit_logs').getFullList({
+            return await pb.collection('audit_logs').getFullList<AuditLog>({
                 filter,
                 sort: '-created',
                 expand: 'operator,project,task',
@@ -1655,113 +1341,16 @@ export function useUpdateAuditLogStatus() {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async ({ id, review_status, reject_note }: { id: string; review_status: 'read' | 'approved' | 'rejected'; reject_note?: string }) => {
-            // 先读取审计日志详情
-            const auditLog = await pb.collection('audit_logs').getOne(id)
-
-            // 拒绝 mark_complete 时，回滚任务状态
-            if (review_status === 'rejected' && auditLog.action_type === 'mark_complete' && auditLog.task) {
-                try {
-                    const task = await pb.collection('tasks').getOne(auditLog.task)
-                    if (task.status === 'completed') {
-                        // 判断是否逾期：有截止日期且已过期 → overdue，否则 → in_progress
-                        const isOverdue = task.deadline && new Date(task.deadline) < new Date()
-                        await pb.collection('tasks').update(auditLog.task, {
-                            status: isOverdue ? 'overdue' : 'in_progress',
-                            completed_at: null,
-                        })
-                    }
-
-                    // ⚠️ Bug fix #9（Agent B MEDIUM-9，与 Bug #1 配套）：
-                    // 拒绝 mark_complete 时还要取消同步创建的 pending handoff，
-                    // 否则会出现"任务回到 in_progress + handoff 仍 pending"，
-                    // 另一管理员批准 handoff 后会触发我们 commit c7cee3c 的 PB hook
-                    // 重新把 task 设回 completed → 矛盾状态。
-                    // 取消方式：把 handoff 也置 rejected，写明自动撤销原因。
-                    try {
-                        const pendingHs = await pb.collection('handoffs').getFullList({
-                            filter: `from_task="${auditLog.task}" && status="pending"`,
-                            fields: 'id',
-                        })
-                        for (const h of pendingHs) {
-                            await pb.collection('handoffs').update(h.id, {
-                                status: 'rejected',
-                                reviewer: pb.authStore.model?.id,
-                                review_note: `任务完成被审计拒绝，自动撤销交接${reject_note ? '：' + reject_note : ''}`,
-                            }).catch((err) => console.warn('cancel pending handoff failed', err))
-                        }
-                    } catch (e) {
-                        console.warn('cleanup pending handoffs failed', e)
-                    }
-                } catch (e) { console.warn('回滚任务状态失败', e) }
-            }
-
-            // ⚠️ Bug fix E-1（Agent E HIGH）：拒绝 mark_blocked 时回滚卡点 +
-            // 清空 blocker，避免任务永远卡在 blocked 无 UI 路径恢复
-            if (review_status === 'rejected' && auditLog.action_type === 'mark_blocked' && auditLog.task) {
-                try {
-                    const task = await pb.collection('tasks').getOne<Task>(auditLog.task)
-                    if (task.status === 'blocked') {
-                        await pb.collection('tasks').update(auditLog.task, {
-                            status: 'in_progress',
-                            blocker: null,
-                        })
-                    } else {
-                        // 员工可能已自己 unblock，blocker 已为 null/状态变了；
-                        // 仍然清一次 blocker 字段保证一致性
-                        if (task.blocker) {
-                            await pb.collection('tasks').update(auditLog.task, { blocker: null })
-                        }
-                    }
-                } catch (e) {
-                    console.warn('reject mark_blocked rollback failed', e)
-                }
-            }
-
-            // 拒绝 update_task 时，回滚到 before_data
-            if (review_status === 'rejected' && auditLog.action_type === 'update_task' && auditLog.task && auditLog.before_data) {
-                try {
-                    const rollbackData: Record<string, unknown> = {}
-                    const before = auditLog.before_data as Record<string, unknown>
-                    const after = auditLog.after_data as Record<string, unknown>
-                    // 只回滚实际被修改的字段
-                    for (const key of Object.keys(after || {})) {
-                        if (key in before) rollbackData[key] = before[key]
-                    }
-                    if (Object.keys(rollbackData).length > 0) {
-                        await pb.collection('tasks').update(auditLog.task, rollbackData)
-                    }
-                } catch (e) { console.warn('回滚任务变更失败', e) }
-            }
-
-            // 更新审计日志状态
-            let result
+        mutationFn: async ({ id, review_status }: { id: string; review_status: 'read' }) => {
             try {
-                result = await pb.collection('audit_logs').update(id, {
+                return await pb.collection('audit_logs').update(id, {
                     review_status,
                     reviewed_by: pb.authStore.model?.id,
-                    ...(reject_note ? { reject_note } : {}),
                 })
             } catch (updateErr: unknown) {
                 console.error('更新审计日志失败', updateErr)
                 throw new Error(getPocketBaseErrorMessage(updateErr, '更新审计日志失败'))
             }
-
-            // 拒绝时通知操作人
-            if (review_status === 'rejected' && auditLog.operator) {
-                const reviewerName = pb.authStore.model?.name || pb.authStore.model?.username || '管理员'
-                const actionLabel = auditLog.action_type === 'mark_complete' ? '任务完成' : auditLog.action_type === 'update_task' ? '任务修改' : '操作'
-                await createNotificationRecord({
-                    user: auditLog.operator,
-                    type: 'audit_rejected',
-                    title: `${actionLabel}被拒绝`,
-                    content: `${reviewerName} 拒绝了您的${actionLabel}${reject_note ? '，原因：' + reject_note : ''}`,
-                    link_type: auditLog.task ? 'task' : 'project',
-                    link_id: auditLog.task || auditLog.project || '',
-                })
-            }
-
-            return result
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['audit_logs'] })

@@ -1,19 +1,21 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button, Toast, Dialog, Avatar, TextArea, Input, SpinLoading } from 'antd-mobile'
-import { pb } from '../lib/pocketbase'
-import { notifyProjectMembers } from '../lib/api'
+import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
+import { notifyProjectMembers, useDeleteTask, useMarkTaskBlocked, type Project, type Task } from '../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { IoArrowBack, IoCheckmarkDone, IoCalendarOutline, IoCreateOutline, IoSaveOutline, IoCloseOutline, IoWarningOutline, IoTrashOutline } from 'react-icons/io5'
 import { motion } from 'framer-motion'
+import './TaskDetail.css'
+import { getUserAvatarUrl } from '../lib/avatar'
 
 const TaskDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [task, setTask] = useState<any>(null)
-  const [project, setProject] = useState<any>(null)
+  const [task, setTask] = useState<Task | null>(null)
+  const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState(false)
 
@@ -29,6 +31,8 @@ const TaskDetail = () => {
     expected_resolve: ''
   })
   const [submittingBlocker, setSubmittingBlocker] = useState(false)
+  const markTaskBlocked = useMarkTaskBlocked()
+  const deleteTask = useDeleteTask()
 
   const currentUser = pb.authStore.model
   const isManager = currentUser?.role === 'admin' || currentUser?.role === 'manager'
@@ -36,11 +40,11 @@ const TaskDetail = () => {
   const loadData = useCallback(async () => {
     if (!id) return
     try {
-      const taskData = await pb.collection('tasks').getOne(id, {
+      const taskData = await pb.collection('tasks').getOne<Task>(id, {
         expand: 'project,assignees'
       })
       setTask(taskData)
-      setProject(taskData.expand?.project)
+      setProject(taskData.expand?.project || null)
       setEditForm({
         stage_name: taskData.stage_name,
         completed_steps: taskData.completed_steps || '',
@@ -100,63 +104,13 @@ const TaskDetail = () => {
   }
 
   // 被分配人也可以标记完成
-  const isAssignee = task?.assignees?.includes(currentUser?.id)
+  const isAssignee = !!currentUser?.id && !!task?.assignees?.includes(currentUser.id)
   const canComplete = isManager || isAssignee
 
-  // ⚠️ ARCH-DEBT P0-1（Agent C 数据流审计标记）：
-  //
-  // 本应用存在两条"标记完成"路径：
-  //   A. TaskDetail.handleComplete（本函数）— 直接 update status='completed'，
-  //      不创建 handoff。任何 assignee 或 manager 可用。
-  //   B. kanban/TaskDetailDrawer 内的 useMarkTaskComplete（api.ts:829）—
-  //      创建 handoff(status=pending) 进入 ReviewCenter 审核流。
-  //
-  // 设计原意可能是"快速完成"（员工直接交付，免去 handoff 表单填写），
-  // 但与"强制交接审核"流程冲突。短期方案：保留快速路径不破坏 UX，
-  // 同时在 audit_log 写入 note=quick_complete_skip_handoff 让 reviewer
-  // 在审计中心能区分这是直接完成还是经过 handoff 的完成。
-  //
-  // 长期方案：在 TaskDetail 加 handoff 表单 UI（proposed_title /
-  // proposed_assignees / proposed_due_date），统一走 useMarkTaskComplete。
-  // TODO: 计划在下一个 PR（v3.1）做此 UX 重构。
   const handleComplete = () => {
     if (!canComplete || !task) return
-    Dialog.confirm({
-      title: '确认完成',
-      content: '确认当前节点任务已全部完成？\n（注：此路径将直接标记完成，不进入交接审核流程）',
-      confirmText: '确认提交',
-      cancelText: '取消',
-      onConfirm: async () => {
-        setCompleting(true)
-        try {
-          if (!id) return
-          await pb.collection('tasks').update(id, { status: 'completed', completed_at: new Date().toISOString() })
-          // 审计日志 — 加 note 标识本次完成跳过了 handoff（让 reviewer 在审计
-          // 中心可识别"快速完成 vs 经审核完成"两种情况）
-          await pb.collection('audit_logs').create({
-            project: task.project, task: id, action_type: 'mark_complete',
-            operator: currentUser?.id,
-            before_data: { status: task.status },
-            after_data: { status: 'completed', skip_handoff: true },
-            note: 'quick_complete_skip_handoff',
-          }).catch(() => {})
-          // 通知项目全员
-          const userName = currentUser?.name || currentUser?.username
-          notifyProjectMembers(task.project, '任务完成', `${userName} 完成了任务「${task.stage_name}」（快速完成，未走交接审核）`, 'task_update', currentUser?.id, id).catch(() => {})
-          Toast.show({ content: '提交成功', icon: 'success' })
-          loadData()
-          queryClient.invalidateQueries({ queryKey: ['tasks'] })
-          queryClient.invalidateQueries({ queryKey: ['projects'] })
-          queryClient.invalidateQueries({ queryKey: ['notifications'] })
-          queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
-        } catch (e) {
-          console.error(e)
-          Toast.show({ content: '提交失败: ' + (e as Error).message, icon: 'fail' })
-        } finally {
-          setCompleting(false)
-        }
-      }
-    })
+    Toast.show({ content: '完成任务需要填写交接信息，已打开项目看板', duration: 2200 })
+    navigate(`/project/${task.project}/kanban`)
   }
 
   const handleSubmitBlocker = async () => {
@@ -167,26 +121,15 @@ const TaskDetail = () => {
     if (!id || !task) return
     setSubmittingBlocker(true)
     try {
-      await pb.collection('tasks').update(id, {
-        status: 'blocked',
+      await markTaskBlocked.mutateAsync({
+        taskId: id,
         blocker: {
-          reason_type: 'other',
+          reason_type: blockerForm.reason_type || 'other',
           reason_detail: blockerForm.reason_detail,
           need_help_from: [],
           expected_resolve: blockerForm.expected_resolve || dayjs().add(3, 'day').format('YYYY-MM-DD')
-        }
+        },
       })
-      // Create audit log
-      await pb.collection('audit_logs').create({
-        project: task.project,
-        task: id,
-        action_type: 'mark_blocked',
-        operator: currentUser?.id,
-        after_data: blockerForm
-      }).catch(() => {})
-      // 通知项目全员
-      const userName = currentUser?.name || currentUser?.username
-      notifyProjectMembers(task.project, '卡点上报', `${userName} 上报了「${task.stage_name}」的卡点：${blockerForm.reason_detail}`, 'blocker', currentUser?.id, id).catch(() => {})
       Toast.show({ content: '卡点已上报', icon: 'success' })
       setShowBlockerDialog(false)
       loadData()
@@ -196,7 +139,7 @@ const TaskDetail = () => {
       queryClient.invalidateQueries({ queryKey: ['audit_logs'] })
     } catch (e) {
       console.error(e)
-      Toast.show({ content: '上报失败: ' + (e as any).message, icon: 'fail' })
+      Toast.show({ content: '上报失败: ' + getPocketBaseErrorMessage(e), icon: 'fail' })
     } finally {
       setSubmittingBlocker(false)
     }
@@ -219,7 +162,7 @@ const TaskDetail = () => {
   const nextSteps = task.next_steps ? task.next_steps.split('\n') : []
 
   return (
-    <div style={{ minHeight: '100dvh', background: '#FFFFFF', paddingBottom: 100 }}>
+    <div className="task-detail-page">
       {/* Immersive Glass Header */}
       <div className="glass-header" style={{
         padding: '16px 20px',
@@ -262,23 +205,12 @@ const TaskDetail = () => {
                 content: `确认删除「${task?.stage_name}」？此操作不可恢复！`,
                 onConfirm: async () => {
                   try {
-                    // 审计日志
-                    await pb.collection('audit_logs').create({
-                      project: task.project, task: id, action_type: 'delete_task',
-                      operator: currentUser?.id,
-                      before_data: { stage_name: task.stage_name, status: task.status },
-                    }).catch(() => {})
-                    // 通知项目全员
-                    const userName = currentUser?.name || currentUser?.username
-                    notifyProjectMembers(task.project, '任务删除', `${userName} 删除了任务「${task.stage_name}」`, 'task_update', currentUser?.id).catch(() => {})
                     if (!id) return
-                    await pb.collection('tasks').delete(id)
-                    queryClient.invalidateQueries({ queryKey: ['tasks'] })
-                    queryClient.invalidateQueries({ queryKey: ['projects'] })
+                    await deleteTask.mutateAsync(id)
                     Toast.show({ content: '已删除', icon: 'success' })
-                    navigate(-1)
-                  } catch (e: any) {
-                    Toast.show({ content: '删除失败: ' + e.message, icon: 'fail' })
+                    navigate(`/project/${task.project}`, { replace: true })
+                  } catch (e) {
+                    Toast.show({ content: '删除失败: ' + getPocketBaseErrorMessage(e), icon: 'fail' })
                   }
                 }
               })} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
@@ -426,7 +358,7 @@ const TaskDetail = () => {
                   <IoCalendarOutline />
                   {task.deadline ? (
                     <>
-                      {dayjs(task.deadline).format('MMM DD, YYYY')}
+                      {dayjs(task.deadline).format('YYYY年M月D日')}
                       {isOverdue && <span style={{ fontSize: 11, fontWeight: 700 }}> (逾期 {Math.abs(daysLeft!)} 天)</span>}
                       {isUrgent && <span style={{ fontSize: 11, fontWeight: 700 }}> (剩余 {daysLeft} 天)</span>}
                     </>
@@ -436,9 +368,9 @@ const TaskDetail = () => {
               <div>
                 <div style={{ fontSize: 10, color: 'var(--neutral-400)', fontWeight: 700 }}>执行人</div>
                 <div style={{ display: 'flex', marginTop: 4 }}>
-                  {task.expand?.assignees?.map((u: any, idx: number) => (
+                  {task.expand?.assignees?.map((u, idx) => (
                     <div key={u.id} style={{ marginLeft: idx > 0 ? -8 : 0, border: '2px solid white', borderRadius: '50%' }}>
-                      <Avatar src={u.avatar ? pb.files.getUrl(u, u.avatar) : ''} style={{ '--size': '24px' }} />
+                      <Avatar src={getUserAvatarUrl(u)} style={{ '--size': '24px' }} />
                     </div>
                   ))}
                   {!task.expand?.assignees && <div style={{ fontSize: 13, color: 'var(--neutral-700)' }}>待分配</div>}
@@ -485,7 +417,7 @@ const TaskDetail = () => {
       />
 
       {/* Enhanced Floating Action Buttons */}
-      <div className="float-up" style={{ position: 'fixed', bottom: 24, left: 20, right: 20, zIndex: 100, maxWidth: 440, margin: '0 auto' }}>
+      <div className="float-up task-detail-actions">
         {isEditing ? (
           <Button
             className="premium-button" block shape='rounded'
@@ -548,8 +480,10 @@ const TaskDetail = () => {
                 onClick={() => {
                   const handleUnblock = async (newStatus: 'completed' | 'in_progress') => {
                     if (!id) return
-                    await pb.collection('tasks').update(id, { status: newStatus, blocker: null })
-                    await pb.collection('audit_logs').create({ project: task.project, task: id, action_type: 'unblock_task', operator: currentUser?.id, after_data: { status: newStatus } })
+                    await pb.send('/api/custom/tasks/unblock', {
+                      method: 'POST',
+                      body: { task_id: id, status: newStatus },
+                    })
                     const userName = currentUser?.name || currentUser?.username
                     const label = newStatus === 'completed' ? '已完成' : '进行中'
                     notifyProjectMembers(task.project, '卡点解除', `${userName} 解除了「${task.stage_name}」的卡点，状态变为${label}`, 'task_update', currentUser?.id, id).catch(() => {})

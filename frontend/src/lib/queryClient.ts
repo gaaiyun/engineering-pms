@@ -4,7 +4,7 @@
 import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query'
 import { Toast } from 'antd-mobile'
 
-// Bug fix E1（Agent L Round 4）：PB 服务器不可达时缺 user-facing 错误提示。
+// PocketBase 不可达时保留可识别的用户提示。
 // 原版只有 console.error 和 pageerror，用户看不到。改加全局 onError 触发 Toast。
 // 仅在"网络/服务器"类错误显示，业务 4xx 不打扰（业务错误由各 mutation 自己处理）。
 let lastNetworkErrorAt = 0
@@ -63,6 +63,7 @@ export const queryKeys = {
     projects: ['projects'] as const,
     project: (id: string) => ['projects', id] as const,
     projectTasks: (projectId: string) => ['projects', projectId, 'tasks'] as const,
+    projectPortfolioTasks: (projectIds: string[]) => ['tasks', 'portfolio', ...projectIds] as const,
 
     // 任务相关
     tasks: ['tasks'] as const,

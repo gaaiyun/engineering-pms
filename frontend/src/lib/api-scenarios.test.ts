@@ -14,9 +14,16 @@ const mockCreate = vi.fn()
 const mockUpdate = vi.fn()
 const mockDelete = vi.fn()
 
+type MockAuthModel = {
+  id?: string
+  role?: string
+  name?: string
+  username?: string
+}
+
 const mockAuthStore = vi.hoisted(() => ({
   isValid: true,
-  model: { id: 'u1', role: 'admin', name: '张经理', username: 'zhang_manager' } as any,
+  model: { id: 'u1', role: 'admin', name: '张经理', username: 'zhang_manager' } as MockAuthModel | null,
 }))
 
 vi.mock('./pocketbase', () => ({
@@ -35,7 +42,7 @@ vi.mock('./pocketbase', () => ({
 
 import {
   useProjects, useTasks, useMyTasks, useNotifications,
-  isManagerRole, isManager,
+  isManagerRole, isManager, buildNotificationFilter, useNotificationPage,
 } from './api'
 
 function createWrapper() {
@@ -190,6 +197,39 @@ describe('useNotifications', () => {
     const { result } = renderHook(() => useNotifications('u1'), { wrapper: createWrapper() })
     expect(result.current.isFetching).toBe(false)
     mockAuthStore.isValid = true
+  })
+})
+
+describe('paginated notifications', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('buildNotificationFilter 将 tab 过滤下推到 PocketBase', () => {
+    expect(buildNotificationFilter('u1', 'all')).toBe('user="u1"')
+    expect(buildNotificationFilter('u1', 'unread')).toBe('user="u1" && is_read=false')
+    expect(buildNotificationFilter('u1', 'task')).toContain('type~"task"')
+    expect(buildNotificationFilter('u1', 'handoff')).toContain('type~"handoff"')
+    expect(buildNotificationFilter('u1', 'blocker')).toContain('type~"blocker"')
+    expect(buildNotificationFilter('u1', 'project')).toContain('type~"project"')
+  })
+
+  it('useNotificationPage 使用 getList 做服务端分页', async () => {
+    mockGetList.mockResolvedValueOnce({
+      page: 2,
+      perPage: 20,
+      totalItems: 45,
+      totalPages: 3,
+      items: [{ id: 'n21', title: '第 21 条', user: 'u1', is_read: false }],
+    })
+
+    const { result } = renderHook(() => useNotificationPage('u1', 'unread', 2, 20), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockGetList).toHaveBeenCalledWith(2, 20, expect.objectContaining({
+      filter: 'user="u1" && is_read=false',
+      sort: '-created',
+    }))
+    expect(result.current.data?.totalPages).toBe(3)
+    expect(result.current.data?.items).toHaveLength(1)
   })
 })
 

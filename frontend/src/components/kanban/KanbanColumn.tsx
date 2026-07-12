@@ -15,6 +15,7 @@ interface KanbanColumnProps {
     color: string
     tasks: Task[]
     onTaskClick?: (task: Task) => void
+    canDrag?: boolean
     /** 全局序号偏移量，用于跨列连续编号 */
     indexOffset?: number
 }
@@ -25,6 +26,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
     color,
     tasks,
     onTaskClick,
+    canDrag = true,
     indexOffset = 0,
 }) => {
     const { isOver, setNodeRef } = useDroppable({ id })
@@ -62,6 +64,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
                                 task={task}
                                 sequenceNumber={indexOffset + idx + 1}
                                 onClick={() => onTaskClick?.(task)}
+                                canDrag={canDrag}
                             />
                         ))
                     )}

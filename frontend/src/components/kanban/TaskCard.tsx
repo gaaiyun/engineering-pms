@@ -5,7 +5,9 @@ import React from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Tag } from 'antd-mobile'
+import { IoReorderThreeOutline } from 'react-icons/io5'
 import type { Task } from '../../lib/api'
+import { getUserAvatarUrl } from '../../lib/avatar'
 import './TaskCard.css'
 
 interface TaskCardProps {
@@ -13,6 +15,7 @@ interface TaskCardProps {
     onClick?: () => void
     isDragging?: boolean
     sequenceNumber?: number
+    canDrag?: boolean
 }
 
 const priorityColors = {
@@ -27,7 +30,7 @@ const priorityLabels: Record<string, string> = {
     low: '低',
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, sequenceNumber }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, sequenceNumber, canDrag = true }) => {
     const {
         attributes,
         listeners,
@@ -35,7 +38,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, s
         transform,
         transition,
         isDragging: isSortableDragging,
-    } = useSortable({ id: task.id })
+    } = useSortable({ id: task.id, disabled: !canDrag })
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -67,10 +70,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, s
         <div
             ref={setNodeRef}
             style={style}
-            {...attributes}
-            {...listeners}
             className={`task-card ${isDragging || isSortableDragging ? 'dragging' : ''} ${isOverdue ? 'overdue' : ''} ${isBlocked ? 'blocked' : ''} ${isMilestone ? 'milestone' : ''} ${task.status === 'in_progress' ? 'task-active-glow' : ''}`}
             onClick={onClick}
+            onKeyDown={!canDrag ? (event) => {
+                if ((event.key === 'Enter' || event.key === ' ') && onClick) {
+                    event.preventDefault()
+                    onClick()
+                }
+            } : undefined}
+            role={onClick && !canDrag ? 'button' : undefined}
+            tabIndex={onClick && !canDrag ? 0 : undefined}
             data-task-active={task.status === 'in_progress' ? 'true' : undefined}
         >
             <div className="task-card-header">
@@ -94,6 +103,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, s
                     >
                         {priorityLabels[task.priority] || '中'}
                     </Tag>
+                )}
+                {canDrag && (
+                    <button
+                        type="button"
+                        className="task-drag-handle"
+                        aria-label={`拖动任务 ${task.stage_name}`}
+                        title="按住拖动"
+                        {...attributes}
+                        {...listeners}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <IoReorderThreeOutline aria-hidden="true" />
+                    </button>
                 )}
             </div>
 
@@ -125,11 +147,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, s
                                 style={{ marginLeft: idx > 0 ? -8 : 0, zIndex: 3 - idx }}
                                 title={user.name}
                             >
-                                {user.avatar ? (
-                                    <img src={user.avatar} alt={user.name} />
-                                ) : (
-                                    user.name?.charAt(0) || '?'
-                                )}
+                                <img src={getUserAvatarUrl(user)} alt={user.name} />
                             </div>
                         ))}
                         {task.expand.assignees.length > 3 && (
