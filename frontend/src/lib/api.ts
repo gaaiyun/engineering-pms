@@ -192,9 +192,14 @@ export function getAddedAssigneeIds(before: string[] = [], after: string[] = [])
 
 async function createNotificationRecord(input: NotificationCreateInput) {
     try {
-        await pb.collection('notifications').create({
-            ...input,
-            is_read: input.is_read ?? false,
+        await pb.send('/api/custom/notifications/send', {
+            method: 'POST',
+            body: {
+                notification: {
+                    ...input,
+                    is_read: input.is_read ?? false,
+                },
+            },
         })
         return true
     } catch (error) {

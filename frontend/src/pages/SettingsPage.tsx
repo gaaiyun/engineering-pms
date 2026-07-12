@@ -10,7 +10,6 @@ import {
   IoLockClosedOutline, 
   IoHelpCircleOutline, 
   IoInformationCircleOutline,
-  IoKeyOutline,
   IoTrashOutline,
   IoCloudOutline
 } from 'react-icons/io5'
@@ -61,10 +60,6 @@ export default function SettingsPage() {
     return localStorage.getItem('notification_enabled') !== 'false'
   })
   
-  // API Key 设置
-  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('sf_api_key') || '')
-
   const handleNotificationToggle = (checked: boolean) => {
     setNotificationEnabled(checked)
     localStorage.setItem('notification_enabled', String(checked))
@@ -132,17 +127,6 @@ export default function SettingsPage() {
         Toast.show({ content: getPocketBaseErrorMessage(error, '修改失败'), icon: 'fail' })
       }
     }
-  }
-
-  const handleSaveApiKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('sf_api_key', apiKey.trim())
-      Toast.show({ content: 'API Key 已保存', icon: 'success' })
-    } else {
-      localStorage.removeItem('sf_api_key')
-      Toast.show({ content: 'API Key 已清除', icon: 'success' })
-    }
-    setShowApiKeyDialog(false)
   }
 
   const handleClearCache = async () => {
@@ -282,13 +266,6 @@ export default function SettingsPage() {
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>AI 设置</div>
           <div className="profile-table" style={{ marginBottom: 24 }}>
             <SettingRow
-              icon={<IoKeyOutline size={18} />}
-              color="#8B5CF6"
-              label="API Key"
-              value={apiKey ? '已配置' : '未配置'}
-              onClick={() => setShowApiKeyDialog(true)}
-            />
-            <SettingRow
               icon={<IoCloudOutline size={18} />}
               color="#06B6D4"
               label="AI 模型"
@@ -334,35 +311,6 @@ export default function SettingsPage() {
         © 2026 All Rights Reserved
       </div>
 
-      {/* API Key Dialog */}
-      <Dialog
-        visible={showApiKeyDialog}
-        title="配置 AI API Key"
-        content={
-          <div style={{ marginTop: 12 }}>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
-              请输入 SiliconFlow API Key，用于 AI 智能分析功能
-            </p>
-            <Input
-              value={apiKey}
-              onChange={setApiKey}
-              placeholder="sk-..."
-              style={{ '--font-size': '14px' }}
-            />
-            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>
-              获取方式：访问 siliconflow.cn 注册并获取 API Key
-            </p>
-          </div>
-        }
-        closeOnAction
-        onClose={() => setShowApiKeyDialog(false)}
-        actions={[
-          [
-            { key: 'cancel', text: '取消' },
-            { key: 'save', text: '保存', bold: true, onClick: handleSaveApiKey },
-          ],
-        ]}
-      />
     </div>
   )
 }

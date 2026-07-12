@@ -309,17 +309,15 @@ const ManagerDashboard: React.FC = () => {
                                             Toast.show({ content: '正在聚合数据...', icon: 'loading', duration: 0 })
                                             const { aggregateProjectData, generateAIReport } = await import('../lib/ai-service')
                                             const data = await aggregateProjectData()
-                                            const apiKey = localStorage.getItem('sf_api_key')
-                                            if (!apiKey) { Toast.clear(); Toast.show({ content: '请先在"AI决策"页面配置API Key', icon: 'fail' }); return }
                                             Toast.show({ content: '正在生成智能分析...', icon: 'loading', duration: 0 })
-                                            const aiRes = await generateAIReport(data, apiKey)
+                                            const aiRes = await generateAIReport(data, undefined)
                                             const { pb } = await import('../lib/pocketbase')
                                             const userId = pb.authStore.model?.id
                                             if (userId && aiRes) {
                                                 await pb.collection('ai_summaries').create({
                                                     target_user: userId, date: new Date().toISOString(),
                                                     content: aiRes.content, risk_level: aiRes.risk_level,
-                                                    model_used: 'deepseek-ai/DeepSeek-V3', input_snapshot: data
+                                                    model_used: 'deepseek-ai/DeepSeek-V3'
                                                 })
                                             }
                                             Toast.clear(); Toast.show({ content: '分析已更新', icon: 'success' })

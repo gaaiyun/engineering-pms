@@ -27,15 +27,54 @@ routerAdd('POST', '/api/custom/llm-proxy', (c) => {
       return c.json(401, { error: 'unauthorized' })
     }
 
-    // 2. 解析 body
+    const role = authRecord.getString('role')
+    if (role !== 'admin' && role !== 'manager') {
+      return c.json(403, { error: 'forbidden' })
+    }
+
+    // 2. 解析并限制请求体，避免普通请求放大为高额上游调用。
     let body
     try {
       body = $apis.requestInfo(c).data
-    } catch (e) {
-      return c.json(400, { error: 'invalid body: ' + e })
+    } catch (_) {
+      return c.json(400, { error: 'invalid body' })
     }
-    if (!body || !body.messages) {
+    if (!body || !Array.isArray(body.messages) || body.messages.length < 1 || body.messages.length > 40) {
       return c.json(400, { error: 'messages field required' })
+    }
+
+    const allowedModels = [
+      'deepseek-ai/DeepSeek-V3',
+      'deepseek-ai/DeepSeek-V3.2',
+      'baidu/ERNIE-4.0-8K',
+      'baidu/ERNIE-4.5-300B-A47B',
+      'Qwen/Qwen3-235B-A22B-Instruct-2507',
+      'zai-org/GLM-4.6',
+    ]
+    const model = body.model || 'deepseek-ai/DeepSeek-V3'
+    if (allowedModels.indexOf(model) === -1) {
+      return c.json(400, { error: 'unsupported model' })
+    }
+
+    let totalChars = 0
+    for (let i = 0; i < body.messages.length; i++) {
+      const message = body.messages[i]
+      if (!message || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant') || typeof message.content !== 'string') {
+        return c.json(400, { error: 'invalid messages' })
+      }
+      totalChars += message.content.length
+    }
+    if (totalChars > 50000) {
+      return c.json(413, { error: 'messages too large' })
+    }
+
+    const maxTokens = typeof body.max_tokens === 'number' ? Math.floor(body.max_tokens) : 2000
+    if (maxTokens < 1 || maxTokens > 4000) {
+      return c.json(400, { error: 'invalid max_tokens' })
+    }
+    const temperature = typeof body.temperature === 'number' ? body.temperature : 0.7
+    if (temperature < 0 || temperature > 2) {
+      return c.json(400, { error: 'invalid temperature' })
     }
 
     // 3. 从 app_settings 读 API key
@@ -62,11 +101,11 @@ routerAdd('POST', '/api/custom/llm-proxy', (c) => {
         url: 'https://api.siliconflow.cn/v1/chat/completions',
         method: 'POST',
         body: JSON.stringify({
-          model: body.model || 'deepseek-ai/DeepSeek-V3',
+          model: model,
           messages: body.messages,
           response_format: body.response_format,
-          temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
-          max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : 2000,
+          temperature: temperature,
+          max_tokens: maxTokens,
         }),
         headers: {
           'Content-Type': 'application/json',
@@ -75,16 +114,13 @@ routerAdd('POST', '/api/custom/llm-proxy', (c) => {
         timeout: 60, // 60s LLM 调用可能较长
       })
     } catch (err) {
-      console.log('[llm-proxy] upstream call failed:', err)
-      return c.json(502, { error: 'LLM upstream call failed: ' + err })
+      console.log('[llm-proxy] upstream call failed')
+      return c.json(502, { error: 'LLM upstream unavailable' })
     }
 
     if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
-      console.log('[llm-proxy] upstream returned', upstream.statusCode, upstream.raw)
-      return c.json(upstream.statusCode, {
-        error: 'LLM upstream error: HTTP ' + upstream.statusCode,
-        details: typeof upstream.raw === 'string' ? upstream.raw.slice(0, 500) : '',
-      })
+      console.log('[llm-proxy] upstream returned', upstream.statusCode)
+      return c.json(502, { error: 'LLM upstream rejected request' })
     }
 
     // 5. 返回 LLM 响应（直通）
@@ -94,7 +130,7 @@ routerAdd('POST', '/api/custom/llm-proxy', (c) => {
       return c.json(200, { raw: upstream.raw })
     }
   } catch (e) {
-    console.log('[llm-proxy] outer error:', e)
-    return c.json(500, { error: 'internal server error: ' + e })
+    console.log('[llm-proxy] outer error')
+    return c.json(500, { error: 'internal server error' })
   }
 }, $apis.requireRecordAuth())

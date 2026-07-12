@@ -39,18 +39,6 @@ const AIConsole = () => {
     const [chatHistory, setChatHistory] = useState<any[]>([])
     const [input, setInput] = useState('')
     const [chatLoading, setChatLoading] = useState(false)
-    const [apiKey, setApiKey] = useState(localStorage.getItem('sf_api_key') || '')
-    const [showKeyInput, setShowKeyInput] = useState(!localStorage.getItem('sf_api_key'))
-    
-    // 每次组件加载时重新检查API key
-    useEffect(() => {
-        const savedKey = localStorage.getItem('sf_api_key')
-        if (savedKey) {
-            setApiKey(savedKey)
-            setShowKeyInput(false)
-        }
-    }, [])
-
     // Model Selection
     const MODELS = [
         { label: 'DeepSeek-V3.2 (推荐)', value: 'deepseek-ai/DeepSeek-V3' }, // Mapped to valid API model name, user requested V3.2 name but API likely V3 or custom. Using V3 for safety or as per user instruction if they insist on V3.2 name for UI but valid param for API. 
@@ -115,20 +103,6 @@ const AIConsole = () => {
     const [debugInfo, setDebugInfo] = useState<string>('')
     
     const handleUpdate = async () => {
-        // 重新从localStorage读取apiKey，确保使用最新值
-        const currentApiKey = localStorage.getItem('sf_api_key') || apiKey
-        
-        if (!currentApiKey) {
-            Toast.show('请先设置 API Key')
-            setShowKeyInput(true)
-            return
-        }
-        
-        // 更新state中的apiKey
-        if (currentApiKey !== apiKey) {
-            setApiKey(currentApiKey)
-        }
-        
         setLoading(true)
         setDebugInfo('正在聚合数据...')
         
@@ -139,7 +113,7 @@ const AIConsole = () => {
 
             // Generate Report
             setDebugInfo('正在调用 AI API...')
-            const aiRes = await generateAIReport(data, currentApiKey, selectedModel)
+            const aiRes = await generateAIReport(data, undefined, selectedModel)
             setDebugInfo('AI 响应成功，正在保存...')
             // 构建报告对象
             const reportData = {
@@ -161,8 +135,7 @@ const AIConsole = () => {
                         date: new Date().toISOString(),
                         content: aiRes.content,
                         risk_level: aiRes.risk_level,
-                        model_used: selectedModel,
-                        input_snapshot: JSON.stringify(data)
+                        model_used: selectedModel
                     })
                     setReport(saveRes)
                     // 更新缓存
@@ -202,7 +175,7 @@ const AIConsole = () => {
     }
 
     const handleSend = async () => {
-        if (!input.trim() || !apiKey) return
+        if (!input.trim()) return
         const msg = input
         setInput('')
 
@@ -212,7 +185,7 @@ const AIConsole = () => {
 
         try {
             const context = stats || await aggregateProjectData()
-            const reply = await chatWithAI(msg, context, newHistory.slice(-10), apiKey, selectedModel)
+            const reply = await chatWithAI(msg, context, newHistory.slice(-10), undefined, selectedModel)
             setChatHistory(prev => [...prev, { role: 'assistant', content: reply }])
         } catch (error: any) {
             Toast.show('发送失败')
@@ -251,30 +224,6 @@ const AIConsole = () => {
                 </select>
             </div>
 
-            {showKeyInput && (
-                <Card style={{ marginBottom: 16, background: '#fff7ed', borderColor: '#fdba74' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#c2410c' }}>需要配置 SiliconFlow API Key</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <Input
-                            placeholder="sk-..."
-                            value={apiKey}
-                            onChange={v => { setApiKey(v); localStorage.setItem('sf_api_key', v) }}
-                            style={{ background: 'white', padding: '4px 8px', borderRadius: 4, flex: 1 }}
-                        />
-                        <Button size='small' color='primary' onClick={() => {
-                            if (apiKey) {
-                                localStorage.setItem('sf_api_key', apiKey)
-                                Toast.show({ icon: 'success', content: 'API Key 已保存' })
-                            }
-                            setShowKeyInput(false)
-                        }}>保存</Button>
-                    </div>
-                    <div style={{ fontSize: 11, color: '#92400E', marginTop: 8 }}>
-                        获取方式: 访问 <a href="https://siliconflow.cn" target="_blank" rel="noreferrer" style={{ color: '#2563EB' }}>siliconflow.cn</a> 注册并获取 API Key
-                    </div>
-                </Card>
-            )}
-            
             {/* API状态指示器 */}
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ 
@@ -282,7 +231,7 @@ const AIConsole = () => {
                     alignItems: 'center', 
                     gap: 6,
                     padding: '6px 12px',
-                    background: apiKey ? '#ECFDF5' : '#FEF2F2',
+                    background: '#ECFDF5',
                     borderRadius: 20,
                     fontSize: 12
                 }}>
@@ -290,17 +239,12 @@ const AIConsole = () => {
                         width: 8, 
                         height: 8, 
                         borderRadius: '50%', 
-                        background: apiKey ? '#10B981' : '#EF4444' 
+                        background: '#10B981'
                     }}></div>
-                    <span style={{ color: apiKey ? '#059669' : '#DC2626', fontWeight: 500 }}>
-                        API Key: {apiKey ? '已配置' : '未配置'}
+                    <span style={{ color: '#059669', fontWeight: 500 }}>
+                        服务端安全代理
                     </span>
                 </div>
-                {!apiKey && (
-                    <Button size='mini' onClick={() => setShowKeyInput(true)} style={{ fontSize: 11, borderRadius: 20 }}>
-                        配置 Key
-                    </Button>
-                )}
                 {debugInfo && (
                     <div style={{ fontSize: 11, color: '#64748B', background: '#F1F5F9', padding: '4px 10px', borderRadius: 10 }}>
                         {debugInfo}
