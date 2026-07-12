@@ -47,8 +47,6 @@ backups/
 
 # Archive (历史 APK / 临时文件 / 旧文档 / 夜间产物 — 不推上 GitHub 避免大文件)
 _archive/
+deploy/private/
 
-# Temp PB data screenshots / debug
-docs/superpowers/qa-screenshots/*.json
-docs/superpowers/qa-screenshots/_debug_*.png
 _secrets_to_redact.txt
