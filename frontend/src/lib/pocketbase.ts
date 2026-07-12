@@ -1,11 +1,13 @@
 import PocketBase, { BaseAuthStore } from 'pocketbase'
 import type { RecordModel } from 'pocketbase'
+import { Capacitor } from '@capacitor/core'
 
 // 线上 PocketBase 地址（APK / localhost 均走此地址）
 // ⚠️ 部署到自己服务器时，请通过 VITE_PB_URL 环境变量覆盖此值。
 //    本地开发：在 frontend/.env.local 中设 VITE_PB_URL=http://YOUR_SERVER:8090
 //    生产构建：CI/CD 注入 VITE_PB_URL=https://your-domain.com/pb
-const PRODUCTION_PB_URL = (import.meta.env.VITE_PB_URL || 'http://127.0.0.1:8090')
+const LOCAL_PB_URL = 'http://127.0.0.1:8090'
+const DEFAULT_PUBLIC_PB_URL = 'http://8.134.9.77:8090'
 
 type BrowserLocationLike = Pick<Location, 'protocol' | 'hostname' | 'origin'>
 
@@ -13,12 +15,13 @@ type ResolvePocketBaseUrlOptions = {
   envUrl?: string
   storedUrl?: string
   location?: BrowserLocationLike
+  isNative?: boolean
 }
 
 // 连接策略：
 // 1) localhost / 127.0.0.1：允许 localStorage.pb_url 临时覆盖，便于本地审计/切换临时 PB
-// 2) 构建时注入：VITE_PB_URL（适用于 APK / 多环境）
-// 3) 非本地 Web 站点：默认同源 /pb（由 Nginx / 网关反代 PocketBase）
+// 2) 构建时注入：VITE_PB_URL（适用于 Web、APK 和多环境）
+// 3) 非本地 Web / Capacitor：默认连接当前生产 PocketBase 公网地址
 // 4) 兜底：本机 8090
 export function resolvePocketBaseUrl(options: ResolvePocketBaseUrlOptions): string {
   const envUrl = (options.envUrl || '').trim()
@@ -27,15 +30,16 @@ export function resolvePocketBaseUrl(options: ResolvePocketBaseUrlOptions): stri
   const hostname = location?.hostname || ''
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
 
+  if (options.isNative) return envUrl || DEFAULT_PUBLIC_PB_URL
   if (isLocalhost && storedUrl) return storedUrl
   if (envUrl) return envUrl
 
   if (location) {
-    if (isLocalhost) return PRODUCTION_PB_URL
-    return `${location.origin}/pb`
+    if (isLocalhost) return LOCAL_PB_URL
+    return DEFAULT_PUBLIC_PB_URL
   }
 
-  return 'http://127.0.0.1:8090'
+  return LOCAL_PB_URL
 }
 
 function getPocketBaseUrl(): string {
@@ -43,6 +47,7 @@ function getPocketBaseUrl(): string {
     envUrl: import.meta.env.VITE_PB_URL,
     storedUrl: typeof window !== 'undefined' ? window.localStorage.getItem('pb_url') || '' : '',
     location: typeof window !== 'undefined' ? window.location : undefined,
+    isNative: Capacitor.isNativePlatform(),
   })
 }
 

@@ -8,6 +8,7 @@
 
 ```bash
 cd frontend
+$env:VITE_PB_URL = "http://8.134.9.77:8090"
 npm run build
 npx cap sync android
 cd android
@@ -18,8 +19,12 @@ Windows（PowerShell）也可用仓库脚本：
 
 ```powershell
 cd frontend
-.\scripts\build-debug-apk.ps1
+.\scripts\build-debug-apk.ps1 -PocketBaseUrl "http://8.134.9.77:8090"
 ```
+
+脚本默认使用当前生产 PocketBase `http://8.134.9.77:8090`，也可以通过
+`-PocketBaseUrl` 切换到后续的 HTTPS `/pb` 地址。脚本会检查构建产物，避免把
+`127.0.0.1:8090` 误打进 APK。
 
 安装包路径：
 
