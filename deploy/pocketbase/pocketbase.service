@@ -5,14 +5,19 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=pocketbase
+Group=pocketbase
 WorkingDirectory=/www/server/pocketbase
 ExecStart=/www/server/pocketbase/pocketbase serve --http=0.0.0.0:8090
 Restart=always
 RestartSec=5
 LimitNOFILE=4096
 SyslogIdentifier=engineering-pms-pocketbase
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/www/server/pocketbase/pb_data /www/server/pocketbase/maintenance_backups
 
 [Install]
 WantedBy=multi-user.target

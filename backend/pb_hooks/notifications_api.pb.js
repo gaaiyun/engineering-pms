@@ -11,6 +11,7 @@ routerAdd('POST', '/api/custom/notifications/send', (c) => {
   const info = $apis.requestInfo(c)
   const actor = info.authRecord
   if (!actor) return c.json(401, { error: 'unauthorized' })
+  if (!actor.getBool('is_active')) return c.json(401, { error: 'account disabled' })
 
   const data = info.data || {}
   const input = data.notification

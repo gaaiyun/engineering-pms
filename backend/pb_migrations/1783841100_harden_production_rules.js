@@ -10,8 +10,17 @@
  */
 migrate((db) => {
   const dao = new Dao(db)
+  const active = '@request.auth.id != "" && @request.auth.is_active = true'
+  const activeManager = active + ' && (@request.auth.role = "admin" || @request.auth.role = "manager")'
   const saveRules = (name, rules) => {
-    const collection = dao.findCollectionByNameOrId(name)
+    let collection
+    try {
+      collection = dao.findCollectionByNameOrId(name)
+    } catch {
+      // 历史生产库可能没有启用某个可选集合（例如 attachments）。
+      // 权限收紧不应因此阻断其余集合迁移和 PocketBase 启动。
+      return
+    }
     if (Object.prototype.hasOwnProperty.call(rules, 'listRule')) collection.listRule = rules.listRule
     if (Object.prototype.hasOwnProperty.call(rules, 'viewRule')) collection.viewRule = rules.viewRule
     if (Object.prototype.hasOwnProperty.call(rules, 'createRule')) collection.createRule = rules.createRule
@@ -21,92 +30,96 @@ migrate((db) => {
   }
 
   saveRules('users', {
-    listRule: '@request.auth.id != ""',
-    viewRule: '@request.auth.id != ""',
+    listRule: active,
+    viewRule: active,
     createRule: '@request.data.role = "employee"',
-    updateRule: '@request.auth.role = "admin" || (@request.auth.id = id && @request.data.role:isset = false && @request.data.is_active:isset = false && @request.data.flower_count:isset = false)',
-    deleteRule: '@request.auth.role = "admin"',
+    updateRule: active + ' && (@request.auth.role = "admin" || (@request.auth.id = id && @request.data.role:isset = false && @request.data.is_active:isset = false && @request.data.flower_count:isset = false))',
+    deleteRule: active + ' && @request.auth.role = "admin"',
   })
 
+  const ownProject = '@request.auth.role = "admin" || @request.auth.role = "manager" || manager = @request.auth.id || members.id ?= @request.auth.id'
   saveRules('projects', {
-    listRule: '@request.auth.id != ""',
-    viewRule: '@request.auth.id != ""',
-    createRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    deleteRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
+    listRule: active + ' && (' + ownProject + ')',
+    viewRule: active + ' && (' + ownProject + ')',
+    createRule: activeManager,
+    updateRule: activeManager,
+    deleteRule: activeManager,
   })
 
-  const employeeTaskUpdate = 'assignees.id ?= @request.auth.id && @request.data.project:isset = false && @request.data.stage_name:isset = false && @request.data.description:isset = false && @request.data.assignees:isset = false && @request.data.created_by:isset = false && @request.data.start_date:isset = false && @request.data.deadline:isset = false && @request.data.sequence:isset = false && @request.data.priority:isset = false && @request.data.is_milestone:isset = false && @request.data.predecessor_tasks:isset = false && @request.data.next_assignees:isset = false'
+  const taskParticipant = '@request.auth.role = "admin" || @request.auth.role = "manager" || project.manager = @request.auth.id || project.members.id ?= @request.auth.id || assignees.id ?= @request.auth.id'
+  const employeeTaskUpdate = 'assignees.id ?= @request.auth.id && @request.data.project:isset = false && @request.data.stage_name:isset = false && @request.data.description:isset = false && @request.data.assignees:isset = false && @request.data.created_by:isset = false && @request.data.start_date:isset = false && @request.data.deadline:isset = false && @request.data.sequence:isset = false && @request.data.priority:isset = false && @request.data.is_milestone:isset = false && @request.data.predecessor_tasks:isset = false && @request.data.next_assignees:isset = false && @request.data.status:isset = false && @request.data.blocker:isset = false && @request.data.completed_at:isset = false && @request.data.approved:isset = false && @request.data.score:isset = false'
   saveRules('tasks', {
-    createRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager" || (' + employeeTaskUpdate + ')',
-    deleteRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
+    listRule: active + ' && (' + taskParticipant + ')',
+    viewRule: active + ' && (' + taskParticipant + ')',
+    createRule: activeManager,
+    updateRule: active + ' && (@request.auth.role = "admin" || @request.auth.role = "manager" || (' + employeeTaskUpdate + '))',
+    deleteRule: activeManager,
   })
 
   saveRules('notifications', {
-    listRule: 'user = @request.auth.id',
-    viewRule: 'user = @request.auth.id',
+    listRule: active + ' && user = @request.auth.id',
+    viewRule: active + ' && user = @request.auth.id',
     createRule: null,
-    updateRule: 'user = @request.auth.id && @request.data.user:isset = false',
-    deleteRule: 'user = @request.auth.id',
+    updateRule: active + ' && user = @request.auth.id && @request.data.user:isset = false',
+    deleteRule: active + ' && user = @request.auth.id',
   })
 
-  const projectParticipant = '@request.auth.role = "admin" || @request.auth.role = "manager" || project.manager = @request.auth.id || project.members.id ?= @request.auth.id'
+  const projectParticipant = active + ' && (@request.auth.role = "admin" || @request.auth.role = "manager" || project.manager = @request.auth.id || project.members.id ?= @request.auth.id)'
   saveRules('handoffs', {
     listRule: projectParticipant + ' || submitter = @request.auth.id || proposed_assignees.id ?= @request.auth.id',
     viewRule: projectParticipant + ' || submitter = @request.auth.id || proposed_assignees.id ?= @request.auth.id',
-    createRule: '@request.auth.id != "" && submitter = @request.auth.id && from_task.assignees.id ?= @request.auth.id',
-    updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    deleteRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
+    createRule: active + ' && submitter = @request.auth.id && from_task.assignees.id ?= @request.auth.id',
+    updateRule: activeManager,
+    deleteRule: activeManager,
   })
 
   saveRules('audit_logs', {
     listRule: projectParticipant,
     viewRule: projectParticipant,
-    createRule: '@request.auth.id != "" && operator = @request.auth.id && (' + projectParticipant + ' || task.assignees.id ?= @request.auth.id)',
-    updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    deleteRule: '@request.auth.role = "admin"',
+    createRule: active + ' && operator = @request.auth.id && (' + projectParticipant + ' || task.assignees.id ?= @request.auth.id)',
+    updateRule: activeManager,
+    deleteRule: active + ' && @request.auth.role = "admin"',
   })
 
-  const commentParticipant = '@request.auth.role = "admin" || @request.auth.role = "manager" || project.manager = @request.auth.id || project.members.id ?= @request.auth.id || step.assignees.id ?= @request.auth.id'
+  const commentParticipant = active + ' && (@request.auth.role = "admin" || @request.auth.role = "manager" || project.manager = @request.auth.id || project.members.id ?= @request.auth.id || step.assignees.id ?= @request.auth.id)'
   saveRules('comments', {
     listRule: commentParticipant,
     viewRule: commentParticipant,
     createRule: 'author = @request.auth.id && (' + commentParticipant + ')',
-    updateRule: 'author = @request.auth.id && @request.data.author:isset = false',
-    deleteRule: 'author = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager"',
+    updateRule: active + ' && author = @request.auth.id && @request.data.author:isset = false',
+    deleteRule: active + ' && (author = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager")',
   })
 
   saveRules('device_tokens', {
-    listRule: 'user = @request.auth.id',
-    viewRule: 'user = @request.auth.id',
-    createRule: 'user = @request.auth.id',
-    updateRule: 'user = @request.auth.id && @request.data.user:isset = false',
-    deleteRule: 'user = @request.auth.id',
+    listRule: active + ' && user = @request.auth.id',
+    viewRule: active + ' && user = @request.auth.id',
+    createRule: active + ' && user = @request.auth.id',
+    updateRule: active + ' && user = @request.auth.id && @request.data.user:isset = false',
+    deleteRule: active + ' && user = @request.auth.id',
   })
 
   saveRules('attachments', {
     listRule: commentParticipant,
     viewRule: commentParticipant,
     createRule: 'uploader = @request.auth.id && (' + commentParticipant + ')',
-    updateRule: 'uploader = @request.auth.id && @request.data.uploader:isset = false',
-    deleteRule: 'uploader = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager"',
+    updateRule: active + ' && uploader = @request.auth.id && @request.data.uploader:isset = false',
+    deleteRule: active + ' && (uploader = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager")',
   })
 
   saveRules('flower_logs', {
-    listRule: 'user = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager"',
-    viewRule: 'user = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager"',
-    createRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    deleteRule: '@request.auth.role = "admin"',
+    listRule: active + ' && (user = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager")',
+    viewRule: active + ' && (user = @request.auth.id || @request.auth.role = "admin" || @request.auth.role = "manager")',
+    createRule: activeManager,
+    updateRule: activeManager,
+    deleteRule: active + ' && @request.auth.role = "admin"',
   })
 
   saveRules('progress_logs', {
     listRule: projectParticipant,
     viewRule: projectParticipant,
-    createRule: 'user = @request.auth.id && (' + projectParticipant + ')',
-    updateRule: '@request.auth.role = "admin" || @request.auth.role = "manager"',
-    deleteRule: '@request.auth.role = "admin"',
+    createRule: active + ' && user = @request.auth.id && (' + projectParticipant + ')',
+    updateRule: activeManager,
+    deleteRule: active + ' && @request.auth.role = "admin"',
   })
 }, (_) => {
   // Forward-only production reconciliation; restore the cold backup to rollback.

@@ -1,6 +1,6 @@
 /// <reference path="../pb_data/types.d.ts" />
 /**
- * P0-3 安全 + 一致性修复（Agent C 数据流审计发现）
+ * 交接安全与一致性修复。
  *
  * 原 rules（来自 1770000001_created_handoffs.js）：
  *   handoffs.updateRule = '@request.auth.id != ""'

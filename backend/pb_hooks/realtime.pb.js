@@ -5,7 +5,7 @@
  *
  * 调整 SSE 连接的 idle timeout：默认 5 分钟，改为 30 分钟。
  *
- * 原因（详见 docs/superpowers/research/2026-05-16-pr2-tech-reference.md §1）：
+ * 原因：
  *   - 5 分钟 idle 会导致移动端频繁断线重连
  *   - 调到 30 分钟可显著降低重连频率与流量
  *   - 不可设为无限（会留 zombie 连接）
