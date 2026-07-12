@@ -9,8 +9,8 @@ dist/
 pocketbase/pocketbase
 backend/pocketbase.exe
 
-# Capacitor generated
-frontend/android/
+# Capacitor Android native project is source code. Its nested .gitignore keeps
+# generated web assets, Gradle caches, local SDK paths and build outputs out.
 
 # PocketBase runtime data
 backend/pb_data/*.db

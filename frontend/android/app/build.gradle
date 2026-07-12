@@ -7,6 +7,20 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+gradle.taskGraph.whenReady { graph ->
+    def releaseRequested = graph.allTasks.any { task ->
+        task.path.toLowerCase().contains('release') &&
+            (task.name.toLowerCase().startsWith('assemble') || task.name.toLowerCase().startsWith('bundle'))
+    }
+    if (releaseRequested) {
+        def requiredKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+        def missingKeys = requiredKeys.findAll { key -> !keystoreProperties[key]?.trim() }
+        if (!keystorePropertiesFile.exists() || !missingKeys.isEmpty()) {
+            throw new GradleException('Release 构建必须配置完整的 android/keystore.properties；禁止生成未签名的伪 release 包。')
+        }
+    }
+}
+
 android {
     namespace "com.engineering.pms"
     compileSdkVersion rootProject.ext.compileSdkVersion
