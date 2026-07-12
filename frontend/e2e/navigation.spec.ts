@@ -75,3 +75,34 @@ test('employee 不能访问审核中心', async ({ browser }) => {
   await expect(page).toHaveURL(/\/app$/)
   await context.close()
 })
+
+test('手机消息分类完整显示且不超出视口', async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: BASE_URL,
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+  })
+  const page = await context.newPage()
+  await installStaticApp(page)
+  await installMockSession(page, 'employee')
+  await page.goto('/notifications')
+
+  const tablist = page.getByRole('tablist')
+  const headerBox = await tablist.boundingBox()
+  expect(headerBox).not.toBeNull()
+
+  const expectedLabels = ['全部', '未读', '任务', '项目', '卡点', '交接']
+  const tabs = tablist.getByRole('tab')
+  await expect(tabs).toHaveCount(expectedLabels.length)
+
+  for (const label of expectedLabels) {
+    const tab = tablist.getByRole('tab', { name: label, exact: true })
+    await expect(tab).toBeVisible()
+    const box = await tab.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(headerBox!.x)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(headerBox!.x + headerBox!.width)
+  }
+
+  await context.close()
+})

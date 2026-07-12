@@ -399,8 +399,8 @@ export default function Notifications() {
             '--active-line-color': '#3b82f6',
           }}
         >
-          <Tabs.Tab title={activeTab === 'all' ? `全部 (${totalItems})` : '全部'} key="all" />
-          <Tabs.Tab title={`未读 (${unreadCount})`} key="unread" />
+          <Tabs.Tab title="全部" key="all" />
+          <Tabs.Tab title="未读" key="unread" />
           <Tabs.Tab title="任务" key="task" />
           <Tabs.Tab title="项目" key="project" />
           <Tabs.Tab title="卡点" key="blocker" />
