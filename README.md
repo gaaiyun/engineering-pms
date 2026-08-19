@@ -1,6 +1,6 @@
 # EngineeringPMS 工程项目管理系统
 
-面向工程结算团队的 Web、PWA 与 Android 项目协作系统。当前应用版本为 `3.05`，采用 React、Capacitor 与 PocketBase。
+面向工程结算团队的 Web、PWA 与 Android 项目协作系统。当前应用版本为 `3.06`，采用 React、Capacitor 与 PocketBase。
 
 ## 当前状态
 
@@ -10,9 +10,25 @@
 - 账号支持保持登录、停用即时失效、管理员增改停用及安全删除校验。
 - LLM 使用 OpenAI-compatible 服务端代理，Provider、Base URL、模型和 Key 均由管理员配置；浏览器不保存 API Key。
 - PocketBase Server 固定 `0.22.21`，前端 PocketBase JS SDK 固定 `0.21.5`。升级必须单独做迁移和回滚测试。
-- Android Debug APK 已在 Android 16 真机完成主页面、项目、时间轴和实时通知验收；正式发布仍需私有 release keystore。
+- 3.06 Debug APK 已通过版本、包信息和内嵌生产地址静态检查；`adb devices` 当前为空，真机验收未完成，产物不得放入正式交付包。
+- 3.06 生产数据已清理为正式账号空白基线；项目、任务、通知等业务内容在交付后创建。
+- MCP sidecar 已通过生产 HTTPS 提供 20 个受控业务工具，不包含账号或系统管理工具。
 
 生产发布必须遵循 [部署与运维手册](docs/宝塔部署操作手册.md)。仓库内容不等于已部署状态。
+
+## 3.06 交付记录
+
+| 项目 | 结果 |
+|---|---|
+| 部署 | 提交 `c4c298f`，2026-08-20 06:45 CST |
+| 生产备份 | 精确路径记录于私有运维接力文档 |
+| Web | `<production-web-url>` |
+| MCP | `<production-web-url>/mcp`；无认证 MCP POST 请求返回 401 |
+| 自动化 | 后端 QA 既有基线 `64/64`、最终差异 `15/15`；前端 `203/203`；Playwright `28/28`；MCP `11/11` |
+| Realtime | 生产 SSE 返回 200 |
+| APK | `3.06` / `46`；SHA-256 `C445196B7574C63CDE4F3E90E14EB6CAD4929EDF4717DE41B7D78C2FF52B87ED`；静态验收通过，真机待验收 |
+
+MCP 环境文件权限为 `0600`，release 目录由 root 管理且服务进程只读，systemd 安全评分为 `3.2`。公网 8090 在 3.06 APK 真机验收完成前暂时保留。
 
 ## 角色与导航
 
@@ -37,7 +53,7 @@
 
 ## 本地开发
 
-要求：Node.js 18+，以及与生产兼容的 PocketBase `0.22.21`。
+要求：前端使用 Node.js 18+，MCP sidecar 使用 Node.js 20+，PocketBase 使用与生产兼容的 `0.22.21`。
 
 1. 在隔离测试目录启动 PocketBase，不要复制或覆盖生产 `pb_data`：
 
@@ -91,6 +107,8 @@ frontend/                 React、Capacitor Android、Vitest、Playwright
 backend/pb_hooks/         服务端权限与事务扩展
 backend/pb_migrations/    前向数据库迁移
 deploy/pocketbase/        systemd、日志修复与可选 Nginx 模板
+deploy/mcp/               MCP systemd 与 Nginx 模板
+mcp-server/               MCP sidecar 源码、测试与锁文件
 docs/                     当前产品、架构、运维与交接文档
 ```
 
@@ -98,6 +116,7 @@ docs/                     当前产品、架构、运维与交接文档
 
 ## 文档入口
 
+- [3.06 交付快速使用说明](docs/交付快速使用说明.md)
 - [产品说明](docs/产品说明.md)
 - [用户使用指南](docs/用户使用指南.md)
 - [代码架构](docs/代码架构文档.md)
@@ -105,12 +124,13 @@ docs/                     当前产品、架构、运维与交接文档
 - [需求与验收矩阵](docs/需求实现对照表.md)
 - [宝塔部署与运维](docs/宝塔部署操作手册.md)
 - [Android APK](docs/android-apk.md)
+- [MCP 服务交接](docs/MCP服务交接.md)
 - [开发交接](docs/开发交接.md)
 - [历史发展摘要](docs/历史发展摘要.md)
 
 ## 安全边界
 
-- 不提交 API Key、管理 Token、真实账号清单、keystore、生产数据库或备份。
+- 公开服务入口可以写入交付文档；不提交 API Key、管理 Token、真实账号清单、私有拓扑、keystore、生产数据库或备份。
 - 不通过前端多请求模拟事务；状态机统一调用 `/api/custom/*` 服务端路由。
 - 不直接覆盖生产 `pb_data`、hooks 或 migrations；先冷备、测试副本验证，再逐项发布。
 - 不用 `npm audit fix --force`、强推、跳过 hooks 或未经确认的递归删除处理发布问题。

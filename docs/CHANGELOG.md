@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.06 delivery — 2026-08-20
+
+- 提交 `c4c298f` 于 2026-08-20 06:45 CST 完成生产部署；发布前备份路径记录于私有运维接力文档。
+- Web 已发布到 `<production-web-url>`，Realtime SSE 返回 200。
+- 生产业务测试数据已在冷备后清理，保留正式用户、系统配置、迁移记录和 Agent 服务账号；业务库前后 `PRAGMA quick_check` 均为 `ok`。
+- 正式账号已按私有清单同步；初始密码首次登录必须修改，旧测试账号不再启用。用户名、初始密码和人员角色清单不进入仓库。
+- MCP sidecar 以独立 systemd 服务运行，`<production-web-url>/mcp` 提供 20 个业务工具，不包含账号或系统管理工具；无认证 MCP POST 请求返回 401。
+- 后端 QA 既有基线 `64/64`、最终差异 `15/15`；前端 `203/203`、Playwright `28/28`、MCP `11/11`。
+- Web/App 版本统一为 3.06，Android `versionCode` 为 46；APK 静态验收通过，但 `adb devices` 为空，真机验收前不得放入正式交付包。
+
 ## 3.05 release candidate — 2026-07-13
 
 - 生产 PocketBase 已完成冷备、账号状态校正、增量迁移与 hooks 发布；systemd、健康检查和两个 SQLite 数据库检查通过。

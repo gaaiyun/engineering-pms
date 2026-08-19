@@ -1,6 +1,6 @@
 # Android APK 构建与验收
 
-当前应用：`EngineeringPMS`，applicationId `com.engineering.pms`，versionName `3.05`，versionCode `45`。
+当前应用：`EngineeringPMS`，applicationId `com.engineering.pms`，versionName `3.06`，versionCode `46`。
 
 ## Debug APK
 
@@ -25,14 +25,14 @@ npx cap sync android
 
 APK 输出：`frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
 
-2026-07-13 最终候选产物：
+2026-08-20 的 3.06 候选产物：
 
-- 大小：`7,210,637` bytes
-- SHA-256：`7D78A618DCCD13498F3C3A6EAB279AE3823B5D4B8AECEFE460D15DD6FB8A6447`
-- `aapt dump badging`：`com.engineering.pms` / versionName `3.05` / versionCode `45`
-- 内嵌后端：直接生产 PocketBase URL；实际值不在公开文档重复记录
+- `aapt dump badging`：`com.engineering.pms` / versionName `3.06` / versionCode `46`
+- 内嵌后端：生产 PocketBase URL
+- 大小：`7,210,979` bytes
+- SHA-256：`C445196B7574C63CDE4F3E90E14EB6CAD4929EDF4717DE41B7D78C2FF52B87ED`
 
-该产物包含最新姓名字标头像与看板拖拽修复，并指向已完成 3.05 后端增量发布的生产 PocketBase。手机在最终重建前已断开，因此最终候选包已完成构建与静态校验，尚待下次 USB 连接后覆盖安装复验；不能用 Web 已发布替代 APK 真机验收。
+该产物对应提交 `c4c298f`，已通过 metadata 和 `aapt dump badging` 静态校验。`adb devices` 当前为空，尚未执行真机覆盖安装和下方验收；不能用 3.05 的真机结果或 Web 验收替代 3.06 APK 真机验收，也不得把该 APK 放入正式交付包。
 
 ## 安装
 
