@@ -14,7 +14,8 @@ type FilterTab = 'all' | 'active' | 'blocked' | 'archived'
 
 export default function MyProjects() {
   const navigate = useNavigate()
-  const { data: projects = [], isLoading } = useProjects()
+  const projectsQuery = useProjects()
+  const { data: projects = [], isLoading } = projectsQuery
   const projectIds = useMemo(() => projects.map(project => project.id), [projects])
   const { data: allTasks = [] } = useProjectPortfolioTasks(projectIds)
   const { data: allUsers = [] } = useUsers()
@@ -94,13 +95,13 @@ export default function MyProjects() {
   const tabs: { key: FilterTab; label: string; count: number }[] = [
     { key: 'all', label: '全部', count: projects.length },
     { key: 'active', label: '进行中', count: projects.filter(p => p.status === 'active' && !blockedProjectIds.has(p.id)).length },
-    { key: 'blocked', label: '卡顿', count: projects.filter(p => p.status === 'active' && blockedProjectIds.has(p.id)).length },
+    { key: 'blocked', label: '卡点', count: projects.filter(p => p.status === 'active' && blockedProjectIds.has(p.id)).length },
     { key: 'archived', label: '已归档', count: projects.filter(p => p.status === 'archived').length },
   ]
 
   const statusBadge = (p: typeof projects[0]) => {
     if (p.status === 'archived') return { label: '已归档', bg: '#f1f5f9', color: '#94a3b8', icon: <IoArchiveOutline size={12} /> }
-    if (blockedProjectIds.has(p.id)) return { label: '卡顿', bg: '#fef3c7', color: '#d97706', icon: <IoWarningOutline size={12} /> }
+    if (blockedProjectIds.has(p.id)) return { label: '卡点', bg: '#fef3c7', color: '#d97706', icon: <IoWarningOutline size={12} /> }
     if (p.status === 'completed') return { label: '已完成', bg: '#dcfce7', color: '#16a34a', icon: null }
     return { label: '进行中', bg: '#dbeafe', color: '#2563eb', icon: null }
   }
@@ -108,6 +109,16 @@ export default function MyProjects() {
   if (isLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60dvh' }}>
       <SpinLoading style={{ '--size': '36px' }} />
+    </div>
+  )
+
+  if (projectsQuery.isError) return (
+    <div className="page my-projects-page" role="alert">
+      <div className="my-projects-error">
+        <strong>项目列表加载失败</strong>
+        <span>请检查网络连接后重试，当前没有用空列表覆盖真实数据。</span>
+        <button type="button" onClick={() => projectsQuery.refetch()}>重新加载</button>
+      </div>
     </div>
   )
 
@@ -149,7 +160,7 @@ export default function MyProjects() {
       <div className="my-projects-search"><SearchBar value={projectSearch} onChange={setProjectSearch} placeholder="搜索项目名称或说明" /></div>
 
       {/* 筛选 Tabs */}
-      <div style={{ display: 'flex', gap: 8, padding: '0 16px', marginBottom: 20, overflowX: 'auto' }}>
+      <div className="my-projects-filters">
         {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '8px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
@@ -164,7 +175,7 @@ export default function MyProjects() {
       </div>
 
       {/* 项目列表 */}
-      <div style={{ padding: '0 16px' }}>
+      <div className="my-projects-list">
         {filtered.map(p => {
           const badge = statusBadge(p)
           const progress = projectMetrics[p.id]?.progress ?? p.progress ?? 0
@@ -179,8 +190,8 @@ export default function MyProjects() {
             }}>
               {(projectNotifCounts[p.id] || 0) > 0 && (
                 <div style={{
-                  position: 'absolute', top: -6, right: 0, zIndex: 10,
-                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', color: 'white',
+                  position: 'absolute', top: 6, right: 6, zIndex: 10,
+                  background: '#DC2626', color: 'white',
                   borderRadius: '50%', minWidth: 20, height: 20, padding: '0 6px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 11, fontWeight: 'bold', boxShadow: '0 2px 8px rgba(239,68,68,0.4)'

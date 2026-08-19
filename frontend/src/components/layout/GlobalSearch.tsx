@@ -13,6 +13,7 @@ import {
   normalizeGlobalSearchQuery,
   type GlobalSearchResult,
 } from '../../lib/globalSearch'
+import { resolveNotificationPath } from '../../lib/notification-utils'
 
 type SearchRecord = {
   id: string
@@ -38,13 +39,6 @@ function resultIcon(kind: GlobalSearchResult['kind']) {
   if (kind === 'project') return <IoBriefcaseOutline size={18} />
   if (kind === 'notification') return <IoNotificationsOutline size={18} />
   return <IoCheckmarkCircleOutline size={18} />
-}
-
-function notificationPath(record: SearchRecord) {
-  if (!record.link_id) return '/notifications'
-  if (record.link_type === 'project') return `/project/${record.link_id}`
-  if (record.link_type === 'handoff' || record.type?.startsWith('handoff')) return '/review-center?tab=handoff'
-  return `/task/${record.link_id}`
 }
 
 async function searchAll(query: string): Promise<GlobalSearchResult[]> {
@@ -91,7 +85,11 @@ async function searchAll(query: string): Promise<GlobalSearchResult[]> {
       kind: 'notification' as const,
       title: record.title || '通知',
       subtitle: record.content,
-      path: notificationPath(record),
+      path: resolveNotificationPath({
+        type: record.type || 'system',
+        link_type: record.link_type,
+        link_id: record.link_id,
+      }, pb.authStore.model?.role),
     })))
   }
   return results

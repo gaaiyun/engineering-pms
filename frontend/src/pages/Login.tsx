@@ -193,7 +193,7 @@ export default function Login() {
       Toast.show({ icon: 'success', content: '登录成功' })
 
       const role = normalizeAppRole(authData.record?.role)
-      navigate(getPostLoginPath(role), { replace: true })
+      navigate(authData.record?.must_change_password ? '/change-password' : getPostLoginPath(role), { replace: true })
     } catch (error: unknown) {
       const requestError = error as LoginRequestError
       const newAttempts = parseInt(localStorage.getItem(keys.attempts) || String(failedAttempts), 10) + 1
@@ -243,14 +243,14 @@ export default function Login() {
   }
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.25 } }
   }
 
   return (
     <div style={{
       minHeight: '100dvh',
-      background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)',
+      background: '#EEF1F4',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -258,28 +258,6 @@ export default function Login() {
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* 背景装饰 */}
-      <div style={{
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 400,
-        height: 400,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)',
-        filter: 'blur(60px)'
-      }} />
-      <div style={{
-        position: 'absolute',
-        bottom: -150,
-        left: -150,
-        width: 500,
-        height: 500,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%)',
-        filter: 'blur(80px)'
-      }} />
-
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -287,34 +265,35 @@ export default function Login() {
         style={{
           width: '100%',
           maxWidth: 420,
-          background: 'rgba(255, 255, 255, 0.98)',
-          borderRadius: 24,
-          padding: '48px 36px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.1)',
+          background: '#FFFFFF',
+          border: '1px solid #DDE3EA',
+          borderRadius: 8,
+          padding: '36px 34px',
+          boxShadow: '0 12px 34px rgba(15, 23, 42, 0.10)',
           position: 'relative',
           zIndex: 1
         }}
       >
         {/* Logo & Header */}
-        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginBottom: 40 }}>
+        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginBottom: 30 }}>
           <img
             src="/icons/icon-192x192.png"
             alt="EngineeringPMS"
-            width={72}
-            height={72}
+            width={58}
+            height={58}
             style={{
               display: 'block',
-              margin: '0 auto 20px',
-              borderRadius: 18,
-              boxShadow: '0 14px 34px rgba(15, 47, 99, 0.28)',
+              margin: '0 auto 16px',
+              borderRadius: 8,
+              boxShadow: '0 7px 18px rgba(15, 47, 99, 0.18)',
             }}
           />
           <h1 style={{
-            fontSize: 28,
+            fontSize: 25,
             fontWeight: 800,
             color: '#0F172A',
             marginBottom: 8,
-            letterSpacing: '-0.5px'
+            letterSpacing: 0
           }}>
             工程结算管理
           </h1>
@@ -332,7 +311,7 @@ export default function Login() {
           marginBottom: 16,
           padding: '10px 16px',
           background: serverStatus === 'online' ? '#ECFDF5' : serverStatus === 'offline' ? '#FEF2F2' : '#FEF3C7',
-          borderRadius: 12,
+          borderRadius: 6,
           cursor: serverStatus === 'offline' ? 'pointer' : 'default'
         }} onClick={serverStatus === 'offline' ? checkServer : undefined}>
           {serverStatus === 'checking' && (
@@ -363,7 +342,7 @@ export default function Login() {
             <div
               style={{
                 background: '#FEF2F2',
-                borderRadius: 12,
+                borderRadius: 6,
                 padding: '10px 14px',
                 color: '#B91C1C',
                 fontSize: 13,
@@ -394,9 +373,9 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 background: '#F8FAFC',
-                borderRadius: 14,
+                borderRadius: 6,
                 padding: '4px 16px',
-                border: '2px solid transparent',
+                border: '1px solid #D7DEE7',
                 transition: 'all 0.2s'
               }}>
                 <IoPersonOutline size={20} color="#94A3B8" style={{ flexShrink: 0 }} />
@@ -425,9 +404,9 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 background: '#F8FAFC',
-                borderRadius: 14,
+                borderRadius: 6,
                 padding: '4px 16px',
-                border: '2px solid transparent',
+                border: '1px solid #D7DEE7',
                 transition: 'all 0.2s'
               }}>
                 <IoLockClosedOutline size={20} color="#94A3B8" style={{ flexShrink: 0 }} />
@@ -443,9 +422,9 @@ export default function Login() {
                     flex: 1
                   }}
                 />
-                <div onClick={() => setShowPassword(!showPassword)} style={{ cursor: 'pointer', padding: 4 }}>
+                <button type="button" aria-label={showPassword ? '隐藏密码' : '显示密码'} onClick={() => setShowPassword(!showPassword)} style={{ cursor: 'pointer', padding: 4, border: 0, background: 'transparent', display: 'flex' }}>
                   {showPassword ? <IoEyeOffOutline size={20} color="#94A3B8" /> : <IoEyeOutline size={20} color="#94A3B8" />}
-                </div>
+                </button>
               </div>
             </Form.Item>
           </motion.div>
@@ -458,7 +437,7 @@ export default function Login() {
                   display: 'flex',
                   alignItems: 'center',
                   background: '#EFF6FF',
-                  borderRadius: 14,
+                  borderRadius: 6,
                   padding: '8px 16px',
                   gap: 8,
                 }}
@@ -507,14 +486,14 @@ export default function Login() {
               loading={loading}
               disabled={serverStatus === 'checking'}
               style={{
-                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+                background: '#172033',
                 border: 'none',
                 color: '#fff',
-                borderRadius: 14,
-                height: 52,
-                fontSize: 16,
+                borderRadius: 6,
+                height: 46,
+                fontSize: 15,
                 fontWeight: 700,
-                boxShadow: '0 10px 30px rgba(15, 23, 42, 0.3)',
+                boxShadow: '0 5px 14px rgba(15, 23, 42, 0.18)',
                 opacity: serverStatus === 'checking' ? 0.7 : 1,
                 transition: 'all 0.3s'
               }}
@@ -524,19 +503,6 @@ export default function Login() {
           </motion.div>
         </Form>
 
-        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginTop: 32 }}>
-          <span
-            onClick={() => navigate('/register')}
-            style={{
-              fontSize: 14,
-              color: '#2563EB',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            还没有账号？立即注册 →
-          </span>
-        </motion.div>
       </motion.div>
     </div>
   )

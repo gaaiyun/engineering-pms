@@ -25,6 +25,7 @@ import { TaskDetailDrawer } from './TaskDetailDrawer'
 import { useTasks, useUpdateTask, useUpdateTaskSequence, isManagerRole, type Task } from '../../lib/api'
 import { useUIStore } from '../../lib/store'
 import { useBreakpoint } from '../../lib/useBreakpoint'
+import { buildCrossColumnSequence, normalizeKanbanStatus } from './kanban-utils'
 import './KanbanBoard.css'
 
 interface KanbanBoardProps {
@@ -41,12 +42,6 @@ const COLUMNS = [
     { id: 'completed', title: '已完成', color: '#52c41a' },
 ]
 
-// 状态映射：兼容旧数据
-const normalizeStatus = (status: string): string => {
-    if (status === 'processing') return 'in_progress';
-    return status;
-}
-
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName }) => {
     const navigate = useNavigate()
     const bp = useBreakpoint()
@@ -58,6 +53,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
     const [activeTask, setActiveTask] = useState<Task | null>(null)
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
     const [drawerVisible, setDrawerVisible] = useState(false)
+    const [requestedAction, setRequestedAction] = useState<'complete' | 'block' | null>(null)
 
     const { setDraggingTaskId } = useUIStore()
     const canDrag = isManagerRole()
@@ -102,7 +98,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
         }
 
         tasks.forEach((task) => {
-            const status = normalizeStatus(task.status || 'pending')
+            const status = normalizeKanbanStatus(task.status || 'pending')
             if (grouped[status]) {
                 grouped[status].push(task)
             } else {
@@ -145,7 +141,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
         // 如果 overId 是任务 ID，找到它的状态
         const overTask = tasks.find(t => t.id === overId)
         if (overTask) {
-            targetStatus = normalizeStatus(overTask.status)
+            targetStatus = normalizeKanbanStatus(overTask.status)
             targetTask = overTask
         }
 
@@ -154,11 +150,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
             return
         }
 
-        const normalizedDragStatus = normalizeStatus(draggedTask.status)
+        const normalizedDragStatus = normalizeKanbanStatus(draggedTask.status)
         // 如果状态改变，更新任务
         if (normalizedDragStatus !== targetStatus) {
             if (targetStatus === 'completed' || targetStatus === 'blocked') {
                 setSelectedTask(draggedTask)
+                setRequestedAction(targetStatus === 'completed' ? 'complete' : 'block')
                 setDrawerVisible(true)
                 Toast.show(targetStatus === 'completed' ? '请在任务详情中填写交接信息' : '请在任务详情中填写卡点原因')
                 return
@@ -168,6 +165,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
                     id: activeId,
                     data: { status: targetStatus as Task['status'] },
                 })
+                await updateSequence.mutateAsync(buildCrossColumnSequence(
+                    tasks,
+                    draggedTask,
+                    targetStatus,
+                    targetTask?.id,
+                ))
                 Toast.show({ content: '状态已更新', icon: 'success' })
             } catch {
                 Toast.show({ content: '更新失败', icon: 'fail' })
@@ -198,6 +201,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
 
     const handleTaskClick = useCallback((task: Task) => {
         setSelectedTask(task)
+        setRequestedAction(null)
         setDrawerVisible(true)
     }, [])
 
@@ -256,14 +260,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, projectName
 
             <Popup
                 visible={drawerVisible}
-                onMaskClick={() => setDrawerVisible(false)}
+                onMaskClick={() => { setDrawerVisible(false); setRequestedAction(null) }}
                 position="right"
                 bodyStyle={{ width: '85vw', maxWidth: '400px' }}
             >
                 {selectedTask && (
                     <TaskDetailDrawer
+                        key={`${selectedTask.id}-${requestedAction || 'view'}`}
                         task={selectedTask}
-                        onClose={() => setDrawerVisible(false)}
+                        initialAction={requestedAction}
+                        onClose={() => { setDrawerVisible(false); setRequestedAction(null) }}
                         onUpdate={() => {
                             // 刷新数据由 TanStack Query 自动处理
                         }}

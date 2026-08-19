@@ -39,6 +39,7 @@ interface TaskDetailDrawerProps {
     task: Task
     onClose: () => void
     onUpdate?: () => void
+    initialAction?: 'complete' | 'block' | null
 }
 
 interface HandoffFormValues {
@@ -74,11 +75,12 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
 export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     task,
     onClose,
-    onUpdate
+    onUpdate,
+    initialAction = null,
 }) => {
     const [activeTab, setActiveTab] = useState<'info' | 'comments' | 'history'>('info')
-    const [showHandoffForm, setShowHandoffForm] = useState(false)
-    const [showBlockerForm, setShowBlockerForm] = useState(false)
+    const [showHandoffForm, setShowHandoffForm] = useState(initialAction === 'complete')
+    const [showBlockerForm, setShowBlockerForm] = useState(initialAction === 'block')
     const [commentText, setCommentText] = useState('')
 
     const { data: taskDetail } = useTask(task.id)

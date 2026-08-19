@@ -66,8 +66,10 @@ export default function ProjectDetail() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const managerUser = isManager()
-  const { data: project, isLoading: projectLoading } = useProject(id)
-  const { data: tasks = [], isLoading: tasksLoading } = useTasks(id)
+  const projectQuery = useProject(id)
+  const tasksQuery = useTasks(id)
+  const { data: project, isLoading: projectLoading } = projectQuery
+  const { data: tasks = [], isLoading: tasksLoading } = tasksQuery
   const { data: users = [] } = useUsers()
   const { data: activities = [] } = useAuditLogs({ project: id })
   const updateProject = useUpdateProject()
@@ -134,6 +136,10 @@ export default function ProjectDetail() {
 
   if (projectLoading || tasksLoading) {
     return <div className="project-detail-loading"><SpinLoading style={{ '--size': '36px' }} /><span>正在加载项目</span></div>
+  }
+
+  if (projectQuery.isError || tasksQuery.isError) {
+    return <div className="project-detail-empty"><h2>项目数据加载失败</h2><p>请检查网络连接后重试，系统没有用空数据覆盖项目进度。</p><Button onClick={() => { projectQuery.refetch(); tasksQuery.refetch() }}>重新加载</Button></div>
   }
 
   if (!project) {

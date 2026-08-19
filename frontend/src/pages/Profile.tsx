@@ -13,7 +13,7 @@ import {
   IoSettingsOutline,
 } from 'react-icons/io5'
 import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
-import { useTasks } from '../lib/api'
+import { useProjects, useTasks } from '../lib/api'
 import { logoutWithDeviceCleanup } from '../lib/pushNotifications'
 import { canAccessSystem, normalizeAppRole } from '../lib/navigation'
 import { getProfessionalAvatarOptions, getUserAvatarUrl } from '../lib/avatar'
@@ -50,8 +50,8 @@ export default function Profile() {
   const user = pb.authStore.model
   const appRole = normalizeAppRole(user?.role)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { data: tasks = [] } = useTasks()
-
+  const taskQuery = useTasks()
+  const projectQuery = useProjects()
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(user?.name || '')
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
@@ -65,21 +65,21 @@ export default function Profile() {
   const stats = useMemo(() => {
     const userId = user?.id
     if (!userId) return { projectCount: 0, taskCount: 0, completionRate: 0 }
-    const projectIds = new Set<string>()
+    const tasks = taskQuery.data || []
+    const projects = projectQuery.data || []
     let taskCount = 0
     let completedCount = 0
     tasks.forEach(task => {
       if (!task.assignees?.includes(userId)) return
       taskCount += 1
-      if (task.project) projectIds.add(task.project)
       if (task.status === 'completed') completedCount += 1
     })
     return {
-      projectCount: projectIds.size,
+      projectCount: projects.filter(project => project.manager === userId || project.members?.includes(userId)).length,
       taskCount,
       completionRate: taskCount ? Math.round((completedCount / taskCount) * 100) : 0,
     }
-  }, [tasks, user?.id])
+  }, [projectQuery.data, taskQuery.data, user?.id])
 
   const cancelEditing = () => {
     setIsEditing(false)
@@ -166,6 +166,13 @@ export default function Profile() {
         )}
       </header>
 
+      {(taskQuery.isError || projectQuery.isError) && (
+        <div className="profile-load-error" role="alert">
+          <span>工作统计加载失败，当前不显示可能不准确的数字。</span>
+          <button type="button" onClick={() => { taskQuery.refetch(); projectQuery.refetch() }}>重新加载</button>
+        </div>
+      )}
+
       <div className="profile-layout">
         <section className="profile-identity" aria-label="员工身份信息">
           <div className="profile-identity__main">
@@ -192,11 +199,11 @@ export default function Profile() {
             </div>
           </div>
 
-          <dl className="profile-stats">
+          {!taskQuery.isError && !projectQuery.isError && <dl className="profile-stats">
             <div><dt>参与项目</dt><dd>{stats.projectCount}</dd></div>
             <div><dt>负责任务</dt><dd>{stats.taskCount}</dd></div>
             <div><dt>任务完成率</dt><dd>{stats.completionRate}%</dd></div>
-          </dl>
+          </dl>}
         </section>
 
         <section className="profile-details" aria-labelledby="profile-details-title">

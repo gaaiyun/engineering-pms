@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { IoAppsOutline } from 'react-icons/io5'
 import { pb } from '../../lib/pocketbase'
-import { getVisibleNavigation, normalizeAppRole } from '../../lib/navigation'
+import { getVisibleNavigation, isNavigationItemActive, normalizeAppRole } from '../../lib/navigation'
 import { NavigationIcon } from './NavigationIcon'
 
 interface SidebarProps {
@@ -47,11 +47,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
       </div>
       <div style={{ flex: 1, paddingTop: 8, overflowY: 'auto' }}>
         {visibleItems.map((item) => {
-          const active =
-            location.pathname === item.path ||
-            (item.path === '/app' && location.pathname.startsWith('/app')) ||
-            (item.path === '/my-projects' && location.pathname.startsWith('/project/')) ||
-            (item.id === 'system' && location.pathname.startsWith('/system/'))
+          const active = isNavigationItemActive(location.pathname, item)
           return (
             <NavLink
               key={item.id}

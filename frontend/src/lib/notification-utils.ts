@@ -15,6 +15,22 @@ export type CollapsedNotification<T extends CollapsibleNotification> = T & {
   duplicateIds?: string[]
 }
 
+export function resolveNotificationPath(
+  notification: Pick<CollapsibleNotification, 'type' | 'link_type' | 'link_id'>,
+  role?: string,
+): string {
+  if (!notification.link_id) return '/notifications'
+  if (notification.link_type === 'project') return `/project/${notification.link_id}`
+  if (notification.link_type === 'handoff' || notification.type.startsWith('handoff')) {
+    return role === 'admin' || role === 'manager' ? '/review-center' : '/my-tasks'
+  }
+  return `/task/${notification.link_id}`
+}
+
+export function clampNotificationPage(page: number, totalPages: number): number {
+  return Math.min(Math.max(1, page), Math.max(1, totalPages))
+}
+
 /**
  * 历史批处理曾给同一用户重复写入相同通知。保留最新记录并显示合并数量，
  * 既不删除审计历史，也避免通知中心被同一条消息刷屏。

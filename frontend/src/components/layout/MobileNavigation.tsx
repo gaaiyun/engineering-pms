@@ -1,13 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { pb } from '../../lib/pocketbase'
-import { getVisibleNavigation, normalizeAppRole } from '../../lib/navigation'
+import { getVisibleNavigation, isNavigationItemActive, normalizeAppRole } from '../../lib/navigation'
 import { NavigationIcon } from './NavigationIcon'
-
-function isActive(pathname: string, path: string) {
-  if (path === '/app') return pathname === '/app' || pathname.startsWith('/app/')
-  if (path === '/my-projects') return pathname === path || pathname.startsWith('/project/')
-  return pathname === path || pathname.startsWith(`${path}/`)
-}
 
 export function MobileNavigation() {
   const location = useLocation()
@@ -17,6 +11,7 @@ export function MobileNavigation() {
   return (
     <nav
       aria-label="底部导航"
+      data-shell-nav="bottom"
       style={{
         flexShrink: 0,
         display: 'grid',
@@ -31,7 +26,7 @@ export function MobileNavigation() {
       }}
     >
       {items.map(item => {
-        const active = isActive(location.pathname, item.path)
+        const active = isNavigationItemActive(location.pathname, item)
         return (
           <NavLink
             key={item.id}

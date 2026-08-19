@@ -14,6 +14,7 @@ import {
   IoCloudOutline
 } from 'react-icons/io5'
 import { getPocketBaseErrorMessage, pb } from '../lib/pocketbase'
+import { changeCurrentPassword } from '../lib/account'
 
 interface SettingRowProps {
   icon: React.ReactNode
@@ -117,11 +118,7 @@ export default function SettingsPage() {
           Toast.show({ content: '用户未登录', icon: 'fail' })
           return
         }
-        await pb.collection('users').update(user.id, {
-          oldPassword: pwdValues.old,
-          password: pwdValues.new_,
-          passwordConfirm: pwdValues.confirm,
-        })
+        await changeCurrentPassword(pwdValues.old, pwdValues.new_)
         Toast.show({ content: '密码修改成功', icon: 'success' })
       } catch (error) {
         Toast.show({ content: getPocketBaseErrorMessage(error, '修改失败'), icon: 'fail' })

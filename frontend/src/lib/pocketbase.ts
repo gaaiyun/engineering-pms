@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core'
 
 const LOCAL_PB_URL = 'http://127.0.0.1:8090'
 const NATIVE_CONFIGURATION_REQUIRED_URL = 'https://pocketbase.invalid'
+const IS_NATIVE_BUILD = import.meta.env.VITE_APP_TARGET === 'native'
 
 type BrowserLocationLike = Pick<Location, 'protocol' | 'hostname' | 'origin'>
 
@@ -26,7 +27,7 @@ export function resolvePocketBaseUrl(options: ResolvePocketBaseUrlOptions): stri
   const hostname = location?.hostname || ''
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
 
-  if (options.isNative) return envUrl || NATIVE_CONFIGURATION_REQUIRED_URL
+  if (IS_NATIVE_BUILD || options.isNative) return envUrl || NATIVE_CONFIGURATION_REQUIRED_URL
   if (isLocalhost && storedUrl) return storedUrl
   if (envUrl) return envUrl
 

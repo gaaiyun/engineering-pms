@@ -35,7 +35,15 @@ if ((Get-JavaMajorVersion) -ne 17) {
 if (-not $env:GRADLE_USER_HOME) {
   $env:GRADLE_USER_HOME = 'G:\dev-cache\gradle'
 }
+if (-not $env:ANDROID_HOME -or -not (Test-Path $env:ANDROID_HOME)) {
+  $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+  if (-not (Test-Path $sdk)) {
+    throw '未找到 Android SDK。请设置 ANDROID_HOME。'
+  }
+  $env:ANDROID_HOME = $sdk
+}
 Write-Host ">> Java: $((& java -version 2>&1 | Select-Object -First 1) -join '')" -ForegroundColor Yellow
+Write-Host ">> Android SDK: $env:ANDROID_HOME" -ForegroundColor Yellow
 
 function Invoke-NativeChecked {
   param(
@@ -58,6 +66,7 @@ if ($PocketBaseUrl -notmatch '^https?://') {
   throw "PocketBaseUrl 必须是完整的 http(s) URL：$PocketBaseUrl"
 }
 $env:VITE_PB_URL = $PocketBaseUrl
+$env:VITE_APP_TARGET = 'native'
 Write-Host ">> PocketBase: $PocketBaseUrl" -ForegroundColor Yellow
 
 Write-Host ">> npm run build" -ForegroundColor Cyan
@@ -80,9 +89,9 @@ if (Test-Path $apk) {
   Remove-Item -LiteralPath $apk -Force
 }
 if ($IsWindows -or $env:OS -match "Windows") {
-  Invoke-NativeChecked 'gradlew assembleDebug' { .\gradlew.bat assembleDebug }
+  Invoke-NativeChecked 'gradlew clean assembleDebug' { .\gradlew.bat clean assembleDebug }
 } else {
-  Invoke-NativeChecked 'gradlew assembleDebug' { ./gradlew assembleDebug }
+  Invoke-NativeChecked 'gradlew clean assembleDebug' { ./gradlew clean assembleDebug }
 }
 
 if (-not (Test-Path $apk)) {

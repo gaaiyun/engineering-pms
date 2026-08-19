@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "3.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "postinstall": "node scripts/patch-react-dom.cjs"
+    "postinstall": "node scripts/patch-react-dom.cjs && node scripts/patch-capacitor-android.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^5.7.8",

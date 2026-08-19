@@ -5,9 +5,9 @@ const config: CapacitorConfig = {
   appName: 'EngineeringPMS',
   webDir: 'dist',
   server: {
-    androidScheme: 'http',
-    cleartext: true,
-    // url: 'http://192.168.x.x:5173' // Unleash this for Live Reload
+    androidScheme: 'https',
+    hostname: 'app.local',
+    cleartext: false,
   },
   plugins: {
     LocalNotifications: {

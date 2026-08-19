@@ -70,6 +70,15 @@ export function getVisibleNavigation(role: AppRole, surface: AppSurface): NavIte
     }))
 }
 
+export function isNavigationItemActive(pathname: string, item: Pick<NavItem, 'id' | 'path'>): boolean {
+  if (item.id === 'workbench') return pathname === '/app' || pathname.startsWith('/app/')
+  if (item.id === 'tasks') return pathname === '/my-tasks' || pathname.startsWith('/task/')
+  if (item.id === 'projects') return pathname === '/my-projects' || pathname.startsWith('/project/')
+  if (item.id === 'me') return pathname === '/me' || pathname === '/settings'
+  if (item.id === 'system') return pathname.startsWith('/system/')
+  return pathname === item.path || pathname.startsWith(`${item.path}/`)
+}
+
 export function resolveAppSurface(input: AppSurfaceInput): AppSurface {
   if (input.isNative || input.pointerCoarse) return 'compact'
   if (input.width >= 1024) return 'sidebar-expanded'

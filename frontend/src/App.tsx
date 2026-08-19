@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
-import Register from './pages/Register'
+import ChangePassword from './pages/ChangePassword'
 import Home from './pages/Home'
 import { useNotificationAlerts } from './lib/useNotificationAlerts'
 import { AppShell } from './components/layout'
@@ -11,6 +11,7 @@ import {
   DefaultRedirect,
   LegacyAdminRedirect,
   ManagerRoute,
+  PasswordChangeRoute,
   PrivateRoute,
   PublicOnlyRoute,
 } from './components/auth/RouteGuards'
@@ -125,7 +126,8 @@ function App() {
       <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
-        <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
+        <Route path="/change-password" element={<PasswordChangeRoute><ChangePassword /></PasswordChangeRoute>} />
 
         {/* 受保护路由统一由 AppShell 提供桌面侧栏或 compact 底栏 */}
         <Route element={<AppShell />}>

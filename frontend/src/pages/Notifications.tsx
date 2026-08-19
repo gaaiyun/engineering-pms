@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { 
   IoArrowBackOutline, 
   IoNotificationsOutline, 
@@ -20,7 +20,7 @@ import {
 } from '../lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppSurface } from '../lib/useAppSurface'
-import { collapseDuplicateNotifications } from '../lib/notification-utils'
+import { clampNotificationPage, collapseDuplicateNotifications, resolveNotificationPath } from '../lib/notification-utils'
 
 interface Notification {
   id: string
@@ -44,7 +44,7 @@ export default function Notifications() {
   const userId = pb.authStore.model?.id || ''
   const [activeTab, setActiveTab] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const { data: notificationPage, isLoading: loading } = useNotificationPage(userId, activeTab, currentPage, PAGE_SIZE)
+  const { data: notificationPage, isLoading: loading, isError, refetch } = useNotificationPage(userId, activeTab, currentPage, PAGE_SIZE)
   const { data: unreadTotal = 0 } = useUnreadNotificationCount(userId)
   const notifications = useMemo(
     () => collapseDuplicateNotifications((notificationPage?.items || []) as unknown as Notification[]),
@@ -52,6 +52,11 @@ export default function Notifications() {
   )
   const totalItems = notificationPage?.totalItems || 0
   const totalPages = Math.max(1, notificationPage?.totalPages || 1)
+  useEffect(() => {
+    if (currentPage <= totalPages) return
+    const timer = window.setTimeout(() => setCurrentPage(clampNotificationPage(currentPage, totalPages)), 0)
+    return () => window.clearTimeout(timer)
+  }, [currentPage, totalPages])
   // Bug fix J-1: 桌面端 AppShell 已有 Sidebar/TopBar，移动版 page header
   // 重复且 ← 在桌面端无意义。仅 mobile 渲染顶部 header。
   const isCompact = useAppSurface() === 'compact'
@@ -76,16 +81,15 @@ export default function Notifications() {
   }
 
   const markAllRead = async () => {
-    const unread = await pb.collection('notifications').getFullList<Notification>({
-      filter: buildNotificationFilter(userId, 'unread'),
-      fields: 'id',
-    })
-    if (unread.length === 0) {
-      Toast.show({ content: '没有未读消息' })
-      return
-    }
-    
     try {
+      const unread = await pb.collection('notifications').getFullList<Notification>({
+        filter: buildNotificationFilter(userId, 'unread'),
+        fields: 'id',
+      })
+      if (unread.length === 0) {
+        Toast.show({ content: '没有未读消息' })
+        return
+      }
       await Promise.all(unread.map(n => 
         pb.collection('notifications').update(n.id, { is_read: true })
       ))
@@ -119,22 +123,7 @@ export default function Notifications() {
 
   const handleClick = (notif: Notification) => {
     markRead(notif)
-    if (notif.link_id) {
-      if (notif.link_type === 'task') {
-        navigate(`/task/${notif.link_id}`)
-      } else if (notif.link_type === 'handoff' || notif.type === 'handoff' || notif.type === 'handoff_pending' || notif.type === 'handoff_result') {
-        const role = pb.authStore.model?.role
-        if (role !== 'admin' && role !== 'manager') {
-          navigate('/my-tasks')
-          return
-        }
-        navigate('/review-center')
-      } else if (notif.link_type === 'project') {
-        navigate(`/project/${notif.link_id}`)
-      } else {
-        navigate(`/task/${notif.link_id}`)
-      }
-    }
+    navigate(resolveNotificationPath(notif, pb.authStore.model?.role))
   }
 
   const getIcon = (type: string) => {
@@ -280,6 +269,15 @@ export default function Notifications() {
           position: 'relative',
         }}
         onClick={() => handleClick(notif)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            handleClick(notif)
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={`打开通知：${notif.title}`}
       >
         {!notif.is_read && (
           <div style={{
@@ -312,6 +310,7 @@ export default function Notifications() {
           <div style={{ fontSize: 10, color: '#94A3B8', marginTop: isCompact ? 5 : 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>{formatTime(notif.created)}</span>
             <button
+              aria-label={`删除通知：${notif.title}`}
               onClick={(e) => { e.stopPropagation(); deleteNotification(notif) }}
               style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 4, display: 'flex' }}
             >
@@ -365,6 +364,8 @@ export default function Notifications() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
+              type="button"
+              aria-label="返回上一页"
               onClick={() => navigate(-1)}
               style={{
                 background: 'none',
@@ -388,6 +389,8 @@ export default function Notifications() {
           
           {unreadCount > 0 && (
             <button
+              type="button"
+              aria-label="全部标为已读"
               onClick={markAllRead}
               style={{
                 background: 'none',
@@ -436,24 +439,28 @@ export default function Notifications() {
           top: 0,
           zIndex: 10,
         }}>
-          <Tabs
-            activeKey={activeTab}
-            onChange={changeTab}
-            style={{ '--title-font-size': '14px' }}
-          >
-            <Tabs.Tab title="全部" key="all" />
-            <Tabs.Tab title="未读" key="unread" />
-            <Tabs.Tab title="任务" key="task" />
-            <Tabs.Tab title="项目" key="project" />
-            <Tabs.Tab title="卡点" key="blocker" />
-            <Tabs.Tab title="交接" key="handoff" />
-          </Tabs>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Tabs activeKey={activeTab} onChange={changeTab} style={{ '--title-font-size': '14px', flex: 1 }}>
+              <Tabs.Tab title="全部" key="all" />
+              <Tabs.Tab title="未读" key="unread" />
+              <Tabs.Tab title="任务" key="task" />
+              <Tabs.Tab title="项目" key="project" />
+              <Tabs.Tab title="卡点" key="blocker" />
+              <Tabs.Tab title="交接" key="handoff" />
+            </Tabs>
+            {unreadCount > 0 && <button type="button" aria-label="全部标为已读" onClick={markAllRead} style={{ border: 0, background: 'transparent', color: '#2563eb', whiteSpace: 'nowrap' }}><IoCheckmarkDoneOutline /> 全部已读</button>}
+          </div>
         </div>
       )}
 
       {/* Content */}
-      <div style={{ padding: '16px 20px' }}>
-        {loading ? (
+      <div style={{ padding: isCompact ? '12px 0' : '16px 20px' }}>
+        {isError ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+            <div style={{ marginBottom: 12 }}>通知加载失败，请检查网络后重试</div>
+            <button type="button" onClick={() => refetch()}>重新加载</button>
+          </div>
+        ) : loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
             加载中...
           </div>

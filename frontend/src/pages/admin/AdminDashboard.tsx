@@ -365,6 +365,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
         role: Array.isArray(values.role) ? values.role[0] : values.role,
         department: Array.isArray(values.department) ? values.department[0] : values.department,
         is_active: true,
+        must_change_password: true,
       })
       Toast.show({ icon: 'success', content: '新用户已创建' })
       setShowAddUserModal(false)
@@ -1525,7 +1526,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
           <Form form={userForm} layout='vertical' onFinish={handleUserUpdate} footer={null}>
             <div className="admin-user-form-grid">
               <Form.Item name='name' label='姓名' rules={[{ required: true, message: '请输入姓名' }]}><Input placeholder="真实姓名" maxLength={30} /></Form.Item>
-              <Form.Item name='username' label='登录账号' rules={[{ required: true }, { pattern: /^[a-zA-Z0-9_]{3,30}$/, message: '3-30 位英文、数字或下划线' }]}><Input placeholder="例如 chen_kaiyuan" /></Form.Item>
+              <Form.Item name='username' label='登录账号' rules={[{ required: true }, { pattern: /^[a-zA-Z0-9_]{3,30}$/, message: '3-30 位英文、数字或下划线' }]}><Input placeholder="例如 zhang_mingyuan" /></Form.Item>
             </div>
             <Form.Item name='email' label='工作邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input placeholder="name@company.com" /></Form.Item>
             <Form.Item name='department' label='所属部门' rules={[{ required: true, message: '请选择部门' }]}>
@@ -1562,7 +1563,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
       >
         <div className="admin-user-sheet__content">
           <header>
-            <div><h2>新增成员账号</h2><p>创建后即可用登录账号或邮箱进入系统</p></div>
+            <div><h2>新增成员账号</h2><p>新账号首次登录必须修改初始密码</p></div>
             <button type="button" className="admin-user-sheet__close" onClick={() => setShowAddUserModal(false)}><IoClose /></button>
           </header>
           <Form form={addUserForm} layout='vertical' onFinish={handleAddUser} footer={null}>
@@ -1581,7 +1582,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
             <Form.Item name='role' label='系统角色' rules={[{ required: true, message: '请选择角色' }]}>
               <Selector options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
             </Form.Item>
-            <div className="admin-user-form-note">新账号默认启用。建议将初始密码通过安全渠道单独发送给员工，并要求首次登录后修改。</div>
+            <div className="admin-user-form-note">新账号默认启用并强制首次改密。初始密码请通过安全渠道单独发送。</div>
           </Form>
           <footer>
             <span />

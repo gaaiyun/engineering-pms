@@ -22,8 +22,12 @@ function initRealtime() {
   })
 }
 
-// 登录状态变化时重新订阅
+// 只有登录用户发生变化时才重建订阅；authRefresh 更新同一用户的 token/model 不需要重建。
+let realtimeUserId = pb.authStore.isValid ? pb.authStore.model?.id ?? null : null
 pb.authStore.onChange(() => {
+  const nextUserId = pb.authStore.isValid ? pb.authStore.model?.id ?? null : null
+  if (nextUserId === realtimeUserId) return
+  realtimeUserId = nextUserId
   unsubscribeAll()
   if (pb.authStore.isValid) {
     setTimeout(initRealtime, 500)
