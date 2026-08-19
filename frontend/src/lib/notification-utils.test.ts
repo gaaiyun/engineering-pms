@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collapseDuplicateNotifications, type CollapsibleNotification } from './notification-utils'
+import { clampNotificationPage, collapseDuplicateNotifications, resolveNotificationPath, type CollapsibleNotification } from './notification-utils'
 
 const base: CollapsibleNotification = {
   id: 'n1',
@@ -32,5 +32,28 @@ describe('collapseDuplicateNotifications', () => {
     ])
 
     expect(result).toHaveLength(3)
+  })
+})
+
+describe('resolveNotificationPath', () => {
+  it('员工和管理角色分别进入可访问的交接页面', () => {
+    const handoff = { type: 'handoff_pending', link_type: 'handoff', link_id: 'h1' }
+    expect(resolveNotificationPath(handoff, 'employee')).toBe('/my-tasks')
+    expect(resolveNotificationPath(handoff, 'manager')).toBe('/review-center')
+    expect(resolveNotificationPath(handoff, 'admin')).toBe('/review-center')
+  })
+
+  it('任务、项目和无关联通知使用稳定深链', () => {
+    expect(resolveNotificationPath({ type: 'task_update', link_type: 'task', link_id: 't1' }, 'employee')).toBe('/task/t1')
+    expect(resolveNotificationPath({ type: 'project_update', link_type: 'project', link_id: 'p1' }, 'employee')).toBe('/project/p1')
+    expect(resolveNotificationPath({ type: 'system' }, 'employee')).toBe('/notifications')
+  })
+})
+
+describe('clampNotificationPage', () => {
+  it('在通知删除导致总页数减少时回退到有效页码', () => {
+    expect(clampNotificationPage(3, 2)).toBe(2)
+    expect(clampNotificationPage(0, 2)).toBe(1)
+    expect(clampNotificationPage(4, 0)).toBe(1)
   })
 })

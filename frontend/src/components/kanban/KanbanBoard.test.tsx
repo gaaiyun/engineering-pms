@@ -3,11 +3,9 @@
  * Focus: status normalization, column grouping, drag-drop status mapping
  */
 import { describe, it, expect } from 'vitest'
+import { buildCrossColumnSequence, normalizeKanbanStatus } from './kanban-utils'
 
-const normalizeStatus = (status: string): string => {
-  if (status === 'processing') return 'in_progress'
-  return status
-}
+const normalizeStatus = normalizeKanbanStatus
 
 const COLUMNS = [
   { id: 'pending', title: '待开始' },
@@ -87,6 +85,8 @@ describe('Task grouping by status', () => {
 })
 
 describe('Drag-drop target resolution', () => {
+  const task = (id: string, status: string) => ({ id, status } as never)
+
   it('dropping on a column uses column id as target status', () => {
     const overId = 'completed'
     const isColumn = COLUMNS.find(c => c.id === overId)
@@ -116,5 +116,47 @@ describe('Drag-drop target resolution', () => {
     const normalizedDrag = normalizeStatus(draggedTask.status)
     const normalizedTarget = normalizeStatus(overTask.status)
     expect(normalizedDrag === normalizedTarget).toBe(true)
+  })
+
+  it('跨列拖动到目标任务前面时保留目标位置并重编号', () => {
+    const updates = buildCrossColumnSequence(
+      [task('dragged', 'pending'), task('target-a', 'in_progress'), task('target-b', 'in_progress')],
+      task('dragged', 'pending'),
+      'in_progress',
+      'target-b',
+    )
+
+    expect(updates).toEqual([
+      { id: 'target-a', sequence: 0 },
+      { id: 'dragged', sequence: 1000 },
+      { id: 'target-b', sequence: 2000 },
+    ])
+  })
+
+  it('跨列拖动到空白区域时追加到目标列末尾', () => {
+    const updates = buildCrossColumnSequence(
+      [task('dragged', 'pending'), task('target-a', 'in_progress')],
+      task('dragged', 'pending'),
+      'in_progress',
+    )
+
+    expect(updates).toEqual([
+      { id: 'target-a', sequence: 0 },
+      { id: 'dragged', sequence: 1000 },
+    ])
+  })
+
+  it('目标任务已不在列表中时也追加到目标列末尾', () => {
+    const updates = buildCrossColumnSequence(
+      [task('dragged', 'pending'), task('target-a', 'in_progress')],
+      task('dragged', 'pending'),
+      'in_progress',
+      'stale-target',
+    )
+
+    expect(updates).toEqual([
+      { id: 'target-a', sequence: 0 },
+      { id: 'dragged', sequence: 1000 },
+    ])
   })
 })

@@ -3,6 +3,7 @@ import {
   canAccessSystem,
   getPostLoginPath,
   getVisibleNavigation,
+  isNavigationItemActive,
   resolveAppSurface,
   resolveLegacyAdminPath,
   type AppRole,
@@ -16,6 +17,16 @@ describe('统一导航模型', () => {
     expect(canAccessSystem('employee')).toBe(false)
     expect(canAccessSystem('manager')).toBe(false)
     expect(canAccessSystem('admin')).toBe(true)
+  })
+
+  it.each([
+    ['/task/task-1', 'tasks'],
+    ['/project/project-1/kanban', 'projects'],
+    ['/settings', 'me'],
+    ['/system/ai', 'system'],
+  ])('%s 激活 %s 导航', (pathname, routeId) => {
+    const item = getVisibleNavigation('admin', 'sidebar-expanded').find(candidate => candidate.id === routeId)
+    expect(item && isNavigationItemActive(pathname, item)).toBe(true)
   })
 
   it('手机、App 和未来小程序固定为五个主入口', () => {
