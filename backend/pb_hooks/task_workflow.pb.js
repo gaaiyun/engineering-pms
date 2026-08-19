@@ -6,6 +6,7 @@ routerAdd('POST', '/api/custom/tasks/unblock', (c) => {
   const actor = info.authRecord
   if (!actor) return c.json(401, { error: 'unauthorized' })
   if (!actor.getBool('is_active')) return c.json(401, { error: 'account disabled' })
+  if (actor.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
 
   const data = info.data || {}
   const taskId = typeof data.task_id === 'string' ? data.task_id : ''
@@ -113,13 +114,14 @@ routerAdd('POST', '/api/custom/tasks/unblock', (c) => {
     console.log('[task workflow] unblock failed', error)
     return c.json(500, { error: 'unblock failed' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 
 // 完成任务与创建交接必须一次提交成功或全部回滚。
 routerAdd('POST', '/api/custom/tasks/complete-with-handoff', (c) => {
   const info = $apis.requestInfo(c)
   const actor = info.authRecord
   if (!actor || !actor.getBool('is_active')) return c.json(401, { error: 'unauthorized' })
+  if (actor.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
   const canManage = (task) => {
     const role = actor.getString('role')
     const assignees = task.getStringSlice('assignees') || []
@@ -196,13 +198,14 @@ routerAdd('POST', '/api/custom/tasks/complete-with-handoff', (c) => {
     console.log('[task workflow] complete failed', error)
     return c.json(500, { error: 'complete failed' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 
 // 上报卡点、回退前序任务、审计和通知使用同一事务。
 routerAdd('POST', '/api/custom/tasks/block', (c) => {
   const info = $apis.requestInfo(c)
   const actor = info.authRecord
   if (!actor || !actor.getBool('is_active')) return c.json(401, { error: 'unauthorized' })
+  if (actor.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
   const canManage = (task) => {
     const role = actor.getString('role')
     const assignees = task.getStringSlice('assignees') || []
@@ -285,13 +288,14 @@ routerAdd('POST', '/api/custom/tasks/block', (c) => {
     console.log('[task workflow] block failed', error)
     return c.json(500, { error: 'block failed' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 
 // 审批交接一次性完成：创建下游任务、状态变更、成员同步、审计和通知。
 routerAdd('POST', '/api/custom/handoffs/decide', (c) => {
   const info = $apis.requestInfo(c)
   const actor = info.authRecord
   if (!actor || !actor.getBool('is_active')) return c.json(401, { error: 'unauthorized' })
+  if (actor.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
   const createNotification = (dao, userId, type, title, content, linkType, linkId) => {
     if (!userId) return
     const notification = new Record(dao.findCollectionByNameOrId('notifications'))
@@ -368,13 +372,14 @@ routerAdd('POST', '/api/custom/handoffs/decide', (c) => {
     console.log('[task workflow] handoff decision failed', error)
     return c.json(500, { error: 'handoff decision failed' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 
 // 永久删除任务由服务端串行清理依赖，避免前端多请求造成幽灵交接、失效通知和断裂前置关系。
 routerAdd('POST', '/api/custom/tasks/delete', (c) => {
   const info = $apis.requestInfo(c)
   const actor = info.authRecord
   if (!actor || !actor.getBool('is_active')) return c.json(401, { error: 'unauthorized' })
+  if (actor.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
   const role = actor.getString('role')
   if (role !== 'admin' && role !== 'manager') return c.json(403, { error: 'forbidden' })
   const data = info.data || {}
@@ -455,7 +460,7 @@ routerAdd('POST', '/api/custom/tasks/delete', (c) => {
     console.log('[task workflow] delete failed', error)
     return c.json(500, { error: 'task delete failed' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 
 // 已批准的交接代表下游任务已经生成，前序任务不能再被竞态改回卡点或进行中。
 onRecordBeforeUpdateRequest((e) => {

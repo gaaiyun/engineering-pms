@@ -12,6 +12,7 @@ routerAdd('POST', '/api/custom/notifications/send', (c) => {
   const actor = info.authRecord
   if (!actor) return c.json(401, { error: 'unauthorized' })
   if (!actor.getBool('is_active')) return c.json(401, { error: 'account disabled' })
+  if (actor.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
 
   const data = info.data || {}
   const input = data.notification
@@ -79,4 +80,4 @@ routerAdd('POST', '/api/custom/notifications/send', (c) => {
   } catch (_) {
     return c.json(500, { error: 'notification create failed' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))

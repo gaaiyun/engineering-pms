@@ -24,6 +24,7 @@ routerAdd('GET', '/api/custom/llm-config', (c) => {
   const authRecord = info.authRecord
   if (!authRecord) return c.json(401, { error: 'unauthorized' })
   if (!authRecord.getBool('is_active')) return c.json(401, { error: 'account disabled' })
+  if (authRecord.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
   const role = authRecord.getString('role')
   if (role !== 'admin' && role !== 'manager') return c.json(403, { error: 'forbidden' })
   const dao = $app.dao()
@@ -53,13 +54,14 @@ routerAdd('GET', '/api/custom/llm-config', (c) => {
     default_model: config.default_model,
     has_api_key: apiKey.length >= 10,
   })
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 
 routerAdd('PUT', '/api/custom/llm-config', (c) => {
   const info = $apis.requestInfo(c)
   const authRecord = info.authRecord
   if (!authRecord) return c.json(401, { error: 'unauthorized' })
   if (!authRecord.getBool('is_active')) return c.json(401, { error: 'account disabled' })
+  if (authRecord.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
   if (authRecord.getString('role') !== 'admin') return c.json(403, { error: 'admin required' })
 
   const getValue = (dao, key) => {
@@ -121,7 +123,7 @@ routerAdd('PUT', '/api/custom/llm-config', (c) => {
     default_model: defaultModel,
     has_api_key: true,
   })
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
 routerAdd('POST', '/api/custom/llm-proxy', (c) => {
   try {
     // 1. 鉴权
@@ -131,6 +133,7 @@ routerAdd('POST', '/api/custom/llm-proxy', (c) => {
       return c.json(401, { error: 'unauthorized' })
     }
     if (!authRecord.getBool('is_active')) return c.json(401, { error: 'account disabled' })
+    if (authRecord.getBool('must_change_password')) return c.json(403, { error: 'password change required' })
 
     const role = authRecord.getString('role')
     if (role !== 'admin' && role !== 'manager') {
@@ -241,4 +244,4 @@ routerAdd('POST', '/api/custom/llm-proxy', (c) => {
     console.log('[llm-proxy] outer error')
     return c.json(500, { error: 'internal server error' })
   }
-}, $apis.requireRecordAuth())
+}, $apis.requireRecordAuth('users'))
