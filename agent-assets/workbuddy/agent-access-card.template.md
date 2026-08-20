@@ -4,6 +4,8 @@
 
 ## 连接配置
 
+WorkBuddy 使用者应优先把本说明同目录的 `workbuddy.mcp.json` 放到工作项目根目录并重启 WorkBuddy，然后把本说明上传给 Agent。若 Agent 明确具备修改项目配置的权限，也可以让它把下面 JSON 保存为项目根目录的 `workbuddy.mcp.json`。
+
 ```json
 {
   "mcpServers": {

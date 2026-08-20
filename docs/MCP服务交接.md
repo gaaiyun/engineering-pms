@@ -36,4 +36,4 @@ journalctl -u engineering-pms-mcp --since "15 minutes ago" --no-pager
 
 WorkBuddy 的连接配置、项目负责人流程、老板只读提示词和故障排查见 [WorkBuddy 项目管理与监控指南](WorkBuddy项目管理与监控指南.md)。可导入的通用 Skill 和脱敏 MCP 配置示例位于 `agent-assets/workbuddy/`。
 
-实际 URL、Bearer Token 和 Skill 合并在独立 AES 加密 Agent 接入卡中，账号凭据包与 Agent 接入材料分开交付。3.06 的老板只读模式仍是行为约束；需要强制只读时必须新增独立只读鉴权边界。
+实际 URL、Bearer Token 和 Skill 放在私有交付 ZIP 的 `Agent工具/华哥Agent接入/`，无需本地解密；该 ZIP 按凭据文件管理，不进入 Git 或公开渠道。账号凭据包仍与 Agent 接入材料分开。3.06 的老板只读模式仍是行为约束；需要强制只读时必须新增独立只读鉴权边界。

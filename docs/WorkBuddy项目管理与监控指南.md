@@ -4,15 +4,13 @@
 
 ## 一、配置 WorkBuddy
 
-最快的接入方式是解密单独交付的 `EngineeringPMS-3.06-Agent接入卡.aes256.json`，把解密后的接入卡私下交给获准使用的 WorkBuddy。接入卡已经合并实际连接配置、Skill 和角色纪律，不包含员工账号密码。不要把七个账号的凭据包整体发给 Agent。
+私下发送给项目负责人的交付 ZIP 已直接包含 `Agent工具/华哥Agent接入/`，无需本地解密：
 
-先把单独收到的 `EngineeringPMS-3.06-Agent接入卡.aes256.json` 密文文件放入解压后的交付目录，再在该目录运行下面命令，按提示输入另一渠道发送的解密密码：
+- `workbuddy.mcp.json`：含实际 MCP 地址和 Bearer Key，放到 WorkBuddy 工作项目根目录。
+- `EngineeringPMS-Agent接入说明.md`：直接上传给 Agent，包含完整连接说明、项目经理/老板工作模式和安全纪律。
+- `engineering-pms/SKILL.md`：WorkBuddy 支持 Skill 导入时使用。
 
-```powershell
-.\Decrypt-Credentials.ps1 -InputFile '.\EngineeringPMS-3.06-Agent接入卡.aes256.json' -OutFile '.\EngineeringPMS-3.06-Agent接入卡.md'
-```
-
-解密后的 Markdown 含有效 Token，只通过私密渠道交给指定 Agent；接入完成后不要把它上传到网盘公开目录、Git 或群聊。
+最省事的流程是解压 ZIP，把 `workbuddy.mcp.json` 放进华哥平时用 WorkBuddy 打开的项目目录，重启 WorkBuddy，再把 `EngineeringPMS-Agent接入说明.md` 上传到该 Agent 对话。这个 ZIP 持有项目业务写入 Key，只能私下交给获准人员，不能上传到公开网盘、Git 或群聊。
 
 优先在 WorkBuddy 对话输入框旁打开“连接器”，进入连接器管理后选择“自定义连接器”。不同版本的按钮名称可能略有差异，核心字段如下：
 
@@ -22,9 +20,9 @@
 4. Header Value：`Bearer <MCP_BEARER_TOKEN>`，中间有一个空格。
 5. 保存、启用连接器并回到对话。
 
-需要项目级配置时，把交付包中的 `workbuddy.mcp.example.json` 复制到工作项目根目录并改名为 `workbuddy.mcp.json`。
+需要项目级配置时，直接使用私有交付目录中的 `Agent工具/华哥Agent接入/workbuddy.mcp.json`；仓库里的 `workbuddy.mcp.example.json` 只是无 Key 示例。
 
-手动配置时，把下面地址和 `<MCP_BEARER_TOKEN>` 替换为独立 Agent 接入卡中的值：
+手动配置时，从私有 `workbuddy.mcp.json` 读取实际地址和 Key：
 
 ```json
 {
