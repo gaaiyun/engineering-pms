@@ -33,3 +33,7 @@ journalctl -u engineering-pms-mcp --since "15 minutes ago" --no-pager
 ## Agent 使用边界
 
 经授权的 Agent 可以在分配的业务 scope 内维护项目进展和生成日报，但不能获得 SSH、root、PocketBase 管理后台、GitHub 或 LLM 原始密钥。业务负责人直接使用 Web admin 账号查看和管理。
+
+WorkBuddy 的连接配置、项目负责人流程、老板只读提示词和故障排查见 [WorkBuddy 项目管理与监控指南](WorkBuddy项目管理与监控指南.md)。可导入的通用 Skill 和脱敏 MCP 配置示例位于 `agent-assets/workbuddy/`。
+
+实际 URL、Bearer Token 和 Skill 合并在独立 AES 加密 Agent 接入卡中，账号凭据包与 Agent 接入材料分开交付。3.06 的老板只读模式仍是行为约束；需要强制只读时必须新增独立只读鉴权边界。

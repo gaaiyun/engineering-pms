@@ -10,7 +10,7 @@
 - 账号支持保持登录、停用即时失效、管理员增改停用及安全删除校验。
 - LLM 使用 OpenAI-compatible 服务端代理，Provider、Base URL、模型和 Key 均由管理员配置；浏览器不保存 API Key。
 - PocketBase Server 固定 `0.22.21`，前端 PocketBase JS SDK 固定 `0.21.5`。升级必须单独做迁移和回滚测试。
-- 3.06 Debug APK 已通过版本、包信息和内嵌生产地址静态检查；`adb devices` 当前为空，真机验收未完成，产物不得放入正式交付包。
+- 3.06 Debug APK 已通过版本、包信息和内嵌生产地址静态检查；作为明确标注的 Android 内测包随交付包提供，`adb devices` 当前为空，真机验收仍未完成。
 - 3.06 生产数据已清理为正式账号空白基线；项目、任务、通知等业务内容在交付后创建。
 - MCP sidecar 已通过生产 HTTPS 提供 20 个受控业务工具，不包含账号或系统管理工具。
 
@@ -109,6 +109,7 @@ backend/pb_migrations/    前向数据库迁移
 deploy/pocketbase/        systemd、日志修复与可选 Nginx 模板
 deploy/mcp/               MCP systemd 与 Nginx 模板
 mcp-server/               MCP sidecar 源码、测试与锁文件
+agent-assets/workbuddy/   可导入 WorkBuddy 的项目管理 Skill 与 MCP 配置示例
 docs/                     当前产品、架构、运维与交接文档
 ```
 
@@ -125,6 +126,7 @@ docs/                     当前产品、架构、运维与交接文档
 - [宝塔部署与运维](docs/宝塔部署操作手册.md)
 - [Android APK](docs/android-apk.md)
 - [MCP 服务交接](docs/MCP服务交接.md)
+- [WorkBuddy 项目管理与监控](docs/WorkBuddy项目管理与监控指南.md)
 - [开发交接](docs/开发交接.md)
 - [历史发展摘要](docs/历史发展摘要.md)
 

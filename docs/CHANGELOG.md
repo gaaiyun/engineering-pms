@@ -8,7 +8,8 @@
 - 正式账号已按私有清单同步；初始密码首次登录必须修改，旧测试账号不再启用。用户名、初始密码和人员角色清单不进入仓库。
 - MCP sidecar 以独立 systemd 服务运行，`<production-web-url>/mcp` 提供 20 个业务工具，不包含账号或系统管理工具；无认证 MCP POST 请求返回 401。
 - 后端 QA 既有基线 `64/64`、最终差异 `15/15`；前端 `203/203`、Playwright `28/28`、MCP `11/11`。
-- Web/App 版本统一为 3.06，Android `versionCode` 为 46；APK 静态验收通过，但 `adb devices` 为空，真机验收前不得放入正式交付包。
+- Web/App 版本统一为 3.06，Android `versionCode` 为 46；APK 静态验收通过并作为明确标注的 Android 内测包提供，但 `adb devices` 为空，真机验收仍未完成。
+- 交付材料新增 WorkBuddy 配置、项目经理/老板操作指南和可导入 Skill；实际 MCP 配置使用独立 AES 加密 Agent 接入卡交付，不与员工账号密码混发。
 
 ## 3.05 release candidate — 2026-07-13
 

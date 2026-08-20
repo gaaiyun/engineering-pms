@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "engineering-pms": {
+      "url": "<production-web-url>/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_BEARER_TOKEN>"
+      }
+    }
+  }
+}

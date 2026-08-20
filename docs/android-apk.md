@@ -32,7 +32,7 @@ APK 输出：`frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
 - 大小：`7,210,979` bytes
 - SHA-256：`C445196B7574C63CDE4F3E90E14EB6CAD4929EDF4717DE41B7D78C2FF52B87ED`
 
-该产物对应提交 `c4c298f`，已通过 metadata 和 `aapt dump badging` 静态校验。`adb devices` 当前为空，尚未执行真机覆盖安装和下方验收；不能用 3.05 的真机结果或 Web 验收替代 3.06 APK 真机验收，也不得把该 APK 放入正式交付包。
+该产物对应提交 `c4c298f`，已通过 metadata 和 `aapt dump badging` 静态校验。APK 以“Android 内测包”随交付材料提供；`adb devices` 当前为空，尚未执行真机覆盖安装和下方验收，不能用 3.05 的真机结果或 Web 验收替代 3.06 APK 真机验收。
 
 ## 安装
 
