@@ -44,6 +44,7 @@
 .admin-user-sheet__content > footer > span { flex: 1; }
 .admin-user-delete { color: #b33d42 !important; }
 .admin-user-delete svg { margin-right: 5px; vertical-align: -2px; }
+.admin-user-disable { color: #9a5b16 !important; }
 
 @media (min-width: 700px) {
   .admin-user-sheet {

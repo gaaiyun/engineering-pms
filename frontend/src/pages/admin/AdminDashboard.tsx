@@ -31,6 +31,7 @@ import BatchTaskEditor from '../../components/BatchTaskEditor'
 import { getProfessionalAvatarOptions, getUserAvatarUrl } from '../../lib/avatar'
 import { IoCameraOutline, IoClose } from 'react-icons/io5'
 import { logoutWithDeviceCleanup } from '../../lib/pushNotifications'
+import { DEPARTMENT_OPTIONS, type Department } from '../../constants/departments'
 import './AdminDashboard.css'
 
 interface User {
@@ -39,7 +40,7 @@ interface User {
   name?: string
   email?: string
   role?: 'admin' | 'manager' | 'employee'
-  department?: '工程部' | '审计部' | '财务部' | '管理层'
+  department?: Department
   avatar?: string
   created?: string
   is_active?: boolean
@@ -399,6 +400,33 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
       refreshAll()
     } catch (error: unknown) {
       Toast.show({ icon: 'fail', content: `${getPocketBaseErrorMessage(error, '删除失败')}；有关联业务数据时请使用“停用账号”` })
+    } finally {
+      setUserSaving(false)
+    }
+  }
+
+  const handleDisableUser = async () => {
+    if (!currentUser || currentUser.id === authUser?.id) {
+      Toast.show({ icon: 'fail', content: '不能停用当前登录账号' })
+      return
+    }
+    const confirmed = await Dialog.confirm({
+      title: '停用员工账号',
+      content: `停用“${currentUser.name || currentUser.username}”后，该员工将不能登录，已有项目、任务和审计历史会保留。`,
+      confirmText: '确认停用',
+      cancelText: '取消',
+    })
+    if (!confirmed) return
+
+    setUserSaving(true)
+    try {
+      const updated = await pb.collection('users').update<User>(currentUser.id, { is_active: false })
+      setCurrentUser(updated)
+      userForm.setFieldsValue({ is_active: ['disabled'] })
+      Toast.show({ icon: 'success', content: '账号已停用，员工将不能继续登录' })
+      await refreshAll()
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '停用失败') })
     } finally {
       setUserSaving(false)
     }
@@ -1530,7 +1558,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
             </div>
             <Form.Item name='email' label='工作邮箱' rules={[{ required: true }, { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: '邮箱格式不正确' }]}><Input placeholder="name@company.com" /></Form.Item>
             <Form.Item name='department' label='所属部门' rules={[{ required: true, message: '请选择部门' }]}>
-              <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '设计院', value: '设计院' }, { label: '监理部', value: '监理部' }, { label: '管理层', value: '管理层' }]} />
+              <Selector options={DEPARTMENT_OPTIONS} />
             </Form.Item>
             <Form.Item name='role' label='系统角色' rules={[{ required: true, message: '请选择角色' }]}>
               <Selector disabled={currentUser?.id === authUser?.id} options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
@@ -1546,9 +1574,9 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
             )}
           </Form>
           <footer>
-            {currentUser?.id !== authUser?.id && currentUser?.is_active === false && (
-              <Button fill="none" className="admin-user-delete" onClick={handleDeleteUser}><IoTrashOutline />永久删除</Button>
-            )}
+            {currentUser?.id !== authUser?.id && (currentUser?.is_active === false
+              ? <Button fill="none" className="admin-user-delete" onClick={handleDeleteUser}><IoTrashOutline />永久删除</Button>
+              : <Button fill="none" className="admin-user-disable" onClick={handleDisableUser}>停用账号</Button>)}
             <span />
             <Button fill="outline" onClick={() => setShowUserModal(false)}>取消</Button>
             <Button color="primary" loading={userSaving} onClick={() => userForm.submit()}>保存修改</Button>
@@ -1577,7 +1605,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
               <Form.Item name='passwordConfirm' label='确认密码' dependencies={['password']} rules={[{ required: true, message: '请再次输入密码' }]}><Input type='password' placeholder="再次输入" /></Form.Item>
             </div>
             <Form.Item name='department' label='所属部门' rules={[{ required: true, message: '请选择部门' }]}>
-              <Selector options={[{ label: '工程部', value: '工程部' }, { label: '审计部', value: '审计部' }, { label: '财务部', value: '财务部' }, { label: '设计院', value: '设计院' }, { label: '监理部', value: '监理部' }, { label: '管理层', value: '管理层' }]} />
+              <Selector options={DEPARTMENT_OPTIONS} />
             </Form.Item>
             <Form.Item name='role' label='系统角色' rules={[{ required: true, message: '请选择角色' }]}>
               <Selector options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />

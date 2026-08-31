@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
 import { getProfessionalAvatarOptions } from '../lib/avatar'
 import { motion } from 'framer-motion'
+import { DEPARTMENT_OPTIONS } from '../constants/departments'
 import { 
   IoPersonOutline, 
   IoMailOutline, 
@@ -22,14 +23,6 @@ const Register = () => {
   const [step, setStep] = useState(1) // 分步注册
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
   const [nickname, setNickname] = useState('新成员')
-
-  const departments = [
-    { label: '工程部', value: '工程部' },
-    { label: '审计部', value: '审计部' },
-    { label: '财务部', value: '财务部' },
-    { label: '设计院', value: '设计院' },
-    { label: '监理部', value: '监理部' },
-  ]
 
   type RegisterValues = {
     nickname: string
@@ -331,7 +324,7 @@ const Register = () => {
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 }}>所属部门</div>
                 <Form.Item name='department'>
                   <Selector
-                    options={departments}
+                    options={DEPARTMENT_OPTIONS}
                     style={{
                       '--border-radius': '12px',
                       '--border': 'none',
