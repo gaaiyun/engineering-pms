@@ -1,46 +1,59 @@
 import PocketBase, { BaseAuthStore } from 'pocketbase'
 import type { RecordModel } from 'pocketbase'
+import { Capacitor } from '@capacitor/core'
 
-// 线上 PocketBase 地址（APK / localhost 均走此地址）
-// ⚠️ 部署到自己服务器时，请通过 VITE_PB_URL 环境变量覆盖此值。
-//    本地开发：在 frontend/.env.local 中设 VITE_PB_URL=http://YOUR_SERVER:8090
-//    生产构建：CI/CD 注入 VITE_PB_URL=https://your-domain.com/pb
-const PRODUCTION_PB_URL = (import.meta.env.VITE_PB_URL || 'http://127.0.0.1:8090')
+const NATIVE_CONFIGURATION_REQUIRED_URL = 'https://pocketbase.invalid'
+const LOCAL_PB_URL = import.meta.env.DEV
+  ? 'http://127.0.0.1:8090'
+  : NATIVE_CONFIGURATION_REQUIRED_URL
+const IS_NATIVE_BUILD = import.meta.env.VITE_APP_TARGET === 'native'
 
-// 连接策略（按优先级）：
-// 1) 构建时注入：VITE_PB_URL（适用于 App 打包/多环境）
-// 2) localStorage 覆盖：pb_url（运行时临时调试）
-// 3) localhost / 127.0.0.1 → PRODUCTION_PB_URL（Capacitor WebView 和本地开发共用）
-// 4) https 站点 → 同域 /pb（Nginx 反代）
-// 5) http 站点 → 同域名 :8090
+type BrowserLocationLike = Pick<Location, 'protocol' | 'hostname' | 'origin'>
 
-function getPocketBaseUrl(): string {
-  const envUrl = (import.meta.env.VITE_PB_URL || '').trim()
+type ResolvePocketBaseUrlOptions = {
+  envUrl?: string
+  storedUrl?: string
+  location?: BrowserLocationLike
+  isNative?: boolean
+}
+
+// 连接策略：
+// 1) localhost / 127.0.0.1：允许 localStorage.pb_url 临时覆盖，便于本地审计/切换临时 PB
+// 2) 构建时注入：VITE_PB_URL（适用于 Web、APK 和多环境）
+// 3) 非本地 Web：默认使用同源 /pb
+// 4) Capacitor 必须在构建时注入完整 URL；缺失时连接显式无效域名，避免误连设备 localhost 或旧服务器
+export function resolvePocketBaseUrl(options: ResolvePocketBaseUrlOptions): string {
+  const envUrl = (options.envUrl || '').trim()
+  const storedUrl = (options.storedUrl || '').trim()
+  const location = options.location
+  const hostname = location?.hostname || ''
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
+
+  if (IS_NATIVE_BUILD || options.isNative) return envUrl || NATIVE_CONFIGURATION_REQUIRED_URL
+  if (isLocalhost && storedUrl) return storedUrl
   if (envUrl) return envUrl
 
-  if (typeof window !== 'undefined') {
-    const storedUrl = (window.localStorage.getItem('pb_url') || '').trim()
-    if (storedUrl) return storedUrl
-
-    const { protocol, hostname, origin } = window.location
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1'
-
-    // Capacitor WebView 以 http://localhost 加载，直接走线上地址
-    if (isLocalhost) return PRODUCTION_PB_URL
-
-    if (protocol === 'https:') return `${origin}/pb`
-
-    return `${protocol}//${hostname}:8090`
+  if (location) {
+    if (isLocalhost) return LOCAL_PB_URL
+    return `${location.origin.replace(/\/$/, '')}/pb`
   }
 
-  return 'http://127.0.0.1:8090'
+  return LOCAL_PB_URL
+}
+
+function getPocketBaseUrl(): string {
+  return resolvePocketBaseUrl({
+    envUrl: import.meta.env.VITE_PB_URL,
+    storedUrl: typeof window !== 'undefined' ? window.localStorage.getItem('pb_url') || '' : '',
+    location: typeof window !== 'undefined' ? window.location : undefined,
+    isNative: Capacitor.isNativePlatform(),
+  })
 }
 
 export const PB_URL = getPocketBaseUrl()
 
 /**
- * Bug fix C2（Agent D v2 HIGH 安全 — 终极方案）：
- * 子类化 BaseAuthStore，根据 localStorage.rememberMe 决定 token 存哪儿：
+ * 子类化 BaseAuthStore，根据 localStorage.rememberMe 决定 token 存储位置：
  *   - rememberMe=1 → localStorage（跨会话保留）
  *   - 否则        → sessionStorage（关浏览器即失效）
  *
@@ -58,7 +71,50 @@ export const PB_URL = getPocketBaseUrl()
  */
 const STORAGE_KEY = 'pocketbase_auth'
 
-class HybridAuthStore extends BaseAuthStore {
+export class HybridAuthStore extends BaseAuthStore {
+  constructor() {
+    super()
+    if (typeof window === 'undefined') return
+
+    const fromLocal = window.localStorage.getItem(STORAGE_KEY)
+    const fromSession = window.sessionStorage.getItem(STORAGE_KEY)
+    const persistent = this.shouldPersist()
+    const explicitChoice = window.localStorage.getItem('rememberMe')
+    const raw = Capacitor.isNativePlatform()
+      ? (fromLocal || fromSession)
+      : explicitChoice === '1'
+        ? fromLocal
+        : explicitChoice === '0'
+          ? fromSession
+          : persistent
+            ? (fromLocal || fromSession)
+            : (fromSession || fromLocal)
+    if (!raw) {
+      if (explicitChoice === '0') window.localStorage.removeItem(STORAGE_KEY)
+      if (explicitChoice === '1') window.sessionStorage.removeItem(STORAGE_KEY)
+      return
+    }
+
+    try {
+      const data = JSON.parse(raw)
+      const model = data?.model || data?.record
+      if (data?.token && model) {
+        super.save(data.token, model)
+        // 将旧版本或另一种会话策略留下的凭据迁移到当前选择的存储。
+        this.getBackend().setItem(STORAGE_KEY, JSON.stringify({ token: data.token, model }))
+        this.getOtherBackend()?.removeItem(STORAGE_KEY)
+      }
+    } catch {
+      this.getBackend().removeItem(STORAGE_KEY)
+    }
+  }
+
+  private shouldPersist(): boolean {
+    if (Capacitor.isNativePlatform()) return true
+    // 默认保持登录；用户明确取消时才使用 sessionStorage。
+    return window.localStorage.getItem('rememberMe') !== '0'
+  }
+
   private getBackend(): Storage {
     if (typeof window === 'undefined') {
       // SSR / non-browser fallback
@@ -71,37 +127,12 @@ class HybridAuthStore extends BaseAuthStore {
         length: 0,
       } as Storage
     }
-    const remembered = window.localStorage.getItem('rememberMe') === '1'
-    return remembered ? window.localStorage : window.sessionStorage
+    return this.shouldPersist() ? window.localStorage : window.sessionStorage
   }
 
   private getOtherBackend(): Storage | null {
     if (typeof window === 'undefined') return null
-    const remembered = window.localStorage.getItem('rememberMe') === '1'
-    return remembered ? window.sessionStorage : window.localStorage
-  }
-
-  constructor() {
-    super()
-    if (typeof window === 'undefined') return
-    // 初始化时尝试从 localStorage 和 sessionStorage 任一找到现有 token
-    // （兼容：老用户曾用 localStorage、临时会话用 sessionStorage）
-    const fromLocal = window.localStorage.getItem(STORAGE_KEY)
-    const fromSession = window.sessionStorage.getItem(STORAGE_KEY)
-    const raw = fromSession || fromLocal // 优先 session（更短期有效）
-    if (raw) {
-      try {
-        const data = JSON.parse(raw)
-        if (data && data.token && data.model) {
-          super.save(data.token, data.model)
-        } else if (data && data.token && data.record) {
-          // 兼容旧 PB SDK 字段名 'record'
-          super.save(data.token, data.record)
-        }
-      } catch {
-        // ignore corrupted storage
-      }
-    }
+    return this.shouldPersist() ? window.sessionStorage : window.localStorage
   }
 
   save(token: string, model: RecordModel | null) {
@@ -149,11 +180,6 @@ export function getPocketBaseErrorMessage(err: unknown, fallback = '操作失败
   const body = (e.response && typeof e.response === 'object' ? e.response : null)
     ?? (e.data && typeof e.data === 'object' ? e.data : null)
 
-  const top = body && typeof body.message === 'string' ? body.message.trim() : ''
-  if (top) return top
-
-  if (typeof e.message === 'string' && e.message.trim()) return e.message.trim()
-
   // 字段级校验：{ data: { field: { message } } }
   const nested = body?.data
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
@@ -166,6 +192,11 @@ export function getPocketBaseErrorMessage(err: unknown, fallback = '操作失败
     }
     if (parts.length) return parts.join('；')
   }
+
+  const top = body && typeof body.message === 'string' ? body.message.trim() : ''
+  if (top) return top
+
+  if (typeof e.message === 'string' && e.message.trim()) return e.message.trim()
 
   return fallback
 }

@@ -1,9 +1,29 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
+function sanitizeNativeBundle(): Plugin {
+  const nativeBuild = process.env.VITE_APP_TARGET === 'native'
+  return {
+    name: 'sanitize-native-local-addresses',
+    apply: 'build' as const,
+    generateBundle(_options, bundle) {
+      if (!nativeBuild) return
+      Object.values(bundle).forEach((entry) => {
+        if (entry.type !== 'chunk' || typeof entry.code !== 'string') return
+        entry.code = entry.code
+          .replaceAll('http://localhost', 'https://app.invalid')
+          .replaceAll('http://127.0.0.1:8090', 'https://pocketbase.invalid')
+          .replaceAll('10.0.2.2', '192.0.2.2')
+          .replaceAll('127.0.0.1', '192.0.2.1')
+          .replace(/localhost/gi, 'localtest')
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
-  base: './',
+  plugins: [react(), sanitizeNativeBundle()],
+  base: '/',
   optimizeDeps: {
     force: true,
   },

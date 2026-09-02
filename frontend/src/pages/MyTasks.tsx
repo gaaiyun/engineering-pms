@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Toast, Tabs, Button, Tag } from 'antd-mobile'
-import { IoArrowBackOutline, IoTimeOutline } from 'react-icons/io5'
-import { useNavigate } from 'react-router-dom'
+import { IoTimeOutline } from 'react-icons/io5'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { pb } from '../lib/pocketbase'
 import dayjs from 'dayjs'
 import { SkeletonList } from '../components/Skeleton'
@@ -12,6 +12,7 @@ import { TasksTableView } from '../components/tasks/TasksTableView'
 
 export default function MyTasks() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const bp = useBreakpoint()
   const isDesktop = bp !== 'mobile'
   const userId = pb.authStore.model?.id ?? ''
@@ -30,19 +31,24 @@ export default function MyTasks() {
   // Group Tasks
   const todoTasks = tasks.filter(t => t.status === 'pending')
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || (t.status as string) === 'processing' || t.status === 'blocked')
-  const overdueTasks = tasks.filter(t => t.status === 'overdue')
+  const isEffectivelyOverdue = (task: Task) => task.status !== 'completed' && !!task.deadline && dayjs(task.deadline).endOf('day').isBefore(dayjs())
+  const overdueTasks = tasks.filter(isEffectivelyOverdue)
   const doneTasks = tasks.filter(t => t.status === 'completed')
+  const requestedTab = searchParams.get('tab')
+  const activeTab = requestedTab === 'pending' || requestedTab === 'overdue' || requestedTab === 'completed'
+    ? requestedTab
+    : 'in_progress'
 
   const TaskCard = ({ task }: { task: Task }) => {
-    const isOverdue = task.status === 'overdue'
+    const isOverdue = isEffectivelyOverdue(task)
 
     return (
       <div
-        className="elevated-card fade-in"
+        className="elevated-card"
         onClick={() => navigate(`/task/${task.id}`)}
-        style={{ cursor: 'pointer', borderLeft: isOverdue ? '4px solid var(--danger-text)' : '1px solid var(--neutral-100)' }}
+        style={{ cursor: 'pointer', border: `1px solid ${isOverdue ? '#fca5a5' : 'var(--neutral-100)'}`, background: isOverdue ? '#fffafa' : 'var(--card-bg)', boxShadow: 'none' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
           <Tag fill='outline' style={{ border: 'none', background: 'var(--neutral-100)', color: 'var(--neutral-500)', fontWeight: 600 }}>
             {task.expand?.project?.name || '未知项目'}
           </Tag>
@@ -52,7 +58,7 @@ export default function MyTasks() {
           {task.status === 'completed' && <Tag color='success'>已完成</Tag>}
         </div>
 
-        <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px 0', color: 'var(--neutral-900)' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--neutral-900)' }}>
           {task.stage_name}
         </h3>
 
@@ -83,8 +89,8 @@ export default function MyTasks() {
   }
 
   const EmptyState = ({ text }: { text: string }) => (
-    <div style={{ textAlign: 'center', padding: 60, color: 'var(--neutral-400)' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>☕</div>
+    <div style={{ textAlign: 'center', padding: 34, color: 'var(--neutral-400)' }}>
+      <div style={{ fontSize: 30, marginBottom: 9 }}>☕</div>
       <div>{text}</div>
     </div>
   )
@@ -94,7 +100,7 @@ export default function MyTasks() {
       return <TasksTableView tasks={list} />
     }
     return (
-      <div style={{ padding: 20, paddingBottom: 80, overflowY: 'auto', height: '100%' }}>
+      <div style={{ padding: '10px 12px 14px', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
         {list.length > 0 ? list.map(t => <TaskCard key={t.id} task={t} />) : <EmptyState text={emptyText} />}
       </div>
     )
@@ -103,21 +109,20 @@ export default function MyTasks() {
   return (
     <div className="page" style={{ padding: 0, background: 'var(--page-bg)' }}>
       {!isDesktop && (
-        <div className="glass-header" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => navigate(-1)}
-            style={{ background: 'transparent', border: 'none', padding: 0, color: 'var(--neutral-600)', display: 'flex' }}
-          >
-            <IoArrowBackOutline size={24} />
-          </button>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>我的任务</div>
+        <div className="glass-header" style={{ padding: '10px 12px 8px', display: 'flex', alignItems: 'center' }}>
+          <div style={{ fontSize: 17, fontWeight: 760 }}>我的任务</div>
         </div>
       )}
 
-      <div style={{ height: isDesktop ? '100%' : 'calc(100dvh - 60px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <Tabs
-          defaultActiveKey='in_progress'
-          style={{ '--title-font-size': '14px', '--active-title-color': 'var(--primary-color)', '--active-line-color': 'var(--accent-color)' }}
+          activeKey={activeTab}
+          onChange={(key) => {
+            const next = new URLSearchParams(searchParams)
+            next.set('tab', key)
+            setSearchParams(next, { replace: true })
+          }}
+          style={{ '--title-font-size': isDesktop ? '14px' : '12px', '--active-title-color': 'var(--primary-color)', '--active-line-color': 'var(--accent-color)' }}
         >
           <Tabs.Tab title={`进行中 (${inProgressTasks.length})`} key='in_progress'>
             {renderTabContent(inProgressTasks, '没有进行中的任务')}

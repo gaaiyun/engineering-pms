@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useBreakpoint } from '../lib/useBreakpoint'
+import { useAppSurface } from '../lib/useAppSurface'
+import { APP_NAME, APP_VERSION } from '../lib/appMeta'
 import { Toast, Dialog, Input, Switch } from 'antd-mobile'
 import { 
   IoArrowBackOutline, 
@@ -9,11 +10,11 @@ import {
   IoLockClosedOutline, 
   IoHelpCircleOutline, 
   IoInformationCircleOutline,
-  IoKeyOutline,
   IoTrashOutline,
   IoCloudOutline
 } from 'react-icons/io5'
-import { pb } from '../lib/pocketbase'
+import { getPocketBaseErrorMessage, pb } from '../lib/pocketbase'
+import { changeCurrentPassword } from '../lib/account'
 
 interface SettingRowProps {
   icon: React.ReactNode
@@ -26,11 +27,11 @@ interface SettingRowProps {
 
 const SettingRow: React.FC<SettingRowProps> = ({ icon, color, label, value, onClick, rightContent }) => (
   <div className="profile-row" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
       <div style={{ 
-        width: 32, 
-        height: 32, 
-        borderRadius: 8, 
+        width: 29,
+        height: 29,
+        borderRadius: 7,
         background: color, 
         display: 'flex', 
         alignItems: 'center', 
@@ -39,7 +40,7 @@ const SettingRow: React.FC<SettingRowProps> = ({ icon, color, label, value, onCl
       }}>
         {icon}
       </div>
-      <span style={{ fontSize: 15, fontWeight: 600, color: '#1E293B' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{label}</span>
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       {value && <span style={{ fontSize: 13, color: 'var(--neutral-400)' }}>{value}</span>}
@@ -53,22 +54,13 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const user = pb.authStore.model
   // Bug fix J-1: 桌面端不渲染 mobile page header（与 AppShell TopBar 重复）
-  const bp = useBreakpoint()
-  const isMobile = bp === 'mobile'
+  const isCompact = useAppSurface() === 'compact'
 
   // 通知设置
   const [notificationEnabled, setNotificationEnabled] = useState(() => {
     return localStorage.getItem('notification_enabled') !== 'false'
   })
   
-  // API Key 设置
-  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  
-  useEffect(() => {
-    setApiKey(localStorage.getItem('sf_api_key') || '')
-  }, [])
-
   const handleNotificationToggle = (checked: boolean) => {
     setNotificationEnabled(checked)
     localStorage.setItem('notification_enabled', String(checked))
@@ -126,27 +118,12 @@ export default function SettingsPage() {
           Toast.show({ content: '用户未登录', icon: 'fail' })
           return
         }
-        await pb.collection('users').update(user.id, {
-          oldPassword: pwdValues.old,
-          password: pwdValues.new_,
-          passwordConfirm: pwdValues.confirm,
-        })
+        await changeCurrentPassword(pwdValues.old, pwdValues.new_)
         Toast.show({ content: '密码修改成功', icon: 'success' })
-      } catch (error: any) {
-        Toast.show({ content: error.message || '修改失败', icon: 'fail' })
+      } catch (error) {
+        Toast.show({ content: getPocketBaseErrorMessage(error, '修改失败'), icon: 'fail' })
       }
     }
-  }
-
-  const handleSaveApiKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('sf_api_key', apiKey.trim())
-      Toast.show({ content: 'API Key 已保存', icon: 'success' })
-    } else {
-      localStorage.removeItem('sf_api_key')
-      Toast.show({ content: 'API Key 已清除', icon: 'success' })
-    }
-    setShowApiKeyDialog(false)
   }
 
   const handleClearCache = async () => {
@@ -159,12 +136,15 @@ export default function SettingsPage() {
 
     if (result) {
       // 保留登录信息
-      const authData = localStorage.getItem('pocketbase_auth')
+      const localKeys = ['pocketbase_auth', 'rememberMe', 'savedUsername', 'pb_url', 'push_device_id', 'notification_enabled']
+      const preservedLocal = localKeys
+        .map(key => [key, localStorage.getItem(key)] as const)
+        .filter((entry): entry is readonly [string, string] => entry[1] !== null)
+      const sessionAuth = sessionStorage.getItem('pocketbase_auth')
       localStorage.clear()
       sessionStorage.clear()
-      if (authData) {
-        localStorage.setItem('pocketbase_auth', authData)
-      }
+      preservedLocal.forEach(([key, value]) => localStorage.setItem(key, value))
+      if (sessionAuth) sessionStorage.setItem('pocketbase_auth', sessionAuth)
 
       // 同时清理 Service Worker 缓存（避免“仍然是老界面”）
       try {
@@ -209,12 +189,12 @@ export default function SettingsPage() {
       title: '关于版本',
       content: (
         <div style={{ fontSize: 14, lineHeight: 1.8, color: '#64748b', textAlign: 'center' }}>
-          <p style={{ fontSize: 24, marginBottom: 8 }}>PM</p>
-          <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>工程结算管理系统</p>
-          <p>版本 v2.1.0</p>
+          <img src="/icons/icon-96x96.png" alt="EngineeringPMS" width={56} height={56} style={{ display: 'block', margin: '0 auto 10px', borderRadius: 13 }} />
+          <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{APP_NAME}</p>
+          <p>版本 v{APP_VERSION}</p>
           <br />
           <p>基于 React + PocketBase</p>
-          <p>AI 驱动的项目管理工具</p>
+          <p>工程项目协作与进度管理工具</p>
           <br />
           <p style={{ fontSize: 12 }}>© 2026 Engineering Settlement System</p>
         </div>
@@ -224,22 +204,22 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="page" style={{ padding: 20 }}>
+    <div className="page" style={{ padding: isCompact ? 12 : 20 }}>
       {/* Bug fix J-1: 仅 mobile 渲染 page header */}
-      {isMobile && (
+      {isCompact && (
       <div className="glass-header" style={{
-        padding: '16px 20px',
+        padding: '9px 10px',
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        marginBottom: 24,
+        marginBottom: 14,
         position: 'sticky',
         top: 0,
         zIndex: 10,
         background: 'rgba(255,255,255,0.9)',
         backdropFilter: 'blur(12px)',
-        borderRadius: 16,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+        borderRadius: 9,
+        boxShadow: 'none'
       }}>
         <button
           onClick={() => navigate(-1)}
@@ -247,13 +227,13 @@ export default function SettingsPage() {
         >
           <IoArrowBackOutline size={24} />
         </button>
-        <div style={{ fontSize: 18, fontWeight: 800 }}>系统设置</div>
+        <div style={{ fontSize: 16, fontWeight: 760 }}>系统设置</div>
       </div>
       )}
 
       {/* 通用设置 */}
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>通用</div>
-      <div className="profile-table" style={{ marginBottom: 24 }}>
+      <div className="profile-table" style={{ marginBottom: isCompact ? 15 : 24 }}>
         <SettingRow
           icon={<IoNotificationsOutline size={18} />}
           color="#EF4444"
@@ -280,35 +260,17 @@ export default function SettingsPage() {
         />
       </div>
 
-      {/* AI 设置 - 仅经理可见 */}
-      {(user?.role === 'admin' || user?.role === 'manager') && (
+      {/* AI 设置 - 仅管理员可见 */}
+      {user?.role === 'admin' && (
         <>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-500)', marginBottom: 8, paddingLeft: 12 }}>AI 设置</div>
-          <div className="profile-table" style={{ marginBottom: 24 }}>
-            <SettingRow
-              icon={<IoKeyOutline size={18} />}
-              color="#8B5CF6"
-              label="API Key"
-              value={apiKey ? '已配置' : '未配置'}
-              onClick={() => setShowApiKeyDialog(true)}
-            />
+          <div className="profile-table" style={{ marginBottom: isCompact ? 15 : 24 }}>
             <SettingRow
               icon={<IoCloudOutline size={18} />}
               color="#06B6D4"
               label="AI 模型"
-              value={localStorage.getItem('ai_model')?.replace('deepseek-ai/', '') || 'DeepSeek-V3'}
-              onClick={() => {
-                Dialog.alert({
-                  title: 'AI 模型设置',
-                  content: (
-                    <div style={{ fontSize: 14, lineHeight: 1.8, color: '#64748b' }}>
-                      <p>当前使用模型：<strong>DeepSeek-V3</strong></p>
-                      <p style={{ marginTop: 8 }}>模型切换功能请前往管理控制台的「AI决策」页面配置。</p>
-                    </div>
-                  ),
-                  confirmText: '知道了',
-                })
-              }}
+              value={localStorage.getItem('ai_model') || '服务端配置'}
+              onClick={() => navigate('/system/ai')}
             />
           </div>
         </>
@@ -327,7 +289,7 @@ export default function SettingsPage() {
           icon={<IoInformationCircleOutline size={18} />}
           color="#64748B"
           label="关于版本"
-          value="v2.1.0"
+          value={`v${APP_VERSION}`}
           onClick={handleAbout}
         />
       </div>
@@ -338,35 +300,6 @@ export default function SettingsPage() {
         © 2026 All Rights Reserved
       </div>
 
-      {/* API Key Dialog */}
-      <Dialog
-        visible={showApiKeyDialog}
-        title="配置 AI API Key"
-        content={
-          <div style={{ marginTop: 12 }}>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
-              请输入 SiliconFlow API Key，用于 AI 智能分析功能
-            </p>
-            <Input
-              value={apiKey}
-              onChange={setApiKey}
-              placeholder="sk-..."
-              style={{ '--font-size': '14px' }}
-            />
-            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>
-              获取方式：访问 siliconflow.cn 注册并获取 API Key
-            </p>
-          </div>
-        }
-        closeOnAction
-        onClose={() => setShowApiKeyDialog(false)}
-        actions={[
-          [
-            { key: 'cancel', text: '取消' },
-            { key: 'save', text: '保存', bold: true, onClick: handleSaveApiKey },
-          ],
-        ]}
-      />
     </div>
   )
 }

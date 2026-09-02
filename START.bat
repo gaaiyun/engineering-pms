@@ -1,41 +1,29 @@
 @echo off
+setlocal
 chcp 65001 > nul
-echo ═══════════════════════════════════════════════════
-echo     工程项目管理系统 - 快速启动
-echo ═══════════════════════════════════════════════════
-echo.
 
-echo [1/3] 检查 Node.js...
-node -v
-if %errorlevel% neq 0 (
-    echo 错误: 未安装 Node.js
-    pause
-    exit /b 1
+where node > nul 2>&1
+if errorlevel 1 (
+  echo [错误] 未找到 Node.js，请先安装 Node.js 18 或更高版本。
+  pause
+  exit /b 1
 )
 
-echo [2/3] 启动前端开发服务器...
+if not defined VITE_PB_URL set "VITE_PB_URL=http://127.0.0.1:8090"
+
+echo 工程结算管理系统 - 本地前端开发
+echo PocketBase: %VITE_PB_URL%
+echo 提示: 本脚本不会启动或重建 PocketBase，也不会写入账号和密钥。
+echo.
+
 cd /d "%~dp0frontend"
-start cmd /k "npm run dev"
+if not exist node_modules (
+  echo [1/2] 安装前端依赖...
+  call npm install
+  if errorlevel 1 exit /b 1
+)
 
-echo [3/3] 等待服务器启动...
-timeout /t 5 /nobreak > nul
+echo [2/2] 启动 Vite 开发服务器...
+call npm run dev
 
-echo.
-echo ═══════════════════════════════════════════════════
-echo   ✅ 启动完成！
-echo ═══════════════════════════════════════════════════
-echo.
-echo 🌐 访问地址: http://localhost:5173 或 http://localhost:5174
-echo.
-echo 📱 测试账号:
-echo    经理: zhang_manager / 12345678
-echo    员工: chen_doc / 12345678
-echo.
-echo 🔑 配置 AI Key: 在浏览器控制台执行:
-echo    localStorage.setItem('sf_api_key', 'sk-YOUR_SILICONFLOW_API_KEY')
-echo.
-echo ═══════════════════════════════════════════════════
-
-start http://localhost:5173
-
-pause
+endlocal

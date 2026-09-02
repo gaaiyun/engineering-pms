@@ -1,16 +1,16 @@
 /**
  * 变更审计与复核中心
  * Tab: 全部 / 待复核 / 已阅读 / 已通过 / 交接审核
- * 卡片式布局，支持搜索、筛选、已阅/通过操作
+ * 审计日志只做阅读确认；会改变业务状态的审批集中在交接审核，避免重复审批入口。
  */
 import React, { useState, useMemo } from 'react'
 import { NavBar, SearchBar, Tag, Empty, Toast, Dialog, TextArea, PullToRefresh, Tabs } from 'antd-mobile'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useBreakpoint } from '../lib/useBreakpoint'
+import { useAppSurface } from '../lib/useAppSurface'
 import {
   useAuditLogs, useUpdateAuditLogStatus, useUnreadAuditCount,
   usePendingHandoffs, useApproveHandoff, useRejectHandoff,
-  type Handoff, type User
+  type AuditLog, type Handoff, type User
 } from '../lib/api'
 import { getPocketBaseErrorMessage } from '../lib/pocketbase'
 import dayjs from 'dayjs'
@@ -67,9 +67,6 @@ const ReviewCenter: React.FC = () => {
   const [showFilter, setShowFilter] = useState(false)
   const [filterAction, setFilterAction] = useState('')
 
-  const [rejectingAuditId, setRejectingAuditId] = useState<string | null>(null)
-  const [auditRejectNote, setAuditRejectNote] = useState('')
-
   // 审计日志
   const statusFilter = activeTab === 'unread' ? 'unread' : activeTab === 'read' ? 'read' : activeTab === 'approved' ? 'approved' : activeTab === 'rejected' ? 'rejected' : undefined
   const { data: logs = [], isLoading: logsLoading, refetch: refetchLogs } = useAuditLogs({
@@ -103,30 +100,6 @@ const ReviewCenter: React.FC = () => {
     }
   }
 
-  const handleMarkApproved = async (id: string) => {
-    try {
-      await updateStatus.mutateAsync({ id, review_status: 'approved' })
-      Toast.show({ content: '已通过', icon: 'success' })
-    } catch (e: unknown) {
-      Toast.show({ content: getPocketBaseErrorMessage(e, '审批失败'), icon: 'fail' })
-    }
-  }
-
-  const handleRejectAudit = async () => {
-    if (!rejectingAuditId || !auditRejectNote.trim()) {
-      Toast.show({ content: '请填写拒绝原因', icon: 'fail' }); return
-    }
-    try {
-      await updateStatus.mutateAsync({ id: rejectingAuditId, review_status: 'rejected', reject_note: auditRejectNote })
-      Toast.show({ content: '已拒绝', icon: 'success' })
-      setRejectingAuditId(null)
-      setAuditRejectNote('')
-    } catch (e: unknown) {
-      console.error('审核拒绝失败', e)
-      Toast.show({ content: getPocketBaseErrorMessage(e, '拒绝失败'), icon: 'fail' })
-    }
-  }
-
   const handleApproveHandoff = (handoff: Handoff) => {
     Dialog.confirm({
       title: '确认通过',
@@ -157,7 +130,7 @@ const ReviewCenter: React.FC = () => {
     }
   }
 
-  const formatChange = (log: any) => {
+  const formatChange = (log: AuditLog) => {
     const before = log.before_data || {}
     const after = log.after_data || {}
     const parts: string[] = []
@@ -166,7 +139,7 @@ const ReviewCenter: React.FC = () => {
     if (after.assignees) parts.push('人员变更')
     if (after.deadline) parts.push('时间变更')
     if (after.count) parts.push(`${after.count} 个任务`)
-    if (after.members) parts.push(`成员: ${after.members.length} 人`)
+    if (Array.isArray(after.members)) parts.push(`成员: ${after.members.length} 人`)
     if (after.handoff_id) parts.push('提交交接提案')
     if (log.note) parts.push(log.note)
     return parts.length > 0 ? parts.join(' | ') : log.action_type
@@ -175,12 +148,11 @@ const ReviewCenter: React.FC = () => {
   const { data: unreadCount = 0 } = useUnreadAuditCount()
 
   // Bug fix J-1: 桌面端 AppShell TopBar 已有标题，移动版 NavBar 重复
-  const bp = useBreakpoint()
-  const isMobile = bp === 'mobile'
+  const isCompact = useAppSurface() === 'compact'
 
   return (
     <div className="review-center">
-      {isMobile ? (
+      {isCompact ? (
         <NavBar onBack={() => navigate(-1)} right={
           <div onClick={() => setShowFilter(!showFilter)} style={{ padding: '4px 8px', cursor: 'pointer' }}>
             <IoFunnelOutline size={20} color={filterAction ? '#3b82f6' : '#64748b'} />
@@ -254,7 +226,7 @@ const ReviewCenter: React.FC = () => {
               <Empty style={{ padding: '48px 0' }} description="暂无记录" />
             ) : (
               <div className="audit-list">
-                {displayLogs.map((log: any) => {
+                {displayLogs.map((log: AuditLog) => {
                   const actionInfo = ACTION_LABELS[log.action_type] || { label: log.action_type, color: '#94a3b8' }
                   const status = log.review_status || 'unread'
                   return (
@@ -293,27 +265,12 @@ const ReviewCenter: React.FC = () => {
 
                       <div className="audit-card-footer">
                         {status === 'unread' && (
-                          <>
-                            <button className="audit-btn reject" onClick={() => { setRejectingAuditId(log.id); setAuditRejectNote('') }}>
-                              <IoCloseCircle size={15} /> 拒绝
-                            </button>
-                            <button className="audit-btn read" onClick={() => handleMarkRead(log.id)}>
-                              <IoEyeOutline size={15} /> 已阅读
-                            </button>
-                            <button className="audit-btn approve" onClick={() => handleMarkApproved(log.id)}>
-                              <IoCheckmarkCircle size={15} /> 通过
-                            </button>
-                          </>
+                          <button className="audit-btn read" onClick={() => handleMarkRead(log.id)}>
+                            <IoEyeOutline size={15} /> 确认已阅
+                          </button>
                         )}
                         {status === 'read' && (
-                          <>
-                            <button className="audit-btn reject" onClick={() => { setRejectingAuditId(log.id); setAuditRejectNote('') }}>
-                              <IoCloseCircle size={15} /> 拒绝
-                            </button>
-                            <button className="audit-btn approve" onClick={() => handleMarkApproved(log.id)}>
-                              <IoCheckmarkCircle size={15} /> 通过
-                            </button>
-                          </>
+                          <span className="audit-status-done">已阅读</span>
                         )}
                         {status === 'approved' && (
                           <span className="audit-status-done">已通过</span>
@@ -384,16 +341,6 @@ const ReviewCenter: React.FC = () => {
           )}
         </div>
       </PullToRefresh>
-
-      {/* 审计日志拒绝弹窗 */}
-      <Dialog visible={!!rejectingAuditId} title="拒绝原因"
-        content={<TextArea placeholder="请输入拒绝原因（必填）" value={auditRejectNote} onChange={setAuditRejectNote} rows={3} />}
-        actions={[
-          { key: 'cancel', text: '取消', onClick: () => setRejectingAuditId(null) },
-          { key: 'confirm', text: '确认拒绝', danger: true, onClick: () => { void handleRejectAudit() } },
-        ]}
-        onClose={() => setRejectingAuditId(null)}
-      />
 
       {/* 交接驳回弹窗 */}
       <Dialog visible={!!rejectingId} title="驳回原因"

@@ -19,7 +19,7 @@ alwaysApply: false
 ## 命令
 
 ```bash
-npm test          # 运行全部测试
+npm test -- --run  # 运行全部测试
 npm run test:watch # 监听模式
 npm run test:coverage # 覆盖率报告
 ```
@@ -35,6 +35,8 @@ npm run test:coverage # 覆盖率报告
 1. **单元测试**：`lib/` 下的纯函数（task-parser, queryKeys, isManagerRole）
 2. **组件测试**：UI 组件的渲染与交互（render + screen）
 3. **集成测试**：TanStack Query hooks（renderHook + QueryClientProvider + Mock pb）
+4. **浏览器测试**：Playwright 覆盖三角色、四视口、路由、项目与手机交互
+5. **后端验收**：冷备副本运行权限负面测试、事务失败注入和并发审批
 
 ## Mock 约定
 

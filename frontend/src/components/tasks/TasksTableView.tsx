@@ -149,6 +149,8 @@ export function TasksTableView({ tasks }: TasksTableViewProps) {
     },
   ], [])
 
+  // TanStack Table returns imperative accessors; React Compiler intentionally skips this hook.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: tasks,
     columns,

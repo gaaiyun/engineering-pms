@@ -28,7 +28,8 @@ import {
     useUsers,
     useTasks,
     isManagerRole,
-    type Task
+    type Task,
+    type User
 } from '../../lib/api'
 import { useHandoffDraftStore, useBlockerDraftStore } from '../../lib/store'
 import { pb } from '../../lib/pocketbase'
@@ -38,6 +39,21 @@ interface TaskDetailDrawerProps {
     task: Task
     onClose: () => void
     onUpdate?: () => void
+    initialAction?: 'complete' | 'block' | null
+}
+
+interface HandoffFormValues {
+    title: string
+    description?: string
+    assignees?: string[]
+    dueDate: string
+}
+
+interface BlockerFormValues {
+    reasonDetail: string
+    rollbackToTaskId?: string | string[]
+    needHelpFrom?: string[]
+    expectedResolve: string
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -59,11 +75,12 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
 export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     task,
     onClose,
-    onUpdate
+    onUpdate,
+    initialAction = null,
 }) => {
     const [activeTab, setActiveTab] = useState<'info' | 'comments' | 'history'>('info')
-    const [showHandoffForm, setShowHandoffForm] = useState(false)
-    const [showBlockerForm, setShowBlockerForm] = useState(false)
+    const [showHandoffForm, setShowHandoffForm] = useState(initialAction === 'complete')
+    const [showBlockerForm, setShowBlockerForm] = useState(initialAction === 'block')
     const [commentText, setCommentText] = useState('')
 
     const { data: taskDetail } = useTask(task.id)
@@ -99,9 +116,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
     const handleUnblock = async (newStatus: 'in_progress' | 'completed') => {
         try {
-            await updateTask.mutateAsync({
-                id: currentTask.id,
-                data: { status: newStatus, blocker: null } as any,
+            await pb.send('/api/custom/tasks/unblock', {
+                method: 'POST',
+                body: { task_id: currentTask.id, status: newStatus },
             })
             Toast.show({ content: newStatus === 'completed' ? '已标记完成' : '已恢复进行中', icon: 'success' })
             onUpdate?.()
@@ -121,7 +138,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         setShowHandoffForm(true)
     }
 
-    const handleSubmitHandoff = async (values: any) => {
+    const handleSubmitHandoff = async (values: HandoffFormValues) => {
         try {
             await markComplete.mutateAsync({
                 taskId: currentTask.id,
@@ -151,7 +168,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         setShowBlockerForm(true)
     }
 
-    const handleSubmitBlocker = async (values: any) => {
+    const handleSubmitBlocker = async (values: BlockerFormValues) => {
         try {
             await markBlocked.mutateAsync({
                 taskId: currentTask.id,
@@ -468,8 +485,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
 // 交接表单组件
 const HandoffForm: React.FC<{
-    users: any[]
-    onSubmit: (values: any) => void
+    users: User[]
+    onSubmit: (values: HandoffFormValues) => void
     loading: boolean
 }> = ({ users, onSubmit, loading }) => {
     const [form] = Form.useForm()
@@ -526,10 +543,10 @@ const HandoffForm: React.FC<{
 
 // 卡点表单组件
 const BlockerForm: React.FC<{
-    users: any[]
+    users: User[]
     siblingTasks: Task[]
     currentTaskId: string
-    onSubmit: (values: any) => void
+    onSubmit: (values: BlockerFormValues) => void
     loading: boolean
 }> = ({ users, siblingTasks, currentTaskId, onSubmit, loading }) => {
     const [form] = Form.useForm()
@@ -566,7 +583,7 @@ const BlockerForm: React.FC<{
                 <Form.Item name="rollbackToTaskId" label="回退到步骤（可选）">
                     <Selector
                         options={rollbackOptions}
-                        style={{ '--padding': '4px 12px' } as any}
+                        style={{ '--padding': '4px 12px' } as React.CSSProperties}
                     />
                 </Form.Item>
             )}

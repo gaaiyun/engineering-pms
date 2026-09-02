@@ -1,8 +1,10 @@
 import { Button, Form, Input, Toast, Checkbox } from 'antd-mobile'
 import { useNavigate } from 'react-router-dom'
-import { pb } from '../lib/pocketbase'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { pb, getPocketBaseErrorMessage } from '../lib/pocketbase'
+import { getPostLoginPath, normalizeAppRole } from '../lib/navigation'
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
+import { Capacitor } from '@capacitor/core'
 import {
   IoLockClosedOutline,
   IoPersonOutline,
@@ -19,11 +21,26 @@ const ATTEMPT_KEY = 'login_attempts'
 const MAX_ATTEMPTS = 5
 const LOCKOUT_DURATION = 5 * 60 * 1000
 
+interface LoginFormValues {
+  username: string
+  password: string
+}
+
+interface LoginRequestError {
+  status?: number
+  response?: { code?: number }
+  message?: string
+  isAbort?: boolean
+}
+
 export default function Login() {
   const navigate = useNavigate()
+  const isNativeApp = Capacitor.isNativePlatform()
   const [loading, setLoading] = useState(false)
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking')
-  const [rememberMe, setRememberMe] = useState(false)
+  const [rememberMe, setRememberMe] = useState(() => (
+    isNativeApp || localStorage.getItem('rememberMe') !== '0'
+  ))
   const [savedCredentials, setSavedCredentials] = useState({ username: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [form] = Form.useForm()
@@ -35,6 +52,21 @@ export default function Login() {
   const [captchaQuestion, setCaptchaQuestion] = useState({ a: 0, b: 0, answer: 0 })
   const lockoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const identityKeys = (identity: string) => {
+    const normalized = identity.trim().toLowerCase() || 'unknown'
+    return { lockout: `${LOCKOUT_KEY}:${normalized}`, attempts: `${ATTEMPT_KEY}:${normalized}` }
+  }
+
+  const loadIdentityProtection = (identity: string) => {
+    const keys = identityKeys(identity)
+    const until = parseInt(localStorage.getItem(keys.lockout) || '0', 10)
+    const attempts = parseInt(localStorage.getItem(keys.attempts) || '0', 10)
+    setLockoutUntil(until > Date.now() ? until : null)
+    setFailedAttempts(attempts)
+    setShowCaptcha(attempts >= 3)
+    if (attempts >= 3) generateCaptcha()
+  }
+
   const generateCaptcha = useCallback(() => {
     const a = Math.floor(Math.random() * 10) + 1
     const b = Math.floor(Math.random() * 10) + 1
@@ -43,22 +75,9 @@ export default function Login() {
   }, [])
 
   useEffect(() => {
-    const stored = localStorage.getItem(LOCKOUT_KEY)
-    if (stored) {
-      const until = parseInt(stored, 10)
-      if (until > Date.now()) {
-        setLockoutUntil(until)
-      } else {
-        localStorage.removeItem(LOCKOUT_KEY)
-        localStorage.removeItem(ATTEMPT_KEY)
-      }
-    }
-    const attempts = parseInt(localStorage.getItem(ATTEMPT_KEY) || '0', 10)
-    setFailedAttempts(attempts)
-    if (attempts >= 3) {
-      setShowCaptcha(true)
-      generateCaptcha()
-    }
+    // 清理旧版“整个浏览器共用一个锁定计数”的键，改为按登录账号隔离。
+    localStorage.removeItem(LOCKOUT_KEY)
+    localStorage.removeItem(ATTEMPT_KEY)
   }, [generateCaptcha])
 
   useEffect(() => {
@@ -66,8 +85,10 @@ export default function Login() {
       lockoutTimerRef.current = setInterval(() => {
         if (Date.now() >= lockoutUntil) {
           setLockoutUntil(null)
-          localStorage.removeItem(LOCKOUT_KEY)
-          localStorage.removeItem(ATTEMPT_KEY)
+          const username = String(form.getFieldValue('username') || '')
+          const keys = identityKeys(username)
+          localStorage.removeItem(keys.lockout)
+          localStorage.removeItem(keys.attempts)
           setFailedAttempts(0)
           setShowCaptcha(false)
           if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current)
@@ -75,11 +96,11 @@ export default function Login() {
       }, 1000)
     }
     return () => { if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current) }
-  }, [lockoutUntil])
+  }, [form, lockoutUntil])
 
   useEffect(() => {
     localStorage.removeItem('savedCredentials')
-    const remembered = localStorage.getItem('rememberMe') === '1'
+    const remembered = isNativeApp || localStorage.getItem('rememberMe') !== '0'
     const savedUser = localStorage.getItem('savedUsername')
     if (remembered && savedUser) {
       setSavedCredentials({ username: savedUser, password: '' })
@@ -87,7 +108,7 @@ export default function Login() {
       form.setFieldsValue({ username: savedUser })
     }
     checkServer()
-  }, [form])
+  }, [form, isNativeApp])
 
   const checkServer = async () => {
     setServerStatus('checking')
@@ -100,19 +121,22 @@ export default function Login() {
     }
   }
 
-  const getRemainingLockoutTime = () => {
-    if (!lockoutUntil) return ''
-    const remaining = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000))
+  const getRemainingLockoutTime = (until = lockoutUntil) => {
+    if (!until) return ''
+    const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000))
     const mins = Math.floor(remaining / 60)
     const secs = remaining % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: LoginFormValues) => {
     setErrorMsg('')
+    const keys = identityKeys(values.username)
+    const storedLockout = parseInt(localStorage.getItem(keys.lockout) || '0', 10)
 
-    if (lockoutUntil && lockoutUntil > Date.now()) {
-      setErrorMsg(`账号已锁定，请 ${getRemainingLockoutTime()} 后重试`)
+    if (storedLockout > Date.now()) {
+      setLockoutUntil(storedLockout)
+      setErrorMsg(`账号已锁定，请 ${getRemainingLockoutTime(storedLockout)} 后重试`)
       return
     }
 
@@ -129,17 +153,17 @@ export default function Login() {
 
     setLoading(true)
     try {
-      if (!rememberMe) {
-        localStorage.removeItem('pocketbase_auth')
-      }
+      const shouldRemember = isNativeApp || rememberMe
+      // 必须在 authWithPassword 前确定存储位置，避免 token 先落入错误的存储。
+      localStorage.setItem('rememberMe', shouldRemember ? '1' : '0')
 
       const authData = await pb.collection('users').authWithPassword(
         values.username.trim(),
         values.password
       )
 
-      localStorage.removeItem(ATTEMPT_KEY)
-      localStorage.removeItem(LOCKOUT_KEY)
+      localStorage.removeItem(keys.attempts)
+      localStorage.removeItem(keys.lockout)
       setFailedAttempts(0)
       setShowCaptcha(false)
 
@@ -152,12 +176,10 @@ export default function Login() {
       // 但注意：authWithPassword 已经在前面调用过了（line 132 上方）。所以
       // 这里 set rememberMe='1' 后，SDK 当前内存里的 model 不会自动重写 —
       // 直接调一次 pb.authStore.save 触发 HybridAuthStore.save 重新落盘。
-      if (rememberMe) {
+      if (shouldRemember) {
         localStorage.setItem('savedUsername', values.username.trim())
-        localStorage.setItem('rememberMe', '1')
       } else {
         localStorage.removeItem('savedUsername')
-        localStorage.removeItem('rememberMe')
       }
       // 触发 HybridAuthStore.save 把 token 写到此时正确的 backend
       // （save 内部根据 rememberMe 选择 localStorage 或 sessionStorage）
@@ -170,21 +192,18 @@ export default function Login() {
 
       Toast.show({ icon: 'success', content: '登录成功' })
 
-      const role = (authData.record?.role || 'employee').toLowerCase()
-      if (role === 'admin' || role === 'manager') {
-        navigate('/admin', { replace: true })
-      } else {
-        navigate('/app', { replace: true })
-      }
-    } catch (error: any) {
-      const newAttempts = failedAttempts + 1
+      const role = normalizeAppRole(authData.record?.role)
+      navigate(authData.record?.must_change_password ? '/change-password' : getPostLoginPath(role), { replace: true })
+    } catch (error: unknown) {
+      const requestError = error as LoginRequestError
+      const newAttempts = parseInt(localStorage.getItem(keys.attempts) || String(failedAttempts), 10) + 1
       setFailedAttempts(newAttempts)
-      localStorage.setItem(ATTEMPT_KEY, newAttempts.toString())
+      localStorage.setItem(keys.attempts, newAttempts.toString())
 
       if (newAttempts >= MAX_ATTEMPTS) {
         const until = Date.now() + LOCKOUT_DURATION
         setLockoutUntil(until)
-        localStorage.setItem(LOCKOUT_KEY, until.toString())
+        localStorage.setItem(keys.lockout, until.toString())
         setErrorMsg(`登录失败次数过多，账号已锁定 5 分钟`)
       } else {
         if (newAttempts >= 3 && !showCaptcha) {
@@ -192,18 +211,21 @@ export default function Login() {
           generateCaptcha()
         }
         let msg = '用户名或密码错误'
-        const status = error?.status || error?.response?.code
-        if (status === 400 || status === 401 || status === 403) {
+        const status = requestError.status || requestError.response?.code
+        const serverMessage = getPocketBaseErrorMessage(error, '')
+        if (serverMessage.includes('停用')) {
+          msg = serverMessage
+        } else if (status === 400 || status === 401 || status === 403) {
           msg = `用户名或密码错误（剩余 ${MAX_ATTEMPTS - newAttempts} 次尝试）`
         } else if (
-          error?.message?.includes('Failed to fetch') ||
-          error?.message?.includes('NetworkError') ||
-          error?.isAbort ||
+          requestError.message?.includes('Failed to fetch') ||
+          requestError.message?.includes('NetworkError') ||
+          requestError.isAbort ||
           status === 0
         ) {
           msg = '网络连接失败，请检查网络'
         } else {
-          msg = `登录失败：${error?.message || '用户名或密码错误'}（剩余 ${MAX_ATTEMPTS - newAttempts} 次）`
+          msg = `登录失败：${requestError.message || '用户名或密码错误'}（剩余 ${MAX_ATTEMPTS - newAttempts} 次）`
         }
         setErrorMsg(msg)
       }
@@ -221,14 +243,14 @@ export default function Login() {
   }
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.25 } }
   }
 
   return (
     <div style={{
       minHeight: '100dvh',
-      background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)',
+      background: '#EEF1F4',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -236,28 +258,6 @@ export default function Login() {
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* 背景装饰 */}
-      <div style={{
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 400,
-        height: 400,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)',
-        filter: 'blur(60px)'
-      }} />
-      <div style={{
-        position: 'absolute',
-        bottom: -150,
-        left: -150,
-        width: 500,
-        height: 500,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%)',
-        filter: 'blur(80px)'
-      }} />
-
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -265,35 +265,35 @@ export default function Login() {
         style={{
           width: '100%',
           maxWidth: 420,
-          background: 'rgba(255, 255, 255, 0.98)',
-          borderRadius: 24,
-          padding: '48px 36px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.1)',
+          background: '#FFFFFF',
+          border: '1px solid #DDE3EA',
+          borderRadius: 8,
+          padding: '36px 34px',
+          boxShadow: '0 12px 34px rgba(15, 23, 42, 0.10)',
           position: 'relative',
           zIndex: 1
         }}
       >
         {/* Logo & Header */}
-        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{
-            width: 64,
-            height: 64,
-            background: 'linear-gradient(135deg, #0F172A 0%, #334155 100%)',
-            borderRadius: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 20px',
-            boxShadow: '0 10px 30px rgba(15, 23, 42, 0.3)'
-          }}>
-            <span style={{ fontSize: 28 }}>PM</span>
-          </div>
+        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginBottom: 30 }}>
+          <img
+            src="/icons/icon-192x192.png"
+            alt="EngineeringPMS"
+            width={58}
+            height={58}
+            style={{
+              display: 'block',
+              margin: '0 auto 16px',
+              borderRadius: 8,
+              boxShadow: '0 7px 18px rgba(15, 47, 99, 0.18)',
+            }}
+          />
           <h1 style={{
-            fontSize: 28,
+            fontSize: 25,
             fontWeight: 800,
             color: '#0F172A',
             marginBottom: 8,
-            letterSpacing: '-0.5px'
+            letterSpacing: 0
           }}>
             工程结算管理
           </h1>
@@ -311,7 +311,7 @@ export default function Login() {
           marginBottom: 16,
           padding: '10px 16px',
           background: serverStatus === 'online' ? '#ECFDF5' : serverStatus === 'offline' ? '#FEF2F2' : '#FEF3C7',
-          borderRadius: 12,
+          borderRadius: 6,
           cursor: serverStatus === 'offline' ? 'pointer' : 'default'
         }} onClick={serverStatus === 'offline' ? checkServer : undefined}>
           {serverStatus === 'checking' && (
@@ -342,7 +342,7 @@ export default function Login() {
             <div
               style={{
                 background: '#FEF2F2',
-                borderRadius: 12,
+                borderRadius: 6,
                 padding: '10px 14px',
                 color: '#B91C1C',
                 fontSize: 13,
@@ -373,14 +373,15 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 background: '#F8FAFC',
-                borderRadius: 14,
+                borderRadius: 6,
                 padding: '4px 16px',
-                border: '2px solid transparent',
+                border: '1px solid #D7DEE7',
                 transition: 'all 0.2s'
               }}>
                 <IoPersonOutline size={20} color="#94A3B8" style={{ flexShrink: 0 }} />
                 <Input
                   placeholder='用户名 / 邮箱'
+                  onChange={loadIdentityProtection}
                   style={{
                     '--font-size': '15px',
                     '--placeholder-color': '#94A3B8',
@@ -403,9 +404,9 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 background: '#F8FAFC',
-                borderRadius: 14,
+                borderRadius: 6,
                 padding: '4px 16px',
-                border: '2px solid transparent',
+                border: '1px solid #D7DEE7',
                 transition: 'all 0.2s'
               }}>
                 <IoLockClosedOutline size={20} color="#94A3B8" style={{ flexShrink: 0 }} />
@@ -421,9 +422,9 @@ export default function Login() {
                     flex: 1
                   }}
                 />
-                <div onClick={() => setShowPassword(!showPassword)} style={{ cursor: 'pointer', padding: 4 }}>
+                <button type="button" aria-label={showPassword ? '隐藏密码' : '显示密码'} onClick={() => setShowPassword(!showPassword)} style={{ cursor: 'pointer', padding: 4, border: 0, background: 'transparent', display: 'flex' }}>
                   {showPassword ? <IoEyeOffOutline size={20} color="#94A3B8" /> : <IoEyeOutline size={20} color="#94A3B8" />}
-                </div>
+                </button>
               </div>
             </Form.Item>
           </motion.div>
@@ -436,7 +437,7 @@ export default function Login() {
                   display: 'flex',
                   alignItems: 'center',
                   background: '#EFF6FF',
-                  borderRadius: 14,
+                  borderRadius: 6,
                   padding: '8px 16px',
                   gap: 8,
                 }}
@@ -465,13 +466,16 @@ export default function Login() {
           <motion.div variants={itemVariants} style={{ marginBottom: 28 }}>
             <Checkbox
               checked={rememberMe}
+              disabled={isNativeApp}
               onChange={val => setRememberMe(val)}
               style={{
                 '--icon-size': '18px',
                 '--font-size': '14px'
-              } as any}
+              } as CSSProperties}
             >
-              <span style={{ color: '#64748b', fontWeight: 500 }}>记住登录状态</span>
+              <span style={{ color: '#64748b', fontWeight: 500 }}>
+                {isNativeApp ? 'App 将保持登录，退出账号后清除' : '保持登录状态（推荐）'}
+              </span>
             </Checkbox>
           </motion.div>
 
@@ -482,14 +486,14 @@ export default function Login() {
               loading={loading}
               disabled={serverStatus === 'checking'}
               style={{
-                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+                background: '#172033',
                 border: 'none',
                 color: '#fff',
-                borderRadius: 14,
-                height: 52,
-                fontSize: 16,
+                borderRadius: 6,
+                height: 46,
+                fontSize: 15,
                 fontWeight: 700,
-                boxShadow: '0 10px 30px rgba(15, 23, 42, 0.3)',
+                boxShadow: '0 5px 14px rgba(15, 23, 42, 0.18)',
                 opacity: serverStatus === 'checking' ? 0.7 : 1,
                 transition: 'all 0.3s'
               }}
@@ -499,34 +503,6 @@ export default function Login() {
           </motion.div>
         </Form>
 
-        <motion.div variants={itemVariants} style={{ textAlign: 'center', marginTop: 32 }}>
-          {import.meta.env.DEV && (
-            <div style={{
-              fontSize: 12,
-              color: '#94A3B8',
-              marginBottom: 16,
-              padding: '12px 16px',
-              background: '#F8FAFC',
-              borderRadius: 12,
-              lineHeight: 1.8
-            }}>
-              <div style={{ fontWeight: 600, color: '#64748B', marginBottom: 4 }}>测试账号</div>
-              <div>管理员: zhang_manager / 12345678</div>
-              <div>员工: li_audit / 12345678</div>
-            </div>
-          )}
-          <span
-            onClick={() => navigate('/register')}
-            style={{
-              fontSize: 14,
-              color: '#2563EB',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            还没有账号？立即注册 →
-          </span>
-        </motion.div>
       </motion.div>
     </div>
   )

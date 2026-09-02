@@ -115,11 +115,20 @@
 /* 移动端适配 */
 @media (max-width: 768px) {
     .kanban-column {
-        flex: 0 0 85vw;
-        min-width: 85vw;
-        max-width: 85vw;
-        scroll-snap-align: center;
+        flex: 0 0 min(82vw, 292px);
+        min-width: min(82vw, 292px);
+        max-width: min(82vw, 292px);
+        scroll-snap-align: start;
+        border-radius: 12px;
+        background: #eef1f4;
     }
+
+    .column-header { padding: 10px 12px; background: #f8fafb; }
+    .column-icon { font-size: 16px; }
+    .column-title { font-size: 13px; }
+    .column-count { min-width: 20px; padding: 2px 6px; font-size: 10px; }
+    .column-content { padding: 8px; }
+    .column-empty { padding: 24px 12px; }
 }
 
 /* 移动端横屏适配 */

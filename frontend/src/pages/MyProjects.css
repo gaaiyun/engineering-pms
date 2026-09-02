@@ -1,0 +1,29 @@
+.my-projects-page { max-width: 1180px; margin: 0 auto; }
+.my-projects-header { flex-wrap: nowrap; gap: 10px; }
+.my-projects-search { padding: 0 16px 12px; }
+.my-projects-filters { display: flex; gap: 8px; padding: 0 16px; margin-bottom: 20px; overflow-x: auto; }
+.my-projects-list { padding: 0 16px; }
+.my-projects-search .adm-search-bar { --background: #fff; --border-radius: 9px; border: 1px solid #dfe5eb; }
+.my-project-row { min-height: 66px; border-radius: 12px !important; box-shadow: none !important; }
+.project-more { display: none; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #5f6d80; font-size: 20px; cursor: pointer; }
+.my-projects-error { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 20px; color: var(--neutral-600); text-align: center; }
+.my-projects-error strong { color: var(--neutral-900); font-size: 16px; }
+.my-projects-error span { font-size: 13px; }
+.my-projects-error button { border: 1px solid #bfdbfe; border-radius: 8px; padding: 7px 14px; background: #fff; color: #2563eb; cursor: pointer; }
+
+@media (max-width: 700px) {
+  .my-projects-header { display: grid !important; grid-template-columns: auto 1fr auto; align-items: center !important; }
+  .my-projects-header .my-projects-primary { grid-column: 2; justify-self: start; }
+  .my-projects-header .my-projects-import { display: none !important; }
+  .my-projects-header .my-projects-sort { grid-column: 3; grid-row: 2; }
+  .my-projects-search { padding: 0 0 10px; }
+  .my-projects-filters, .my-projects-list { padding-right: 0; padding-left: 0; }
+  .my-project-row { gap: 10px !important; min-height: 62px; margin-bottom: 8px !important; padding: 11px 10px !important; }
+  .my-project-row > div:first-of-type { gap: 10px !important; min-width: 0; }
+  .my-project-row > div:first-of-type > div:first-child { width: 38px !important; height: 38px !important; border-radius: 9px !important; }
+  .my-project-row > div:first-of-type > div:nth-child(2) { min-width: 0; }
+  .my-project-row > div:first-of-type > div:nth-child(2) > div:first-child { font-size: 13px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .my-project-row > div:first-of-type > div:nth-child(2) > div:nth-child(2) { gap: 5px !important; font-size: 10px !important; white-space: nowrap; overflow: hidden; }
+  .project-actions { display: none !important; }
+  .project-more { display: grid; flex: 0 0 auto; }
+}

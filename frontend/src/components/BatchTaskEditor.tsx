@@ -2,7 +2,7 @@
  * 批量任务编辑器 - 三列表格：任务名 | 执行人 | 截止时间
  * 支持动态增删行，一键保存
  */
-import React, { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Button, Input, Toast, Popup, SearchBar, DatePicker } from 'antd-mobile'
 import { IoAddCircleOutline, IoTrashOutline, IoCheckmarkCircle, IoPersonOutline, IoCalendarOutline } from 'react-icons/io5'
 import { useBatchSaveTasks, type BatchTaskItem } from '../lib/api'
@@ -27,41 +27,24 @@ interface RowData {
   deadline: string
 }
 
+function createRows(existingTasks: Props['existingTasks']): RowData[] {
+  if (existingTasks && existingTasks.length > 0) {
+    return existingTasks.map((task, index) => ({
+      key: `existing-${index}`,
+      id: task.id,
+      stage_name: task.stage_name,
+      assignees: task.assignees || [],
+      start_date: task.start_date ? dayjs(task.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+      deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : '',
+    }))
+  }
+  return [{ key: 'new-0', stage_name: '', assignees: [], start_date: dayjs().format('YYYY-MM-DD'), deadline: '' }]
+}
+
 export default function BatchTaskEditor({ visible, onClose, projectId, projectMembers, allUsers, existingTasks = [] }: Props) {
   const batchSave = useBatchSaveTasks()
 
-  const [rows, setRows] = useState<RowData[]>(() => {
-    if (existingTasks.length > 0) {
-      return existingTasks.map((t, i) => ({
-        key: `existing-${i}`,
-        id: t.id,
-        stage_name: t.stage_name,
-        assignees: t.assignees || [],
-        start_date: t.start_date ? dayjs(t.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
-        deadline: t.deadline ? dayjs(t.deadline).format('YYYY-MM-DD') : '',
-      }))
-    }
-    return [{ key: 'new-0', stage_name: '', assignees: [], start_date: dayjs().format('YYYY-MM-DD'), deadline: '' }]
-  })
-
-  const prevVisibleRef = React.useRef(visible)
-  useEffect(() => {
-    const wasHidden = !prevVisibleRef.current
-    prevVisibleRef.current = visible
-    if (!visible || !wasHidden) return
-    if (existingTasks.length > 0) {
-      setRows(existingTasks.map((t, i) => ({
-        key: `existing-${i}`,
-        id: t.id,
-        stage_name: t.stage_name,
-        assignees: t.assignees || [],
-        start_date: t.start_date ? dayjs(t.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
-        deadline: t.deadline ? dayjs(t.deadline).format('YYYY-MM-DD') : '',
-      })))
-    } else {
-      setRows([{ key: 'new-0', stage_name: '', assignees: [], start_date: dayjs().format('YYYY-MM-DD'), deadline: '' }])
-    }
-  }, [visible, existingTasks])
+  const [rows, setRows] = useState<RowData[]>(() => createRows(existingTasks))
 
   const [pickerRow, setPickerRow] = useState<number | null>(null)
   const [searchText, setSearchText] = useState('')
@@ -114,13 +97,14 @@ export default function BatchTaskEditor({ visible, onClose, projectId, projectMe
       await batchSave.mutateAsync({ projectId, tasks })
       Toast.show({ icon: 'success', content: `已保存 ${tasks.length} 个任务` })
       onClose()
-    } catch (e: any) {
-      Toast.show({ icon: 'fail', content: '保存失败: ' + (e.message || '未知错误') })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      Toast.show({ icon: 'fail', content: '保存失败: ' + message })
     }
   }
 
   return (
-    <Popup visible={visible} onMaskClick={onClose} position="bottom"
+    <Popup visible={visible} onMaskClick={onClose} position="bottom" afterShow={() => setRows(createRows(existingTasks))}
       bodyStyle={{ borderTopLeftRadius: 20, borderTopRightRadius: 20, height: 'min(90vh, 90dvh)', maxHeight: '90dvh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

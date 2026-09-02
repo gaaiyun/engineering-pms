@@ -1,0 +1,35 @@
+[Unit]
+Description=EngineeringPMS MCP sidecar
+After=network-online.target pocketbase.service
+Wants=network-online.target pocketbase.service
+
+[Service]
+Type=simple
+User=engineering-pms-mcp
+Group=engineering-pms-mcp
+WorkingDirectory=/opt/engineering-pms-mcp/current
+EnvironmentFile=/etc/engineering-pms-mcp/mcp.env
+ExecStart=/usr/bin/node /opt/engineering-pms-mcp/current/dist/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+RemoveIPC=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/opt/engineering-pms-mcp
+UMask=0077
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

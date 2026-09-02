@@ -22,8 +22,12 @@ function initRealtime() {
   })
 }
 
-// 登录状态变化时重新订阅
+// 只有登录用户发生变化时才重建订阅；authRefresh 更新同一用户的 token/model 不需要重建。
+let realtimeUserId = pb.authStore.isValid ? pb.authStore.model?.id ?? null : null
 pb.authStore.onChange(() => {
+  const nextUserId = pb.authStore.isValid ? pb.authStore.model?.id ?? null : null
+  if (nextUserId === realtimeUserId) return
+  realtimeUserId = nextUserId
   unsubscribeAll()
   if (pb.authStore.isValid) {
     setTimeout(initRealtime, 500)
@@ -31,18 +35,13 @@ pb.authStore.onChange(() => {
   }
 })
 
-// 首次加载
-setTimeout(initRealtime, 1000)
-setTimeout(() => { void syncPushRegistrationForCurrentUser() }, 1400)
-
-
-class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
-  constructor(props: any) {
+class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
     super(props)
     this.state = { hasError: false, error: null }
   }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error }
+  static getDerivedStateFromError(error: unknown) {
+    return { hasError: true, error: error instanceof Error ? error : new Error(String(error)) }
   }
   render() {
     if (this.state.hasError) {
@@ -64,14 +63,35 @@ class GlobalErrorBoundary extends React.Component<{ children: React.ReactNode },
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <GlobalErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ConfigProvider locale={zhCN}>
-          <App />
-        </ConfigProvider>
-      </QueryClientProvider>
-    </GlobalErrorBoundary>
-  </React.StrictMode>,
-)
+async function validateRestoredSession() {
+  if (!pb.authStore.isValid) return
+  try {
+    await Promise.race([
+      pb.collection('users').authRefresh(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('auth refresh timeout')), 5000)),
+    ])
+  } catch (error: unknown) {
+    const status = (error as { status?: number })?.status
+    // 只有服务端明确拒绝凭据时才登出；短暂离线或超时不应破坏“保持登录”。
+    if (status === 400 || status === 401 || status === 403) pb.authStore.clear()
+  }
+}
+
+function renderApp() {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <GlobalErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <ConfigProvider locale={zhCN}>
+            <App />
+          </ConfigProvider>
+        </QueryClientProvider>
+      </GlobalErrorBoundary>
+    </React.StrictMode>,
+  )
+
+  setTimeout(initRealtime, 1000)
+  setTimeout(() => { void syncPushRegistrationForCurrentUser() }, 1400)
+}
+
+void validateRestoredSession().finally(renderApp)
