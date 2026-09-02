@@ -203,4 +203,74 @@ const invalidScope = await request('/api/custom/agent/v1/admin/service-accounts'
 })
 passed('人员 scope 不允许项目范围限制', invalidScope, 400)
 
+// PocketBase 按大小写不敏感解析登录身份，人员查重必须用同一口径，
+// 否则会建出用户名或邮箱仅大小写不同、拿着自己的临时密码也登不进去的幽灵账号。
+const caseBasePayload = { username: 'QaCaseUser', name: '大小写基准', email: 'qa-case-user@example.invalid', role: 'employee', department: '工程部' }
+const caseBase = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: { action: 'person_create', request_id: key('request-case-base'), idempotency_key: key('person-case-base'), payload: caseBasePayload },
+})
+passed('建立大小写基准账号', caseBase, 200)
+
+const caseDuplicate = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: {
+    action: 'person_create', request_id: key('request-case-dup'), idempotency_key: key('person-case-dup'),
+    payload: { ...caseBasePayload, username: 'qacaseuser', name: '大小写重名', email: 'qa-case-dup@example.invalid' },
+  },
+})
+passed('仅大小写不同的用户名必须冲突', caseDuplicate, 409)
+assert.equal(caseDuplicate.data.error.code, 'PERSON_CONFLICT')
+
+// 存量账号是人工建的，邮箱可能带大写；Agent 会把入参转小写，必须仍能查出冲突。
+const legacyMailPassword = 'QA-legacy-mail-2026'
+const legacyMail = await request('/api/collections/users/records', {
+  method: 'POST', token: superToken,
+  body: { username: 'qa_legacy_mail', email: 'QA-Legacy@example.invalid', emailVisibility: true, password: legacyMailPassword, passwordConfirm: legacyMailPassword, name: '历史大写邮箱', role: 'employee', department: '工程部', is_active: true },
+})
+passed('创建历史大写邮箱账号', legacyMail, 200)
+
+const mailDuplicate = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: {
+    action: 'person_create', request_id: key('request-case-mail'), idempotency_key: key('person-case-mail'),
+    payload: { ...caseBasePayload, username: 'qa_case_mail', name: '邮箱大小写重名', email: 'qa-legacy@example.invalid' },
+  },
+})
+passed('与历史大写邮箱仅大小写不同必须冲突', mailDuplicate, 409)
+assert.equal(mailDuplicate.data.error.code, 'PERSON_CONFLICT')
+
+const renameTarget = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: {
+    action: 'person_create', request_id: key('request-case-rename-src'), idempotency_key: key('person-case-rename-src'),
+    payload: { username: 'qa_rename_src', name: '待改名', email: 'qa-rename-src@example.invalid', role: 'employee', department: '工程部' },
+  },
+})
+passed('创建待改名账号', renameTarget, 200)
+
+const renameConflict = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: { action: 'person_update', request_id: key('request-case-rename'), idempotency_key: key('person-case-rename'), payload: { user_id: renameTarget.data.result.id, username: 'qacaseuser' } },
+})
+passed('改名到已有账号的大小写变体必须冲突', renameConflict, 409)
+assert.equal(renameConflict.data.error.code, 'PERSON_CONFLICT')
+
+// 幽灵账号回归：冲突被拒后基准账号必须唯一，且能用自己的临时密码登录。
+const caseList = await request(`/api/collections/users/records?perPage=200&filter=${encodeURIComponent('username ~ "qacaseuser"')}`, { token: superToken })
+passed('大小写基准账号唯一性查询', caseList, 200)
+assert.equal(caseList.data.items.length, 1)
+
+const caseLogin = await request('/api/collections/users/auth-with-password', { method: 'POST', body: { identity: 'qacaseuser', password: caseBase.data.result.temporary_password } })
+passed('基准账号可用自身临时密码登录', caseLogin, 200)
+assert.equal(caseLogin.data.record.id, caseBase.data.result.id)
+
+// 查重不能把账号自己算成冲突：改自身用户名的大小写必须放行。
+const selfRecase = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: { action: 'person_update', request_id: key('request-case-self'), idempotency_key: key('person-case-self'), payload: { user_id: caseBase.data.result.id, username: 'QACASEUSER' } },
+})
+passed('改成自身用户名的大小写变体应放行', selfRecase, 200)
+assert.equal(selfRecase.data.result.username, 'QACASEUSER')
+
 console.log(JSON.stringify({ passed: results.length, cases: results }))

@@ -96,11 +96,23 @@ function validatePersonInput(payload, partial) {
   return { username: username, name: name, email: email, role: role, department: department }
 }
 
+// 登录身份按大小写不敏感解析，而 Agent 走 dao.saveRecord 绕过了 REST 层的唯一性校验，
+// 所以查重必须与登录同口径；精确匹配会放过仅大小写不同的账号，建出永远登不进去的记录。
 function assertUniquePerson(dao, username, email, exceptId) {
-  const suffix = exceptId ? ' && id != {:exceptId}' : ''
-  const params = exceptId ? { exceptId: exceptId } : {}
-  if (username && dao.findRecordsByFilter('users', `username = {:username}${suffix}`, '', 1, 0, { ...params, username: username }).length > 0) throw new Error('PERSON_CONFLICT')
-  if (email && dao.findRecordsByFilter('users', `email = {:email}${suffix}`, '', 1, 0, { ...params, email: email }).length > 0) throw new Error('PERSON_CONFLICT')
+  if (username) {
+    let holder = null
+    try { holder = dao.findAuthRecordByUsername('users', username) } catch (_) { holder = null }
+    if (holder && holder.id !== exceptId) throw new Error('PERSON_CONFLICT')
+  }
+  if (email) {
+    const wanted = email.toLowerCase()
+    let candidates = []
+    // `~` 是大小写不敏感的包含匹配，只用来收窄候选；相等判断仍在下面逐条精确比较。
+    try { candidates = dao.findRecordsByFilter('users', 'email ~ {:email}', '', 200, 0, { email: wanted }) } catch (_) { candidates = [] }
+    for (let i = 0; i < candidates.length; i += 1) {
+      if (candidates[i].id !== exceptId && candidates[i].getString('email').toLowerCase() === wanted) throw new Error('PERSON_CONFLICT')
+    }
+  }
 }
 
 function operationPayload(action, payload) {
