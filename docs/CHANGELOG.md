@@ -6,6 +6,10 @@
 - 查重改用与登录同口径的 `findAuthRecordByUsername`；邮箱先用大小写不敏感匹配收窄候选，再逐条精确比较。改自身用户名的大小写仍然放行，不会误拦。
 - Web 后台创建路径由 PocketBase REST 层校验拦截（`validation_invalid_username`），不受该缺陷影响，本次未改动前端。
 - 人员维护隔离 QA 由 32 项增加到 41 项，新增大小写重名、历史大写邮箱冲突、改名冲突、幽灵账号回归和自身改名放行用例；`41/41` 通过，前端 `204/204`、MCP `14/14` 无回归。
+- 生产部署前创建冷备 `/www/server/pocketbase/maintenance_backups/20260902_164021_person_unique_ci`，`data.db` 与 `logs.db` quick check 均为 `ok`。
+- 2026-09-02 16:54 CST 部署提交 `0bd61b4` 的 `agent_api.pb.js`，生产 SHA-256 为 `66c181c16ed240d21f238fb7db251d6f1cdbebb283c0bbd08efab21af53377bb`；`user_auth_guard.pb.js` 未改动。
+- 部署后验收：systemd `active`、health `200`；自定义路由返回 `401` 而不存在路由返回 `404`，确认两个 Hook 均已加载；`data.db` 与 `logs.db` quick check 为 `ok`，业务数据保持 12 用户、4 项目、9 任务、33 通知不变；Web、`/pb/api/health`、`/mcp/healthz` 均 `200`，未认证 MCP 与 Agent 请求返回 `401`，TLS 校验通过。
+- 生产名册复核：现有账号不存在用户名或邮箱的大小写撞名，无需数据修复。
 
 ## 3.06 删除影响预检兼容修复 — 2026-09-02
 
