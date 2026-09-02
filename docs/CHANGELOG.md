@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.06 删除影响预检兼容修复 — 2026-09-02
+
+- 修复生产历史 `tasks` 表缺少 `approved_by` 字段时，人员删除影响预检会被不存在字段阻断的问题；Hook 现在按实际 collection schema 过滤引用字段。
+- 生产部署前创建冷备 `/www/server/pocketbase/maintenance_backups/20260902_144354_delete_impact`，`data.db` quick check 为 `ok`，本次未写入或删除业务数据。
+- 生产 Hook 当前由提交 `7bf595f` 提供，`agent_api.pb.js` 与 `user_auth_guard.pb.js` SHA-256 已同步到宝塔手册和数据库设计文档。
+- 隔离 schema 兼容 QA 返回 `status=200, can_delete=true`；人员维护 QA `32/32`，临时数据库、账号、服务和端口均已清理。
+
 ## 3.06 人员重配与交付验收增量 — 2026-09-02
 
 - 增加受控 Agent 人员维护：创建、修改/重置密码、停用和删除预览；服务端严格校验 `people_manage`、全项目范围、admin 所有者和业务引用。

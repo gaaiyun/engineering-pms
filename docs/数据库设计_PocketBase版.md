@@ -87,10 +87,12 @@ sqlite3 -readonly pb_data/logs.db 'PRAGMA quick_check;'
 
 生产账号同步不写 migration：真实姓名、用户名和初始密码属于私有部署数据，必须通过管理员界面或忽略的私有脚本幂等写入。
 
-## 生产状态（2026-08-20）
+## 生产状态（2026-09-02）
 
-- 提交 `c4c298f` 已于 2026-08-20 06:45 CST 部署；发布前备份的精确路径记录于私有运维接力文档。
+- Web/MCP 基线提交 `c4c298f` 已于 2026-08-20 06:45 CST 部署；删除影响预检兼容修复提交 `7bf595f` 已于 2026-09-02 部署。
 - `data.db` 和 `logs.db` 通过 `PRAGMA quick_check`；生产 Realtime SSE 返回 200。
-- 生产 `agent_api.pb.js` SHA-256 为 `ccd32069f3d35d8d388719c55cf3bec207ff3d307c731f425358288746ea0dad`。
-- 生产 `user_auth_guard.pb.js` SHA-256 为 `7093d50869446d783e7f9a94f3aaa85a5e344c05c317e2e5ac4de136b73afd7a`。
+- 当前生产 `agent_api.pb.js` SHA-256 为 `f055e0ca790570767feb7909003404bcd09928b4c678b71950de43bb9510a88b`。
+- 当前生产 `user_auth_guard.pb.js` SHA-256 为 `4ea80c4a870e61aa665d26a74b6f4b55eec31c8d5b4184b8d804572a990534b3`。
+- 本次 Hook 兼容修复前冷备为 `/www/server/pocketbase/maintenance_backups/20260902_144354_delete_impact`；未写入或删除 `data.db`、`storage` 或历史账号。
+- 生产历史 `tasks` 表没有 `approved_by` 字段；删除影响预检按实际 collection schema 选择引用字段，避免依赖未应用的历史迁移。
 - 生产迁移历史与仓库早期历史存在分叉，后续只允许按 `_migrations` 差异增量发布，禁止整目录覆盖。
