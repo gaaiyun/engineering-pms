@@ -12,7 +12,7 @@
 
 ## 工具边界
 
-MCP 只通过受控业务 API 操作项目、任务、评论、交接和查询；不能直接写 SQLite、不能修改 AI 配置或服务器设置。生产 `tools/list` 实测返回 24 个业务工具，其中人员维护工具需要 `people_manage` scope，且服务账号所有者必须是已完成首次改密的全项目 admin。账号只能创建 employee/manager，不能通过 Agent 新建或删除 admin。
+MCP 只通过受控业务 API 操作项目、任务、评论、交接和查询；不能直接写 SQLite、不能修改 AI 配置或服务器设置。生产 `tools/list` 实测返回 24 个业务工具，其中人员维护工具需要管理员在创建服务账号时显式授予 `people_manage` scope，迁移不会给既有服务账号自动扩权；服务账号所有者必须是已完成首次改密的全项目 admin。账号只能创建 employee/manager，不能通过 Agent 新建或删除 admin。
 
 人员维护工具包括 `engineering_pms_list_people`、`engineering_pms_create_person`、`engineering_pms_update_person`、`engineering_pms_disable_person` 和 `engineering_pms_preview_delete_person`。创建和重置密码时，临时密码仅在当次响应显示一次，不写入 operation 结果、审计字段或服务端调试日志；交接给员工后应立即改密。永久删除必须先停用，且账号没有任何项目、任务、交接、评论、通知或审计引用；有历史的账号只能修改或停用，以保留责任链。
 
@@ -32,7 +32,7 @@ journalctl -u engineering-pms-mcp --since "15 minutes ago" --no-pager
 
 发布新版本时，将构建后的 `mcp-server/dist`、`package.json` 和 `package-lock.json` 放入新的 `/opt/engineering-pms-mcp/releases/<timestamp>`，在该目录执行 `npm ci --omit=dev`。确认 `dist/index.js` 和 production dependencies 完整后，再原子切换 `current` 符号链接并重启服务。release 目录归 root 所有，运行用户只保留读取和执行权限。失败时切回上一 release 目录，执行 `systemctl restart engineering-pms-mcp`。修改 Nginx 前必须备份站点配置，`nginx -t` 成功后才 reload。
 
-3.06 生产验收：MCP 单测 `14/14`，人员维护隔离 QA `41/41`，真实 `initialize`、`tools/list`（24 个工具）和健康检查通过；无认证 MCP POST 请求返回 401。
+3.06 生产验收：MCP 单测 `14/14`，人员维护隔离 QA `47/47`，真实 `initialize`、`tools/list`（24 个工具）和健康检查通过；有效业务动作的无认证 Agent 请求返回 401。
 
 ## Agent 使用边界
 

@@ -50,6 +50,8 @@
 
 预期结果：能看到 24 个工具；摘要和项目列表能返回。若项目或任务仍有历史测试数据，先让 Agent 只读列出数量和来源，不要直接删除；若显示 0 个工具，检查 JSON 格式、URL、`Authorization` 是否含 `Bearer ` 前缀，保存后重启 WorkBuddy。
 
+若提示 `certificate has expired`，先完全退出并重新启动 WorkBuddy，再用系统浏览器打开 MCP 健康检查地址。不得关闭 TLS 校验或改用 HTTP。若健康检查正常但连接仍失败，应使用交付包内最新的 `workbuddy.mcp.json` 覆盖旧配置并重启；服务端轮换 Key 后，旧配置会明确返回 401，不能继续复用旧文件。
+
 ## 三、工具分组
 
 | 用途 | 工具 |

@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.06 人员权限与会话一致性修复 — 2026-09-02
+
+- `people_manage` 仍是服务账号 schema 的可选 scope，但迁移不再扫描并静默扩权既有服务账号；只有管理员创建或重新签发服务账号时才可显式授予。
+- 新增 `1788336100_normalize_user_department_select.js`，把新安装中的自由文本 `users.department` 安全规范为与生产一致的七项单选；发现未知存量部门时迁移会中止，不猜测映射。
+- Agent 修改 employee/manager 角色时刷新 `tokenKey`，旧登录会话立即失效；管理员删除影响预检对不存在账号返回 `404 / USER_NOT_FOUND`，不再误报内部错误。
+- 人员维护隔离 QA 从 `41/41` 增加到 `47/47`，新增 schema 枚举、非法部门拒绝、角色变更旧会话失效和不存在账号删除预检覆盖；临时数据库、账号、服务和 18091 端口均已清理。
+- 回归结果：前端 `204/204`、Playwright 独占运行 `30/30`、MCP `14/14`、Vite production build、ESLint 和 58 个 Hook/迁移脚本语法检查通过。
+- 生产部署前冷备 `/www/server/pocketbase/maintenance_backups/20260902_190013_people_scope_session`，备份与部署后两库 `quick_check=ok`；2026-09-02 19:02 CST 部署提交 `c7daa05`。
+- 生产 Hook SHA-256：`agent_api.pb.js` 为 `b63b7d6b841526d24d74bbdc7b95b977d20149be2357b025037438129d5a8bd9`，`user_auth_guard.pb.js` 为 `6b97e3e36d0431ea97ab5ef890b611e9e002c709d9486f4773dbc800fa009fe1`；新迁移已登记。
+- 部署后只读验收保持 12 用户、4 项目、9 任务、33 通知不变；部门为七项单选，服务账号数量和既有 scope 不变；Web 深链、`/pb/api/health`、`/mcp/healthz` 均为 200，MCP `initialize` 为 3.06、`tools/list` 为 24，日志门禁为 0 条错误。
+- 私有 MCP Key 因诊断输出暴露风险于 19:08 CST 主动轮换；旧 Key 实测返回 401，新 Key 的 `initialize` 返回 200。服务器环境文件和获准的私有 WorkBuddy/交付配置已同步，Key 未写入仓库。
+
 ## 3.06 人员查重大小写修复 — 2026-09-02
 
 - 修复 Agent 创建员工和改名时用户名、邮箱查重区分大小写的问题。PocketBase 按大小写不敏感解析登录身份，而 Agent 走 `dao.saveRecord` 绕过 REST 层唯一性校验，此前已有 `SunQi` 时仍可再建 `sunqi`：接口返回成功并下发临时密码，该账号却无法通过认证；把在职员工改名成已有账号的大小写变体，还会让其登录中断。
