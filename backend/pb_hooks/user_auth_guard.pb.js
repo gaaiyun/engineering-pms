@@ -110,25 +110,31 @@ routerAdd('POST', '/api/custom/auth/change-password', (c) => {
 }, $apis.requireRecordAuth('users'))
 
 var USER_REFERENCE_DEFINITIONS = [
-  { collection: 'projects', label: '项目', filter: 'manager = {:userId} || members ?= {:userId} || created_by = {:userId}' },
-  { collection: 'tasks', label: '任务', filter: 'assignees ?= {:userId} || created_by = {:userId} || next_assignees ?= {:userId} || approved_by = {:userId}' },
-  { collection: 'handoffs', label: '交接', filter: 'submitter = {:userId} || reviewer = {:userId} || proposed_assignees ?= {:userId}' },
-  { collection: 'audit_logs', label: '审计记录', filter: 'operator = {:userId} || reviewed_by = {:userId}' },
-  { collection: 'comments', label: '评论与提及', filter: 'author = {:userId} || mentions ?= {:userId}' },
-  { collection: 'notifications', label: '通知', filter: 'user = {:userId}' },
-  { collection: 'progress_logs', label: '进度记录', filter: 'user = {:userId} || next_assignees ?= {:userId}' },
-  { collection: 'flower_logs', label: '协作记录', filter: 'user = {:userId}' },
-  { collection: 'ai_summaries', label: 'AI 摘要', filter: 'target_user = {:userId}' },
-  { collection: 'app_settings', label: '系统设置记录', filter: 'updated_by = {:userId}' },
-  { collection: 'service_accounts', label: 'Agent 服务账号', filter: 'owner = {:userId}' },
-  { collection: 'attachments', label: '附件', filter: 'uploader = {:userId}' },
+  { collection: 'projects', label: '项目', fields: [['manager', '='], ['members', '?='], ['created_by', '=']] },
+  { collection: 'tasks', label: '任务', fields: [['assignees', '?='], ['created_by', '='], ['next_assignees', '?='], ['approved_by', '=']] },
+  { collection: 'handoffs', label: '交接', fields: [['submitter', '='], ['reviewer', '='], ['proposed_assignees', '?=']] },
+  { collection: 'audit_logs', label: '审计记录', fields: [['operator', '='], ['reviewed_by', '=']] },
+  { collection: 'comments', label: '评论与提及', fields: [['author', '='], ['mentions', '?=']] },
+  { collection: 'notifications', label: '通知', fields: [['user', '=']] },
+  { collection: 'progress_logs', label: '进度记录', fields: [['user', '='], ['next_assignees', '?=']] },
+  { collection: 'flower_logs', label: '协作记录', fields: [['user', '=']] },
+  { collection: 'ai_summaries', label: 'AI 摘要', fields: [['target_user', '=']] },
+  { collection: 'app_settings', label: '系统设置记录', fields: [['updated_by', '=']] },
+  { collection: 'service_accounts', label: 'Agent 服务账号', fields: [['owner', '=']] },
+  { collection: 'attachments', label: '附件', fields: [['uploader', '=']] },
 ]
 
 function getUserDeleteImpact(dao, userId) {
   const references = []
   USER_REFERENCE_DEFINITIONS.forEach((definition) => {
-    try { dao.findCollectionByNameOrId(definition.collection) } catch (_) { return }
-    if (dao.findRecordsByFilter(definition.collection, definition.filter, '', 1, 0, { userId: userId }).length > 0) {
+    let collection
+    try { collection = dao.findCollectionByNameOrId(definition.collection) } catch (_) { return }
+    const terms = definition.fields
+      .filter((field) => {
+        try { return !!collection.schema.getFieldByName(field[0]) } catch (_) { return false }
+      })
+      .map((field) => `${field[0]} ${field[1]} {:userId}`)
+    if (terms.length > 0 && dao.findRecordsByFilter(definition.collection, terms.join(' || '), '', 1, 0, { userId: userId }).length > 0) {
       references.push({ collection: definition.collection, label: definition.label })
     }
   })
@@ -143,16 +149,6 @@ onRecordBeforeDeleteRequest((e) => {
   if (!user) return
   const userId = user.id
   if (user.getBool('is_active')) throw new BadRequestError('永久删除前必须先停用账号')
-  if (user.getString('role') === 'admin' && user.getBool('is_active')) {
-    const otherAdmins = $app.dao().findRecordsByFilter(
-      'users',
-      `id != "${userId}" && role = "admin" && is_active = true`,
-      '',
-      1,
-      0,
-    )
-    if (otherAdmins.length === 0) throw new BadRequestError('系统必须保留至少一个启用中的管理员')
-  }
   const runtime = $app.store().get('__epmsUserGuard')
   if (runtime.getUserDeleteImpact($app.dao(), userId).length > 0) throw new BadRequestError('该账号已有业务记录，只能停用或重新配置以保留历史责任人')
 }, 'users')

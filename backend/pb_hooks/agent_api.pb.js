@@ -52,23 +52,29 @@ function requirePeopleManager(dao, agent) {
 
 function userReferenceTypes(dao, userId) {
   const references = [
-    ['projects', 'manager = {:userId} || members ?= {:userId} || created_by = {:userId}'],
-    ['tasks', 'assignees ?= {:userId} || created_by = {:userId} || next_assignees ?= {:userId} || approved_by = {:userId}'],
-    ['handoffs', 'submitter = {:userId} || reviewer = {:userId} || proposed_assignees ?= {:userId}'],
-    ['audit_logs', 'operator = {:userId} || reviewed_by = {:userId}'],
-    ['comments', 'author = {:userId} || mentions ?= {:userId}'],
-    ['notifications', 'user = {:userId}'],
-    ['progress_logs', 'user = {:userId} || next_assignees ?= {:userId}'],
-    ['flower_logs', 'user = {:userId}'],
-    ['ai_summaries', 'target_user = {:userId}'],
-    ['app_settings', 'updated_by = {:userId}'],
-    ['service_accounts', 'owner = {:userId}'],
-    ['attachments', 'uploader = {:userId}'],
+    ['projects', [['manager', '='], ['members', '?='], ['created_by', '=']]],
+    ['tasks', [['assignees', '?='], ['created_by', '='], ['next_assignees', '?='], ['approved_by', '=']]],
+    ['handoffs', [['submitter', '='], ['reviewer', '='], ['proposed_assignees', '?=']]],
+    ['audit_logs', [['operator', '='], ['reviewed_by', '=']]],
+    ['comments', [['author', '='], ['mentions', '?=']]],
+    ['notifications', [['user', '=']]],
+    ['progress_logs', [['user', '='], ['next_assignees', '?=']]],
+    ['flower_logs', [['user', '=']]],
+    ['ai_summaries', [['target_user', '=']]],
+    ['app_settings', [['updated_by', '=']]],
+    ['service_accounts', [['owner', '=']]],
+    ['attachments', [['uploader', '=']]],
   ]
   const found = []
   references.forEach((reference) => {
-    try { dao.findCollectionByNameOrId(reference[0]) } catch (_) { return }
-    if (dao.findRecordsByFilter(reference[0], reference[1], '', 1, 0, { userId: userId }).length > 0) found.push(reference[0])
+    let collection
+    try { collection = dao.findCollectionByNameOrId(reference[0]) } catch (_) { return }
+    const terms = reference[1]
+      .filter((term) => {
+        try { return !!collection.schema.getFieldByName(term[0]) } catch (_) { return false }
+      })
+      .map((term) => `${term[0]} ${term[1]} {:userId}`)
+    if (terms.length > 0 && dao.findRecordsByFilter(reference[0], terms.join(' || '), '', 1, 0, { userId: userId }).length > 0) found.push(reference[0])
   })
   return found
 }
