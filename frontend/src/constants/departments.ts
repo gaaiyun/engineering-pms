@@ -1,4 +1,4 @@
-export const DEPARTMENTS = ['工程部', '审计部', '财务部', '设计院', '监理部', '管理层'] as const
+export const DEPARTMENTS = ['工程部', '财务部', '综合部', '审计部', '设计院', '监理部', '管理层'] as const
 
 export type Department = (typeof DEPARTMENTS)[number]
 

@@ -31,7 +31,7 @@ import BatchTaskEditor from '../../components/BatchTaskEditor'
 import { getProfessionalAvatarOptions, getUserAvatarUrl } from '../../lib/avatar'
 import { IoCameraOutline, IoClose } from 'react-icons/io5'
 import { logoutWithDeviceCleanup } from '../../lib/pushNotifications'
-import { DEPARTMENT_OPTIONS, type Department } from '../../constants/departments'
+import { DEPARTMENTS, DEPARTMENT_OPTIONS, type Department } from '../../constants/departments'
 import './AdminDashboard.css'
 
 interface User {
@@ -86,9 +86,14 @@ interface UserFormValues {
   email: string
   role: string[] | string
   department: string[] | string
-  is_active?: string[] | string
   password?: string
   passwordConfirm?: string
+}
+
+interface UserDeleteImpact {
+  can_delete: boolean
+  reasons: string[]
+  references: Array<{ collection: string; label: string }>
 }
 
 const AdminDashboard = ({ section }: AdminDashboardProps) => {
@@ -300,19 +305,13 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
       email: user.email,
       role: user.role ? [user.role] : [],
       department: user.department ? [user.department] : [],
-      is_active: [user.is_active === false ? 'disabled' : 'enabled'],
     })
     setShowUserModal(true)
   }
 
   const handleUserUpdate = async (values: UserFormValues) => {
     if (!currentUser) return
-    const isActive = (Array.isArray(values.is_active) ? values.is_active[0] : values.is_active) !== 'disabled'
     const nextRole = Array.isArray(values.role) ? values.role[0] : values.role
-    if (currentUser.id === authUser?.id && !isActive) {
-      Toast.show({ icon: 'fail', content: '不能停用当前登录账号' })
-      return
-    }
     if (currentUser.id === authUser?.id && nextRole !== 'admin') {
       Toast.show({ icon: 'fail', content: '不能降低当前登录管理员的角色' })
       return
@@ -330,7 +329,6 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
         emailVisibility: true,
         role: nextRole,
         department: Array.isArray(values.department) ? values.department[0] : values.department,
-        is_active: isActive,
       }
       if (values.password) {
         updateData.password = values.password
@@ -385,9 +383,33 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
       Toast.show({ icon: 'fail', content: '不能删除当前登录账号' })
       return
     }
+    setUserSaving(true)
+    let impact: UserDeleteImpact
+    try {
+      impact = await pb.send<UserDeleteImpact>('/api/custom/admin/users/delete-impact', {
+        method: 'POST',
+        body: { user_id: currentUser.id },
+      })
+    } catch (error: unknown) {
+      setUserSaving(false)
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '无法检查删除条件') })
+      return
+    }
+    setUserSaving(false)
+    if (!impact.can_delete) {
+      const references = impact.references.map(item => item.label).join('、')
+      await Dialog.alert({
+        title: '该账号需要保留',
+        content: references
+          ? `已存在${references}，无法永久删除。你仍可修改姓名、账号、部门和角色，或保持停用；历史责任记录不会丢失。`
+          : `${impact.reasons.join('、') || '当前状态'}不允许永久删除，请先停用后再试。`,
+        confirmText: '知道了',
+      })
+      return
+    }
     const confirmed = await Dialog.confirm({
       title: '永久删除账号',
-      content: `仅无任何业务记录的测试账号可以永久删除“${currentUser.name || currentUser.username}”。已有项目、任务、审计、通知或评论时，系统会要求改为停用。`,
+      content: `“${currentUser.name || currentUser.username}”没有任何业务记录。删除后账号不可恢复，确定继续吗？`,
       confirmText: '确认删除',
       cancelText: '取消',
     })
@@ -399,7 +421,7 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
       setShowUserModal(false)
       refreshAll()
     } catch (error: unknown) {
-      Toast.show({ icon: 'fail', content: `${getPocketBaseErrorMessage(error, '删除失败')}；有关联业务数据时请使用“停用账号”` })
+      Toast.show({ icon: 'fail', content: `${getPocketBaseErrorMessage(error, '删除失败')}；请重新检查账号状态和业务关联` })
     } finally {
       setUserSaving(false)
     }
@@ -422,11 +444,32 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
     try {
       const updated = await pb.collection('users').update<User>(currentUser.id, { is_active: false })
       setCurrentUser(updated)
-      userForm.setFieldsValue({ is_active: ['disabled'] })
       Toast.show({ icon: 'success', content: '账号已停用，员工将不能继续登录' })
       await refreshAll()
     } catch (error: unknown) {
       Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '停用失败') })
+    } finally {
+      setUserSaving(false)
+    }
+  }
+
+  const handleEnableUser = async () => {
+    if (!currentUser) return
+    const confirmed = await Dialog.confirm({
+      title: '重新启用员工账号',
+      content: `启用“${currentUser.name || currentUser.username}”后，该员工可以继续登录；如需重置密码，请在表单中同时填写新密码。`,
+      confirmText: '确认启用',
+      cancelText: '取消',
+    })
+    if (!confirmed) return
+    setUserSaving(true)
+    try {
+      const updated = await pb.collection('users').update<User>(currentUser.id, { is_active: true })
+      setCurrentUser(updated)
+      Toast.show({ icon: 'success', content: '账号已重新启用' })
+      await refreshAll()
+    } catch (error: unknown) {
+      Toast.show({ icon: 'fail', content: getPocketBaseErrorMessage(error, '启用失败') })
     } finally {
       setUserSaving(false)
     }
@@ -438,6 +481,14 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
     return users.filter(user => [user.name, user.username, user.email, user.department, user.role]
       .some(value => String(value || '').toLowerCase().includes(keyword)))
   }, [userSearch, users])
+
+  const groupedUsers = useMemo(() => {
+    const known = new Set<string>(DEPARTMENTS)
+    const departments = [...DEPARTMENTS, ...Array.from(new Set(filteredUsers.map(user => user.department || '未分部门').filter(value => !known.has(value))))]
+    return departments
+      .map(department => ({ department, users: filteredUsers.filter(user => (user.department || '未分部门') === department) }))
+      .filter(group => group.users.length > 0)
+  }, [filteredUsers])
 
   // ---- 项目状态 ----
 
@@ -1058,37 +1109,39 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
               <span>{filteredUsers.length} / {users.length}</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {filteredUsers.map((user, i) => (
-                <div key={user.id} className="fade-in admin-user-row" role="button" tabIndex={0}
-                  onClick={() => handleEditUser(user)}
-                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') handleEditUser(user) }}
-                  style={{
-                    animationDelay: `${i * 0.05}s`,
-                    background: 'white', padding: 16, borderRadius: 16,
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)', border: '1px solid #f1f5f9'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <Avatar
-                      src={getUserAvatarUrl(user)}
-                      style={{ '--size': '48px', '--border-radius': '12px' }}
-                    />
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 600, color: '#1e293b' }}>{user.name || user.username}</div>
-                      <div style={{ fontSize: 13, color: '#94a3b8' }}>{user.email}</div>
-                    </div>
+            <div className="admin-user-groups">
+              {groupedUsers.map(group => (
+                <section key={group.department} className="admin-user-group" aria-label={`${group.department}成员`}>
+                  <header className="admin-user-group__header">
+                    <h3>{group.department}</h3>
+                    <span>{group.users.length} 人</span>
+                  </header>
+                  <div className="admin-user-group__list">
+                    {group.users.map((user, i) => (
+                      <div key={user.id} className="fade-in admin-user-row" role="button" tabIndex={0}
+                        onClick={() => handleEditUser(user)}
+                        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') handleEditUser(user) }}
+                        style={{ animationDelay: `${i * 0.04}s` }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                          <Avatar src={getUserAvatarUrl(user)} style={{ '--size': '48px', '--border-radius': '12px' }} />
+                          <div>
+                            <div style={{ fontSize: 16, fontWeight: 600, color: '#1e293b' }}>{user.name || user.username}</div>
+                            <div style={{ fontSize: 13, color: '#94a3b8' }}>{user.email}</div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', background: '#eff6ff', padding: '4px 10px', borderRadius: 20, display: 'inline-block', marginBottom: 4 }}>
+                            {USER_ROLE_LABELS[user.role || ''] || '未设置'}
+                          </div>
+                          <div style={{ fontSize: 12, color: user.is_active === false ? '#b45309' : '#94a3b8' }}>
+                            {user.is_active === false ? '已停用' : '正常使用'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', background: '#eff6ff', padding: '4px 10px', borderRadius: 20, display: 'inline-block', marginBottom: 4 }}>
-                      {USER_ROLE_LABELS[user.role || ''] || '未设置'}
-                    </div>
-                    <div style={{ fontSize: 12, color: user.is_active === false ? '#b45309' : '#94a3b8' }}>
-                      {user.department}{user.is_active === false ? ' · 已停用' : ''}
-                    </div>
-                  </div>
-                </div>
+                </section>
               ))}
               {filteredUsers.length === 0 && (
                 <div className="admin-user-empty">没有符合条件的成员</div>
@@ -1563,9 +1616,9 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
             <Form.Item name='role' label='系统角色' rules={[{ required: true, message: '请选择角色' }]}>
               <Selector disabled={currentUser?.id === authUser?.id} options={[{ label: '普通员工', value: 'employee' }, { label: '项目经理', value: 'manager' }, { label: '管理员', value: 'admin' }]} />
             </Form.Item>
-            <Form.Item name='is_active' label='账号状态' rules={[{ required: true }]}>
-              <Selector options={[{ label: '正常使用', value: 'enabled' }, { label: '停用账号', value: 'disabled' }]} />
-            </Form.Item>
+            <div className="admin-user-form-note">
+              当前状态：{currentUser?.is_active === false ? '已停用' : '正常使用'}。正式成员离职请停用账号；有项目、任务或历史记录的账号仍可重新修改资料，但不会被永久删除。
+            </div>
             {currentUser?.id !== authUser?.id && (
               <div className="admin-user-form-grid">
                 <Form.Item name='password' label='重置密码' rules={[{ min: 8, message: '新密码至少 8 位' }]}><Input type='password' placeholder="不修改请留空" /></Form.Item>
@@ -1575,7 +1628,10 @@ const AdminDashboard = ({ section }: AdminDashboardProps) => {
           </Form>
           <footer>
             {currentUser?.id !== authUser?.id && (currentUser?.is_active === false
-              ? <Button fill="none" className="admin-user-delete" onClick={handleDeleteUser}><IoTrashOutline />永久删除</Button>
+              ? <div className="admin-user-account-actions">
+                  <Button fill="none" className="admin-user-enable" onClick={handleEnableUser}>重新启用</Button>
+                  <Button fill="none" className="admin-user-delete" onClick={handleDeleteUser}><IoTrashOutline />永久删除</Button>
+                </div>
               : <Button fill="none" className="admin-user-disable" onClick={handleDisableUser}>停用账号</Button>)}
             <span />
             <Button fill="outline" onClick={() => setShowUserModal(false)}>取消</Button>
