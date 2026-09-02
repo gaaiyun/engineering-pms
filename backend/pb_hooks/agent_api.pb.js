@@ -1,11 +1,14 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-var AGENT_HIGH_IMPACT_ACTIONS = ['project_archive', 'task_delete', 'task_bulk_reassign', 'handoff_decide']
+var AGENT_HIGH_IMPACT_ACTIONS = ['project_archive', 'task_delete', 'task_bulk_reassign', 'handoff_decide', 'person_delete']
 var AGENT_ACTION_SCOPES = {
   project_create: 'write', project_update: 'write', project_archive: 'archive',
   task_create: 'write', task_update: 'write', task_complete: 'write', task_block: 'write', task_unblock: 'write',
   task_delete: 'delete', task_bulk_reassign: 'reassign', handoff_decide: 'approve', comment_create: 'comment',
+  person_create: 'people_manage', person_update: 'people_manage', person_disable: 'people_manage', person_delete: 'people_manage',
 }
+var AGENT_PERSON_ROLES = ['employee', 'manager']
+var AGENT_DEPARTMENTS = ['工程部', '审计部', '财务部', '设计院', '监理部', '综合部', '管理层']
 
 function agentError(c, status, code, message) { return c.json(status, { error: { code: code, message: message } }) }
 function safeId(value) { return typeof value === 'string' && /^[a-z0-9]{15}$/.test(value) ? value : '' }
@@ -38,6 +41,74 @@ function validDate(value) { return typeof value === 'string' && value.trim() !==
 function assertPayload(payload, allowedKeys) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('INVALID_PAYLOAD')
   if (Object.keys(payload).some((key) => allowedKeys.indexOf(key) === -1)) throw new Error('INVALID_PAYLOAD')
+}
+
+function requirePeopleManager(dao, agent) {
+  if (agent.projects.length > 0) throw new Error('PEOPLE_DENIED')
+  const owner = dao.findRecordById('users', agent.owner)
+  if (!owner.getBool('is_active') || owner.getBool('must_change_password') || owner.getString('role') !== 'admin') throw new Error('PEOPLE_DENIED')
+  return owner
+}
+
+function userReferenceTypes(dao, userId) {
+  const references = [
+    ['projects', 'manager = {:userId} || members ?= {:userId} || created_by = {:userId}'],
+    ['tasks', 'assignees ?= {:userId} || created_by = {:userId} || next_assignees ?= {:userId} || approved_by = {:userId}'],
+    ['handoffs', 'submitter = {:userId} || reviewer = {:userId} || proposed_assignees ?= {:userId}'],
+    ['audit_logs', 'operator = {:userId} || reviewed_by = {:userId}'],
+    ['comments', 'author = {:userId} || mentions ?= {:userId}'],
+    ['notifications', 'user = {:userId}'],
+    ['progress_logs', 'user = {:userId} || next_assignees ?= {:userId}'],
+    ['flower_logs', 'user = {:userId}'],
+    ['ai_summaries', 'target_user = {:userId}'],
+    ['app_settings', 'updated_by = {:userId}'],
+    ['service_accounts', 'owner = {:userId}'],
+    ['attachments', 'uploader = {:userId}'],
+  ]
+  const found = []
+  references.forEach((reference) => {
+    try { dao.findCollectionByNameOrId(reference[0]) } catch (_) { return }
+    if (dao.findRecordsByFilter(reference[0], reference[1], '', 1, 0, { userId: userId }).length > 0) found.push(reference[0])
+  })
+  return found
+}
+
+function validatePersonInput(payload, partial) {
+  const runtime = $app.store().get('__epmsAgent')
+  const username = typeof payload.username === 'string' ? payload.username.trim() : ''
+  const name = typeof payload.name === 'string' ? payload.name.trim() : ''
+  const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : ''
+  const role = typeof payload.role === 'string' ? payload.role : ''
+  const department = typeof payload.department === 'string' ? payload.department : ''
+  if ((!partial || Object.prototype.hasOwnProperty.call(payload, 'username')) && !/^[A-Za-z0-9_]{3,30}$/.test(username)) throw new Error('INVALID_PAYLOAD')
+  if ((!partial || Object.prototype.hasOwnProperty.call(payload, 'name')) && (!name || name.length > 30)) throw new Error('INVALID_PAYLOAD')
+  if ((!partial || Object.prototype.hasOwnProperty.call(payload, 'email')) && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 180)) throw new Error('INVALID_PAYLOAD')
+  if ((!partial || Object.prototype.hasOwnProperty.call(payload, 'role')) && runtime.personRoles.indexOf(role) === -1) throw new Error('INVALID_PAYLOAD')
+  if ((!partial || Object.prototype.hasOwnProperty.call(payload, 'department')) && runtime.departments.indexOf(department) === -1) throw new Error('INVALID_PAYLOAD')
+  if (Object.prototype.hasOwnProperty.call(payload, 'reset_password') && typeof payload.reset_password !== 'boolean') throw new Error('INVALID_PAYLOAD')
+  if (Object.prototype.hasOwnProperty.call(payload, 'is_active') && payload.is_active !== true) throw new Error('INVALID_PAYLOAD')
+  return { username: username, name: name, email: email, role: role, department: department }
+}
+
+function assertUniquePerson(dao, username, email, exceptId) {
+  const suffix = exceptId ? ' && id != {:exceptId}' : ''
+  const params = exceptId ? { exceptId: exceptId } : {}
+  if (username && dao.findRecordsByFilter('users', `username = {:username}${suffix}`, '', 1, 0, { ...params, username: username }).length > 0) throw new Error('PERSON_CONFLICT')
+  if (email && dao.findRecordsByFilter('users', `email = {:email}${suffix}`, '', 1, 0, { ...params, email: email }).length > 0) throw new Error('PERSON_CONFLICT')
+}
+
+function operationPayload(action, payload) {
+  return payload
+}
+
+function operationResult(action, result) {
+  if ((action !== 'person_create' && action !== 'person_update') || !result || typeof result !== 'object') return result
+  const safe = {}
+  Object.keys(result).forEach((key) => {
+    if (key !== 'temporary_password') safe[key] = result[key]
+  })
+  if (Object.prototype.hasOwnProperty.call(result, 'temporary_password')) safe.temporary_password_available = false
+  return safe
 }
 
 function getAgent(c) {
@@ -138,6 +209,18 @@ function validateHighImpactAccess(dao, agent, action, payload) {
     runtime.requireProject(agent, handoff.getString('project'), dao)
     return
   }
+  if (action === 'person_delete') {
+    runtime.assertPayload(payload, ['user_id'])
+    runtime.requirePeopleManager(dao, agent)
+    const userId = runtime.safeId(payload.user_id)
+    if (!userId) throw new Error('INVALID_PAYLOAD')
+    const user = dao.findRecordById('users', userId)
+    if (user.getString('role') === 'admin' || user.id === agent.owner) throw new Error('PEOPLE_DENIED')
+    if (user.getBool('is_active')) throw new Error('PERSON_ACTIVE')
+    const references = runtime.userReferenceTypes(dao, userId)
+    if (references.length > 0) throw new Error(`PERSON_REFERENCED:${references.join(',')}`)
+    return { user_id: user.id, username: user.getString('username'), name: user.getString('name'), consequence: '永久删除无业务引用的停用账号' }
+  }
   throw new Error('UNKNOWN_ACTION')
 }
 
@@ -164,7 +247,78 @@ function executeAgentAction(dao, agent, requestId, action, payload) {
   let afterData = null
   let result = null
 
-  if (action === 'project_create') {
+  if (action === 'person_create') {
+    runtime.assertPayload(payload, ['username', 'name', 'email', 'role', 'department'])
+    runtime.requirePeopleManager(dao, agent)
+    const person = runtime.validatePersonInput(payload, false)
+    runtime.assertUniquePerson(dao, person.username, person.email, '')
+    const record = new Record(dao.findCollectionByNameOrId('users'))
+    record.set('username', person.username)
+    record.set('name', person.name)
+    record.set('email', person.email)
+    record.set('emailVisibility', true)
+    record.set('role', person.role)
+    record.set('department', person.department)
+    record.set('is_active', true)
+    record.set('must_change_password', true)
+    const temporaryPassword = $security.randomStringWithAlphabet(16, 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789')
+    record.setPassword(temporaryPassword)
+    dao.saveRecord(record)
+    afterData = { username: person.username, name: person.name, email: person.email, role: person.role, department: person.department, is_active: true, must_change_password: true }
+    result = { id: record.id, username: person.username, name: person.name, role: person.role, department: person.department, is_active: true, must_change_password: true, temporary_password: temporaryPassword, password_notice: '临时密码仅本次返回，请立即安全转交员工' }
+  } else if (action === 'person_update') {
+    runtime.assertPayload(payload, ['user_id', 'username', 'name', 'email', 'role', 'department', 'reset_password', 'is_active'])
+    runtime.requirePeopleManager(dao, agent)
+    const userId = runtime.safeId(payload.user_id)
+    const hasUpdate = ['username', 'name', 'email', 'role', 'department'].some((field) => Object.prototype.hasOwnProperty.call(payload, field)) || payload.reset_password === true || payload.is_active === true
+    if (!userId || !hasUpdate) throw new Error('INVALID_PAYLOAD')
+    const record = dao.findRecordById('users', userId)
+    if (record.getString('role') === 'admin' || record.id === agent.owner) throw new Error('PEOPLE_DENIED')
+    const person = runtime.validatePersonInput(payload, true)
+    runtime.assertUniquePerson(dao, person.username, person.email, userId)
+    beforeData = runtime.recordFields(record, ['username', 'name', 'email', 'role', 'department', 'is_active', 'must_change_password'])
+    ;['username', 'name', 'email', 'role', 'department'].forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(payload, field)) record.set(field, person[field])
+    })
+    if (Object.prototype.hasOwnProperty.call(payload, 'email')) record.set('emailVisibility', true)
+    if (Object.prototype.hasOwnProperty.call(payload, 'is_active') && record.getBool('is_active') !== payload.is_active) {
+      record.set('is_active', payload.is_active)
+      record.refreshTokenKey()
+    }
+    let temporaryPassword = ''
+    if (payload.reset_password === true) {
+      temporaryPassword = $security.randomStringWithAlphabet(16, 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789')
+      record.setPassword(temporaryPassword)
+      record.set('must_change_password', true)
+      record.refreshTokenKey()
+    }
+    dao.saveRecord(record)
+    afterData = runtime.recordFields(record, ['username', 'name', 'email', 'role', 'department', 'is_active', 'must_change_password'])
+    result = temporaryPassword
+      ? { ...afterData, temporary_password: temporaryPassword, password_notice: '临时密码仅本次返回，请立即安全转交员工' }
+      : afterData
+  } else if (action === 'person_disable') {
+    runtime.assertPayload(payload, ['user_id'])
+    runtime.requirePeopleManager(dao, agent)
+    const userId = runtime.safeId(payload.user_id)
+    if (!userId) throw new Error('INVALID_PAYLOAD')
+    const record = dao.findRecordById('users', userId)
+    if (record.getString('role') === 'admin' || record.id === agent.owner) throw new Error('PEOPLE_DENIED')
+    beforeData = runtime.recordFields(record, ['username', 'name', 'role', 'department', 'is_active'])
+    if (record.getBool('is_active')) {
+      record.set('is_active', false)
+      record.refreshTokenKey()
+      dao.saveRecord(record)
+    }
+    afterData = runtime.recordFields(record, ['username', 'name', 'role', 'department', 'is_active'])
+    result = afterData
+  } else if (action === 'person_delete') {
+    const preview = runtime.validateHighImpactAccess(dao, agent, action, payload)
+    const record = dao.findRecordById('users', preview.user_id)
+    beforeData = runtime.recordFields(record, ['username', 'name', 'email', 'role', 'department', 'is_active'])
+    dao.deleteRecord(record)
+    result = { deleted: record.id, username: record.getString('username') }
+  } else if (action === 'project_create') {
     runtime.assertPayload(payload, ['name', 'description', 'manager_id', 'members', 'start_date', 'deadline'])
     const name = typeof payload.name === 'string' ? payload.name.trim() : ''
     const managerId = $app.store().get('__epmsAgent').safeId(payload.manager_id)
@@ -414,6 +568,8 @@ function executeAgentAction(dao, agent, requestId, action, payload) {
 $app.store().set('__epmsAgent', {
   highImpactActions: AGENT_HIGH_IMPACT_ACTIONS,
   actionScopes: AGENT_ACTION_SCOPES,
+  personRoles: AGENT_PERSON_ROLES,
+  departments: AGENT_DEPARTMENTS,
   agentError,
   safeId,
   safeKey,
@@ -423,6 +579,12 @@ $app.store().set('__epmsAgent', {
   isoNow,
   validDate,
   assertPayload,
+  requirePeopleManager,
+  userReferenceTypes,
+  validatePersonInput,
+  assertUniquePerson,
+  operationPayload,
+  operationResult,
   getAgent,
   requireAgent,
   projectAllowed,
@@ -477,7 +639,7 @@ routerAdd('POST', '/api/custom/agent/v1/admin/service-accounts', (c) => {
   } catch (_) {
     return runtime.agentError(c, 400, 'INVALID_INPUT', '服务账号参数无效')
   }
-  const allowedScopes = ['read', 'write', 'comment', 'approve', 'archive', 'delete', 'reassign']
+  const allowedScopes = ['read', 'write', 'comment', 'approve', 'archive', 'delete', 'reassign', 'people_manage']
   const hasAllowedProjects = Object.prototype.hasOwnProperty.call(data, 'allowed_projects')
   const requestedProjects = Array.isArray(data.allowed_projects) ? data.allowed_projects : []
   const validProjects = requestedProjects.every((value) => runtime.safeId(value))
@@ -487,6 +649,7 @@ routerAdd('POST', '/api/custom/agent/v1/admin/service-accounts', (c) => {
   let ownerRecord
   try { ownerRecord = $app.dao().findRecordById('users', owner) } catch (_) { return runtime.agentError(c, 400, 'INVALID_OWNER', '所有者不存在') }
   if (!ownerRecord.getBool('is_active')) return runtime.agentError(c, 400, 'INVALID_OWNER', '所有者必须是启用用户')
+  if (scopes.indexOf('people_manage') !== -1 && (ownerRecord.getString('role') !== 'admin' || ownerRecord.getBool('must_change_password') || requestedProjects.length > 0)) return runtime.agentError(c, 400, 'INVALID_PEOPLE_SCOPE', '人员管理仅允许已完成改密的全项目管理员使用')
   for (let i = 0; i < requestedProjects.length; i += 1) {
     try { $app.dao().findRecordById('projects', requestedProjects[i]) } catch (_) { return runtime.agentError(c, 400, 'INVALID_PROJECT', '允许项目不存在') }
   }
@@ -521,8 +684,14 @@ routerAdd('POST', '/api/custom/agent/v1/query', (c) => {
   let items
   try {
     if (query === 'people') {
-      list = runtime.listRecords(dao, 'users', 'is_active = true', 'name', paging.page, paging.perPage)
-      items = list.records.map((record) => runtime.recordFields(record, ['name', 'username', 'role', 'department', 'is_active']))
+      const peopleManager = agent.scopes.indexOf('people_manage') !== -1
+      const includeInactive = data.include_inactive === true
+      if (includeInactive && !peopleManager) return runtime.agentError(c, 403, 'SCOPE_DENIED', '查询停用账号需要 people_manage scope')
+      if (peopleManager) runtime.requirePeopleManager(dao, agent)
+      list = runtime.listRecords(dao, 'users', includeInactive ? 'id != ""' : 'is_active = true', 'department,name', paging.page, paging.perPage)
+      items = list.records.map((record) => runtime.recordFields(record, peopleManager
+        ? ['name', 'username', 'email', 'role', 'department', 'is_active', 'must_change_password']
+        : ['name', 'username', 'role', 'department', 'is_active']))
     } else if (query === 'projects') {
       list = runtime.listRecords(dao, 'projects', runtime.agentProjectFilter(agent), '-updated', paging.page, paging.perPage)
       items = list.records.map((record) => runtime.recordFields(record, ['name', 'description', 'status', 'manager', 'members', 'start_date', 'deadline', 'progress']))
@@ -557,7 +726,8 @@ routerAdd('POST', '/api/custom/agent/v1/query', (c) => {
       return c.json(200, { data: summary, generated_at: runtime.isoNow() })
     } else return runtime.agentError(c, 400, 'UNKNOWN_QUERY', '不支持的查询')
     return c.json(200, { page: list.page, per_page: list.per_page, has_more: list.has_more, next_page: list.next_page, items: items })
-  } catch (_) {
+  } catch (error) {
+    if (String(error).indexOf('PEOPLE_DENIED') !== -1) return runtime.agentError(c, 403, 'PEOPLE_DENIED', '人员管理仅允许全项目管理员服务账号执行')
     return runtime.agentError(c, 500, 'QUERY_FAILED', '查询失败')
   }
 })
@@ -573,21 +743,22 @@ routerAdd('POST', '/api/custom/agent/v1/commands/execute', (c) => {
   const hash = $security.sha256(runtime.stableStringify({ action: action, payload: data.payload || {} }))
   try {
     let output
+    let replayed = false
     $app.dao().runInTransaction((dao) => {
       const existing = dao.findRecordsByFilter('agent_operations', `service_account = "${agent.record.id}" && idempotency_key = "${idempotencyKey}"`, '', 1, 0)
       if (existing.length) {
         if (existing[0].getString('request_hash') !== hash) throw new Error('IDEMPOTENCY_CONFLICT')
         if (existing[0].getString('status') !== 'succeeded') throw new Error('IDEMPOTENCY_IN_PROGRESS')
-        output = runtime.jsonObject(existing[0], 'result'); return
+        output = runtime.jsonObject(existing[0], 'result'); replayed = true; return
       }
       const operation = new Record(dao.findCollectionByNameOrId('agent_operations'))
       operation.set('service_account', agent.record.id); operation.set('idempotency_key', idempotencyKey); operation.set('request_id', requestId)
-      operation.set('action', action); operation.set('request_hash', hash); operation.set('status', 'pending'); operation.set('payload', data.payload || {})
+      operation.set('action', action); operation.set('request_hash', hash); operation.set('status', 'pending'); operation.set('payload', runtime.operationPayload(action, data.payload || {}))
       dao.saveRecord(operation)
       output = runtime.executeAgentAction(dao, agent, requestId, action, data.payload || {})
-      operation.set('status', 'succeeded'); operation.set('result', output); operation.set('consumed_at', runtime.isoNow()); dao.saveRecord(operation)
+      operation.set('status', 'succeeded'); operation.set('result', runtime.operationResult(action, output)); operation.set('consumed_at', runtime.isoNow()); dao.saveRecord(operation)
     })
-    return c.json(200, { result: output, idempotent: true })
+    return c.json(200, { result: output, idempotent: true, replayed: replayed })
   } catch (error) {
     const message = String(error)
     if (message.indexOf('IDEMPOTENCY_CONFLICT') !== -1) return runtime.agentError(c, 409, 'IDEMPOTENCY_CONFLICT', '幂等键已用于不同请求')
@@ -596,6 +767,10 @@ routerAdd('POST', '/api/custom/agent/v1/commands/execute', (c) => {
     if (message.indexOf('PROJECT_MEMBER_REQUIRED') !== -1) return runtime.agentError(c, 400, 'PROJECT_MEMBER_REQUIRED', '任务人员必须是项目成员')
     if (message.indexOf('WORKFLOW_CONFLICT') !== -1) return runtime.agentError(c, 409, 'WORKFLOW_CONFLICT', '任务状态不允许该操作')
     if (message.indexOf('TASK_REFERENCED') !== -1) return runtime.agentError(c, 409, 'TASK_REFERENCED', '任务仍被交接或后续任务引用')
+    if (message.indexOf('PERSON_CONFLICT') !== -1) return runtime.agentError(c, 409, 'PERSON_CONFLICT', '登录账号或邮箱已被使用')
+    if (message.indexOf('PERSON_ACTIVE') !== -1) return runtime.agentError(c, 409, 'PERSON_ACTIVE', '永久删除前必须先停用账号')
+    if (message.indexOf('PERSON_REFERENCED') !== -1) return runtime.agentError(c, 409, 'PERSON_REFERENCED', '账号已有业务记录，请修改或停用以保留历史')
+    if (message.indexOf('PEOPLE_DENIED') !== -1) return runtime.agentError(c, 403, 'PEOPLE_DENIED', '人员管理仅允许全项目管理员服务账号执行')
     if (message.indexOf('INVALID_PAYLOAD') !== -1) return runtime.agentError(c, 400, 'INVALID_PAYLOAD', '操作参数无效')
     return runtime.agentError(c, 400, 'COMMAND_FAILED', '操作未执行')
   }
@@ -612,19 +787,22 @@ routerAdd('POST', '/api/custom/agent/v1/commands/preview', (c) => {
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
   const hash = $security.sha256(runtime.stableStringify({ action: action, payload: data.payload || {} }))
   try {
-    runtime.validateHighImpactAccess($app.dao(), agent, action, data.payload || {})
+    const preview = runtime.validateHighImpactAccess($app.dao(), agent, action, data.payload || {})
     const existing = $app.dao().findRecordsByFilter('agent_operations', `service_account = "${agent.record.id}" && idempotency_key = "${idempotencyKey}"`, '', 1, 0)
     if (existing.length) return runtime.agentError(c, 409, 'IDEMPOTENCY_CONFLICT', '幂等键已存在')
     const operation = new Record($app.dao().findCollectionByNameOrId('agent_operations'))
     operation.set('service_account', agent.record.id); operation.set('idempotency_key', idempotencyKey); operation.set('request_id', requestId)
     operation.set('action', action); operation.set('request_hash', hash); operation.set('status', 'pending'); operation.set('payload', data.payload || {})
     operation.set('confirmation_hash', $security.sha256(code)); operation.set('expires_at', expiresAt); $app.dao().saveRecord(operation)
-    return c.json(200, { operation_id: operation.id, action: action, preview: data.payload || {}, confirmation_code: code, expires_at: expiresAt })
+    return c.json(200, { operation_id: operation.id, action: action, preview: preview || data.payload || {}, confirmation_code: code, expires_at: expiresAt })
   } catch (error) {
     const message = String(error)
     if (message.indexOf('PROJECT_DENIED') !== -1) return runtime.agentError(c, 403, 'PROJECT_DENIED', '项目超出服务账号范围')
     if (message.indexOf('PROJECT_MEMBER_REQUIRED') !== -1) return runtime.agentError(c, 400, 'PROJECT_MEMBER_REQUIRED', '任务人员必须是项目成员')
     if (message.indexOf('IDEMPOTENCY_CONFLICT') !== -1) return runtime.agentError(c, 409, 'IDEMPOTENCY_CONFLICT', '幂等键已存在')
+    if (message.indexOf('PERSON_ACTIVE') !== -1) return runtime.agentError(c, 409, 'PERSON_ACTIVE', '永久删除前必须先停用账号')
+    if (message.indexOf('PERSON_REFERENCED') !== -1) return runtime.agentError(c, 409, 'PERSON_REFERENCED', '账号已有业务记录，请修改或停用以保留历史')
+    if (message.indexOf('PEOPLE_DENIED') !== -1) return runtime.agentError(c, 403, 'PEOPLE_DENIED', '人员管理仅允许全项目管理员服务账号执行')
     return runtime.agentError(c, 400, 'PREVIEW_FAILED', '无法创建操作预览')
   }
 })
@@ -657,6 +835,9 @@ routerAdd('POST', '/api/custom/agent/v1/commands/confirm', (c) => {
     if (text.indexOf('PROJECT_MEMBER_REQUIRED') !== -1) return runtime.agentError(c, 400, 'PROJECT_MEMBER_REQUIRED', '任务人员必须是项目成员')
     if (text.indexOf('WORKFLOW_CONFLICT') !== -1) return runtime.agentError(c, 409, 'WORKFLOW_CONFLICT', '业务状态不允许该操作')
     if (text.indexOf('TASK_REFERENCED') !== -1) return runtime.agentError(c, 409, 'TASK_REFERENCED', '任务仍被交接或后续任务引用')
+    if (text.indexOf('PERSON_ACTIVE') !== -1) return runtime.agentError(c, 409, 'PERSON_ACTIVE', '永久删除前必须先停用账号')
+    if (text.indexOf('PERSON_REFERENCED') !== -1) return runtime.agentError(c, 409, 'PERSON_REFERENCED', '账号已有业务记录，请修改或停用以保留历史')
+    if (text.indexOf('PEOPLE_DENIED') !== -1) return runtime.agentError(c, 403, 'PEOPLE_DENIED', '人员管理仅允许全项目管理员服务账号执行')
     if (text.indexOf('DENIED') !== -1 || text.indexOf('SCOPE') !== -1) return runtime.agentError(c, 403, 'CONFIRMATION_DENIED', '无权确认该操作')
     return runtime.agentError(c, 400, 'CONFIRMATION_INVALID', '确认失败')
   }

@@ -109,11 +109,40 @@ routerAdd('POST', '/api/custom/auth/change-password', (c) => {
   }
 }, $apis.requireRecordAuth('users'))
 
+var USER_REFERENCE_DEFINITIONS = [
+  { collection: 'projects', label: '项目', filter: 'manager = {:userId} || members ?= {:userId} || created_by = {:userId}' },
+  { collection: 'tasks', label: '任务', filter: 'assignees ?= {:userId} || created_by = {:userId} || next_assignees ?= {:userId} || approved_by = {:userId}' },
+  { collection: 'handoffs', label: '交接', filter: 'submitter = {:userId} || reviewer = {:userId} || proposed_assignees ?= {:userId}' },
+  { collection: 'audit_logs', label: '审计记录', filter: 'operator = {:userId} || reviewed_by = {:userId}' },
+  { collection: 'comments', label: '评论与提及', filter: 'author = {:userId} || mentions ?= {:userId}' },
+  { collection: 'notifications', label: '通知', filter: 'user = {:userId}' },
+  { collection: 'progress_logs', label: '进度记录', filter: 'user = {:userId} || next_assignees ?= {:userId}' },
+  { collection: 'flower_logs', label: '协作记录', filter: 'user = {:userId}' },
+  { collection: 'ai_summaries', label: 'AI 摘要', filter: 'target_user = {:userId}' },
+  { collection: 'app_settings', label: '系统设置记录', filter: 'updated_by = {:userId}' },
+  { collection: 'service_accounts', label: 'Agent 服务账号', filter: 'owner = {:userId}' },
+  { collection: 'attachments', label: '附件', filter: 'uploader = {:userId}' },
+]
+
+function getUserDeleteImpact(dao, userId) {
+  const references = []
+  USER_REFERENCE_DEFINITIONS.forEach((definition) => {
+    try { dao.findCollectionByNameOrId(definition.collection) } catch (_) { return }
+    if (dao.findRecordsByFilter(definition.collection, definition.filter, '', 1, 0, { userId: userId }).length > 0) {
+      references.push({ collection: definition.collection, label: definition.label })
+    }
+  })
+  return references
+}
+
+$app.store().set('__epmsUserGuard', { getUserDeleteImpact: getUserDeleteImpact })
+
 // 有业务历史的人员只能停用，不能永久删除，避免责任人字段被置空。
 onRecordBeforeDeleteRequest((e) => {
   const user = e.record
   if (!user) return
   const userId = user.id
+  if (user.getBool('is_active')) throw new BadRequestError('永久删除前必须先停用账号')
   if (user.getString('role') === 'admin' && user.getBool('is_active')) {
     const otherAdmins = $app.dao().findRecordsByFilter(
       'users',
@@ -124,27 +153,33 @@ onRecordBeforeDeleteRequest((e) => {
     )
     if (otherAdmins.length === 0) throw new BadRequestError('系统必须保留至少一个启用中的管理员')
   }
-  const references = [
-    ['projects', `manager = "${userId}" || members ?= "${userId}"`],
-    ['tasks', `assignees ?= "${userId}" || created_by = "${userId}"`],
-    ['handoffs', `submitter = "${userId}" || reviewer = "${userId}" || proposed_assignees ?= "${userId}"`],
-    ['audit_logs', `operator = "${userId}"`],
-    ['comments', `author = "${userId}"`],
-    ['notifications', `user = "${userId}"`],
-    ['progress_logs', `user = "${userId}" || next_assignees ?= "${userId}"`],
-    ['flower_logs', `user = "${userId}"`],
-    ['ai_summaries', `target_user = "${userId}"`],
-    ['app_settings', `updated_by = "${userId}"`],
-    ['service_accounts', `owner = "${userId}"`],
-  ]
-
-  for (let i = 0; i < references.length; i += 1) {
-    try {
-      const found = $app.dao().findRecordsByFilter(references[i][0], references[i][1], '', 1, 0)
-      if (found.length > 0) throw new BadRequestError('该账号已有业务记录，请停用账号以保留历史责任人')
-    } catch (error) {
-      if (error && error.message && error.message.indexOf('该账号已有业务记录') === 0) throw error
-      // 可选集合不存在时继续检查其他引用。
-    }
-  }
+  const runtime = $app.store().get('__epmsUserGuard')
+  if (runtime.getUserDeleteImpact($app.dao(), userId).length > 0) throw new BadRequestError('该账号已有业务记录，只能停用或重新配置以保留历史责任人')
 }, 'users')
+
+routerAdd('POST', '/api/custom/admin/users/delete-impact', (c) => {
+  const info = $apis.requestInfo(c)
+  const actor = info.authRecord
+  if (!actor || actor.collection().name !== 'users' || !actor.getBool('is_active') || actor.getBool('must_change_password') || actor.getString('role') !== 'admin') {
+    return c.json(403, { error: { code: 'ADMIN_REQUIRED', message: '仅启用中的管理员可检查账号删除条件' } })
+  }
+  const data = info.data || {}
+  const userId = typeof data.user_id === 'string' && /^[a-z0-9]{15}$/.test(data.user_id) ? data.user_id : ''
+  if (!userId) return c.json(400, { error: { code: 'INVALID_USER', message: '用户 ID 无效' } })
+  try {
+    const user = $app.dao().findRecordById('users', userId)
+    const references = $app.store().get('__epmsUserGuard').getUserDeleteImpact($app.dao(), userId)
+    const reasons = []
+    if (user.id === actor.id) reasons.push('当前登录账号')
+    if (user.getBool('is_active')) reasons.push('账号仍在启用')
+    if (references.length > 0) reasons.push('账号已有业务记录')
+    return c.json(200, {
+      user: { id: user.id, username: user.getString('username'), name: user.getString('name'), is_active: user.getBool('is_active') },
+      can_delete: reasons.length === 0,
+      reasons: reasons,
+      references: references,
+    })
+  } catch (_) {
+    return c.json(500, { error: { code: 'DELETE_IMPACT_FAILED', message: '无法检查账号删除条件' } })
+  }
+}, $apis.requireRecordAuth('users'))
