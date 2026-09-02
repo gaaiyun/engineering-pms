@@ -48,7 +48,7 @@
 2. “调用 `engineering_pms_get_management_summary`，用 Markdown 返回。”
 3. “调用 `engineering_pms_list_projects`，查询第一页 20 条，不创建项目。”
 
-预期结果：能看到 24 个工具；摘要和项目列表能返回；当前正式空白基线的项目、任务可以为 0。若显示 0 个工具，检查 JSON 格式、URL、`Authorization` 是否含 `Bearer ` 前缀，保存后重启 WorkBuddy。
+预期结果：能看到 24 个工具；摘要和项目列表能返回。若项目或任务仍有历史测试数据，先让 Agent 只读列出数量和来源，不要直接删除；若显示 0 个工具，检查 JSON 格式、URL、`Authorization` 是否含 `Bearer ` 前缀，保存后重启 WorkBuddy。
 
 ## 三、工具分组
 

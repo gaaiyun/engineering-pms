@@ -7,7 +7,7 @@
 - HTTPS 入口：`<production-web-url>/mcp`
 - 健康检查：`<production-web-url>/mcp/healthz`
 - sidecar：`engineering-pms-mcp.service`，监听 `127.0.0.1:3100`，由 Nginx 反代。
-- 无认证 MCP POST 请求返回 401；普通 GET `/mcp` 返回 405。PocketBase 服务账号和 MCP Bearer Token 只在服务器 `/etc/engineering-pms-mcp/mcp.env`，权限为 `0600`，不进入 Git、APK 或源码交付包。
+- 无认证 MCP POST 请求返回 401；普通 GET `/mcp` 返回 405。PocketBase 服务账号只在服务器 `/etc/engineering-pms-mcp/mcp.env`，权限为 `0600`；MCP Bearer Token 不进入 Git、APK 或源码包，实际连接用 Token 仅按获准名单放在私有 Agent 接入包中。
 - 当前 release 由 root 管理，服务运行用户只读；`systemd-analyze security` 评分为 `3.2`。
 
 ## 工具边界
