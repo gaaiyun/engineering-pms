@@ -25,7 +25,7 @@
 | 生产备份 | 精确路径记录于私有运维接力文档 |
 | Web | `<production-web-url>` |
 | MCP | `<production-web-url>/mcp`；无认证 MCP POST 请求返回 401 |
-| 自动化 | 后端既有基线 `64/64`、最终差异 `15/15`；人员维护隔离 QA `32/32`；历史 schema 兼容 QA 通过；前端 `204/204`；Playwright `30/30`；MCP `14/14` |
+| 自动化 | 后端既有基线 `64/64`、最终差异 `15/15`；人员维护隔离 QA `41/41`；历史 schema 兼容 QA 通过；前端 `204/204`；Playwright `30/30`；MCP `14/14` |
 | Realtime | 生产 SSE 返回 200 |
 | APK | `3.06` / `46`；SHA-256 `C445196B7574C63CDE4F3E90E14EB6CAD4929EDF4717DE41B7D78C2FF52B87ED`；静态验收通过，真机待验收 |
 

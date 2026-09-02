@@ -32,7 +32,7 @@ journalctl -u engineering-pms-mcp --since "15 minutes ago" --no-pager
 
 发布新版本时，将构建后的 `mcp-server/dist`、`package.json` 和 `package-lock.json` 放入新的 `/opt/engineering-pms-mcp/releases/<timestamp>`，在该目录执行 `npm ci --omit=dev`。确认 `dist/index.js` 和 production dependencies 完整后，再原子切换 `current` 符号链接并重启服务。release 目录归 root 所有，运行用户只保留读取和执行权限。失败时切回上一 release 目录，执行 `systemctl restart engineering-pms-mcp`。修改 Nginx 前必须备份站点配置，`nginx -t` 成功后才 reload。
 
-3.06 生产验收：MCP 单测 `14/14`，人员维护隔离 QA `32/32`，真实 `initialize`、`tools/list`（24 个工具）和健康检查通过；无认证 MCP POST 请求返回 401。
+3.06 生产验收：MCP 单测 `14/14`，人员维护隔离 QA `41/41`，真实 `initialize`、`tools/list`（24 个工具）和健康检查通过；无认证 MCP POST 请求返回 401。
 
 ## Agent 使用边界
 
