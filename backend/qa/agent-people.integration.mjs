@@ -31,6 +31,19 @@ const adminAuth = await request('/api/admins/auth-with-password', { method: 'POS
 passed('超级管理员登录', adminAuth, 200)
 const superToken = adminAuth.data.token
 
+// 隔离 QA 必须使用与生产一致的受控部门枚举；自由文本会让不存在的部门也通过，掩盖生产失败。
+const usersCollection = await request('/api/collections/users', { token: superToken })
+passed('查询用户集合结构', usersCollection, 200)
+const departmentField = usersCollection.data.schema.find(field => field.name === 'department')
+assert.equal(departmentField?.type, 'select')
+assert.deepEqual(departmentField?.options?.values, ['工程部', '审计部', '财务部', '设计院', '监理部', '管理层', '综合部'])
+const invalidDepartmentPassword = 'QA-invalid-department-2026'
+const invalidDepartment = await request('/api/collections/users/records', {
+  method: 'POST', token: superToken,
+  body: { username: 'qa_invalid_department', email: 'qa-invalid-department@example.invalid', emailVisibility: true, password: invalidDepartmentPassword, passwordConfirm: invalidDepartmentPassword, name: '非法部门', role: 'employee', department: '不存在部门', is_active: true },
+})
+passed('用户集合拒绝未配置部门', invalidDepartment, 400)
+
 const ownerPassword = 'QA-owner-initial-2026'
 const owner = await request('/api/collections/users/records', {
   method: 'POST', token: superToken,
@@ -114,6 +127,19 @@ assert.equal(updated.data.result.role, 'manager')
 assert.equal(updated.data.result.department, '财务部')
 assert.ok(updated.data.result.temporary_password)
 
+const managerLogin = await request('/api/collections/users/auth-with-password', {
+  method: 'POST', body: { identity: 'qa_new_person', password: updated.data.result.temporary_password },
+})
+passed('角色调整前账号登录', managerLogin, 200)
+const demoted = await request('/api/custom/agent/v1/commands/execute', {
+  method: 'POST', token: agentToken,
+  body: { action: 'person_update', request_id: key('request-demote'), idempotency_key: key('person-demote'), payload: { user_id: personId, role: 'employee' } },
+})
+passed('Agent 调整人员角色', demoted, 200)
+assert.equal(demoted.data.result.role, 'employee')
+const staleRoleRefresh = await request('/api/collections/users/auth-refresh', { method: 'POST', token: managerLogin.data.token })
+passed('角色调整后旧会话失效', staleRoleRefresh, 401)
+
 const disabled = await request('/api/custom/agent/v1/commands/execute', {
   method: 'POST', token: agentToken,
   body: { action: 'person_disable', request_id: key('request-disable'), idempotency_key: key('person-disable'), payload: { user_id: personId } },
@@ -179,6 +205,9 @@ const impact = await request('/api/custom/admin/users/delete-impact', { method: 
 passed('网页删除影响预检', impact, 200)
 assert.equal(impact.data.can_delete, false)
 assert.ok(impact.data.references.some(item => item.collection === 'notifications'))
+const missingImpact = await request('/api/custom/admin/users/delete-impact', { method: 'POST', token: ownerToken, body: { user_id: 'zzzzzzzzzzzzzzz' } })
+passed('不存在账号的删除预检返回 404', missingImpact, 404)
+assert.equal(missingImpact.data.error.code, 'USER_NOT_FOUND')
 const referencedPreview = await request('/api/custom/agent/v1/commands/preview', {
   method: 'POST', token: agentToken,
   body: { action: 'person_delete', request_id: key('request-referenced-delete'), idempotency_key: key('person-referenced-delete'), payload: { user_id: referencedPerson.data.result.id } },

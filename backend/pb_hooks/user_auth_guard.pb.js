@@ -162,8 +162,13 @@ routerAdd('POST', '/api/custom/admin/users/delete-impact', (c) => {
   const data = info.data || {}
   const userId = typeof data.user_id === 'string' && /^[a-z0-9]{15}$/.test(data.user_id) ? data.user_id : ''
   if (!userId) return c.json(400, { error: { code: 'INVALID_USER', message: '用户 ID 无效' } })
+  let user
   try {
-    const user = $app.dao().findRecordById('users', userId)
+    user = $app.dao().findRecordById('users', userId)
+  } catch (_) {
+    return c.json(404, { error: { code: 'USER_NOT_FOUND', message: '账号不存在' } })
+  }
+  try {
     const references = $app.store().get('__epmsUserGuard').getUserDeleteImpact($app.dao(), userId)
     const reasons = []
     if (user.id === actor.id) reasons.push('当前登录账号')

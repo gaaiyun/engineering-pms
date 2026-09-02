@@ -11,10 +11,14 @@ $statusBefore = (git -C $repoRoot status --porcelain=v1) -join "`n"
 $process = $null
 $adminEmail = 'qa-admin@example.invalid'
 $adminPassword = 'QA-only-Admin-2026'
+$peopleMigration = Join-Path $repoRoot 'backend\pb_migrations\1788336000_enable_people_management.js'
 
 if (-not (Test-Path -LiteralPath $PocketBaseExe)) { throw "PocketBase 0.22.21 not found: $PocketBaseExe" }
 if (& $PocketBaseExe --version 2>&1 | Select-String -SimpleMatch '0.22.21' -Quiet) { } else { throw 'QA requires PocketBase 0.22.21' }
 if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) { throw "Port $Port is already in use" }
+if ((Get-Content -LiteralPath $peopleMigration -Raw) -match "findRecordsByFilter\('service_accounts'") {
+  throw 'people_manage migration must not grant scopes to existing service accounts'
+}
 
 try {
   New-Item -ItemType Directory -Force -Path $qaRoot | Out-Null

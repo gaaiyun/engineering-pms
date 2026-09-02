@@ -292,6 +292,7 @@ function executeAgentAction(dao, agent, requestId, action, payload) {
     if (!userId || !hasUpdate) throw new Error('INVALID_PAYLOAD')
     const record = dao.findRecordById('users', userId)
     if (record.getString('role') === 'admin' || record.id === agent.owner) throw new Error('PEOPLE_DENIED')
+    const previousRole = record.getString('role')
     const person = runtime.validatePersonInput(payload, true)
     runtime.assertUniquePerson(dao, person.username, person.email, userId)
     beforeData = runtime.recordFields(record, ['username', 'name', 'email', 'role', 'department', 'is_active', 'must_change_password'])
@@ -299,6 +300,7 @@ function executeAgentAction(dao, agent, requestId, action, payload) {
       if (Object.prototype.hasOwnProperty.call(payload, field)) record.set(field, person[field])
     })
     if (Object.prototype.hasOwnProperty.call(payload, 'email')) record.set('emailVisibility', true)
+    if (record.getString('role') !== previousRole) record.refreshTokenKey()
     if (Object.prototype.hasOwnProperty.call(payload, 'is_active') && record.getBool('is_active') !== payload.is_active) {
       record.set('is_active', payload.is_active)
       record.refreshTokenKey()
