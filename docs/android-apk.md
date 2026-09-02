@@ -25,14 +25,14 @@ npx cap sync android
 
 APK 输出：`frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
 
-2026-08-20 的 3.06 候选产物：
+2026-09-02 的 3.06 人员重配增量候选产物：
 
 - `aapt dump badging`：`com.engineering.pms` / versionName `3.06` / versionCode `46`
 - 内嵌后端：生产 PocketBase URL
-- 大小：`7,210,979` bytes
-- SHA-256：`C445196B7574C63CDE4F3E90E14EB6CAD4929EDF4717DE41B7D78C2FF52B87ED`
+- 大小：`7,211,921` bytes
+- SHA-256：`6FAD6BD746DA4FEFC9F15C955497EFDC4DE5F83721A10915A282343E442B4044`
 
-该产物对应提交 `c4c298f`，已通过 metadata 和 `aapt dump badging` 静态校验。APK 以“Android 内测包”随交付材料提供；`adb devices` 当前为空，尚未执行真机覆盖安装和下方验收，不能用 3.05 的真机结果或 Web 验收替代 3.06 APK 真机验收。
+该产物对应交付分支当前代码，已通过 `output-metadata.json`（`com.engineering.pms` / `3.06` / `46`）和生产地址静态扫描。APK 以“Android 内测包”随交付材料提供；当前环境未检测到可用 `adb` 命令或真机，尚未执行真机覆盖安装和下方验收，不能用 3.05 的真机结果或 Web 验收替代 3.06 APK 真机验收。
 
 ## 安装
 
