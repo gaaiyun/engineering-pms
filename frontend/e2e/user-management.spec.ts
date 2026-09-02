@@ -12,12 +12,18 @@ let employee = {
   username: 'employee_tester', name: '李设计', email: 'employee@example.com',
   role: 'employee', department: '工程部', is_active: true,
 }
+let deleteCanProceed = true
 
 function list(items: unknown[]) {
   return { page: 1, perPage: 200, totalItems: items.length, totalPages: 1, items }
 }
 
 async function mockUsers(page: Page) {
+  await page.route('**/api/custom/admin/users/delete-impact', async (route) => {
+    return route.fulfill({ json: deleteCanProceed
+      ? { can_delete: true, reasons: [], references: [] }
+      : { can_delete: false, reasons: ['账号已有业务记录'], references: [{ collection: 'tasks', label: '任务' }, { collection: 'audit_logs', label: '审计记录' }] } })
+  })
   await page.route('**/api/collections/users/records**', async (route) => {
     const url = new URL(route.request().url())
     const method = route.request().method()
@@ -37,6 +43,7 @@ async function mockUsers(page: Page) {
 }
 
 test('管理员可调整部门、停用并删除无业务记录员工', async ({ page }) => {
+  deleteCanProceed = true
   employee = { ...employee, department: '工程部', role: 'employee', is_active: true }
   await installStaticApp(page)
   await installMockSession(page, 'admin')
@@ -44,6 +51,7 @@ test('管理员可调整部门、停用并删除无业务记录员工', async ({
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/system/users')
 
+  await expect(page.getByRole('heading', { name: '工程部' })).toBeVisible()
   await page.getByText('李设计', { exact: true }).click()
   await expect(page.getByRole('heading', { name: '编辑成员账号' })).toBeVisible()
   await page.getByText('设计院', { exact: true }).click()
@@ -68,4 +76,20 @@ test('管理员可调整部门、停用并删除无业务记录员工', async ({
   await page.getByRole('button', { name: '确认删除' }).click()
   await deleteRequest
   await expect(page.getByText('账号已删除')).toBeVisible()
+})
+
+test('有业务记录的停用员工会显示明确保留原因而不发送删除请求', async ({ page }) => {
+  deleteCanProceed = false
+  employee = { ...employee, department: '综合部', role: 'employee', is_active: false }
+  await installStaticApp(page)
+  await installMockSession(page, 'admin')
+  await mockUsers(page)
+  await page.goto('/system/users')
+
+  await expect(page.getByRole('heading', { name: '综合部' })).toBeVisible()
+  await page.getByText('李设计', { exact: true }).click()
+  await page.getByRole('button', { name: '永久删除' }).click()
+  await expect(page.getByText('该账号需要保留')).toBeVisible()
+  await expect(page.getByText(/已存在任务、审计记录/)).toBeVisible()
+  await page.getByRole('button', { name: '知道了' }).click()
 })
