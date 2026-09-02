@@ -41,6 +41,8 @@
 
 `user_auth_guard.pb.js` 额外保证：停用用户不能登录或 refresh；首次登录和管理员重置后必须先改密；管理员不能自降权；至少保留一个启用 admin；有业务引用的账号不能永久删除。
 
+人员重配通过 Agent 受控路由完成：`people_manage` 仅授予全项目、已完成改密的 admin 服务账号，允许创建/修改/停用 employee 或 manager。删除前必须停用并执行全集合引用检查；任何项目、任务、交接、评论、通知、附件或审计引用都会阻止永久删除。服务端返回删除影响预检，避免前端把历史责任人直接删掉。
+
 ## 本轮关键迁移
 
 | 文件 | 作用 |
@@ -49,6 +51,7 @@
 | `1783841000_reconcile_ai_security.js` | AI 设置与权限 reconciliation |
 | `1783841100_harden_production_rules.js` | 收紧用户、项目、任务、通知和业务集合规则 |
 | `1783841200_fix_user_account_rules.js` | 注册和管理员 CRUD 规则；不改写既有账号启停状态 |
+| `1788336000_enable_people_management.js` | 增加“综合部”和受控 `people_manage` scope，不改写业务数据 |
 | `1783841300_backfill_project_members.js` | 把经理和任务负责人补入项目成员 |
 | `1783841400_lock_transactional_workflows.js` | 锁住直接审批/删除和通用审计回滚入口 |
 | `1787190000_require_managed_accounts.js` | 关闭公开注册，加入首次登录/重置后强制改密，并在改密前锁住业务访问 |

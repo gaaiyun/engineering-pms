@@ -28,6 +28,7 @@
 {
   "mcpServers": {
     "engineering-pms": {
+      "type": "streamableHttp",
       "url": "<production-web-url>/mcp",
       "headers": {
         "Authorization": "Bearer <MCP_BEARER_TOKEN>"
@@ -37,7 +38,7 @@
 }
 ```
 
-保存并启用连接器后重启 WorkBuddy。连接正常时应显示 20 个 `engineering_pms_*` 工具。Token 只粘贴到 WorkBuddy 的私有连接器配置，不发送到聊天、群聊或普通文档。
+保存并启用连接器后重启 WorkBuddy。连接正常时应显示 24 个 `engineering_pms_*` 工具。Token 只粘贴到 WorkBuddy 的私有连接器配置，不发送到聊天、群聊或普通文档。
 
 ## 二、连接验收
 
@@ -47,7 +48,7 @@
 2. “调用 `engineering_pms_get_management_summary`，用 Markdown 返回。”
 3. “调用 `engineering_pms_list_projects`，查询第一页 20 条，不创建项目。”
 
-预期结果：能看到 20 个工具；摘要和项目列表能返回；当前正式空白基线的项目、任务可以为 0。若显示 0 个工具，检查 JSON 格式、URL、`Authorization` 是否含 `Bearer ` 前缀，保存后重启 WorkBuddy。
+预期结果：能看到 24 个工具；摘要和项目列表能返回；当前正式空白基线的项目、任务可以为 0。若显示 0 个工具，检查 JSON 格式、URL、`Authorization` 是否含 `Bearer ` 前缀，保存后重启 WorkBuddy。
 
 ## 三、工具分组
 
@@ -55,12 +56,24 @@
 |---|---|
 | 管理摘要 | `engineering_pms_get_management_summary`、`engineering_pms_daily_briefing` |
 | 查询 | `engineering_pms_list_people`、`engineering_pms_list_projects`、`engineering_pms_list_tasks`、`engineering_pms_list_handoffs`、`engineering_pms_list_changes` |
+| 人员维护（仅 admin 服务账号） | `engineering_pms_create_person`、`engineering_pms_update_person`、`engineering_pms_disable_person`、`engineering_pms_preview_delete_person` |
 | 项目 | `engineering_pms_create_project`、`engineering_pms_update_project` |
 | 任务 | `engineering_pms_create_task`、`engineering_pms_update_task`、`engineering_pms_complete_task`、`engineering_pms_block_task`、`engineering_pms_unblock_task`、`engineering_pms_add_comment` |
 | 高影响预览 | `engineering_pms_preview_archive_project`、`engineering_pms_preview_delete_task`、`engineering_pms_preview_bulk_reassign`、`engineering_pms_preview_handoff_decision` |
 | 最终确认 | `engineering_pms_confirm_action` |
 
 创建和修改操作需要 `request_id` 与 `idempotency_key`。WorkBuddy 应为每次业务意图生成唯一值；重试同一意图时复用原值，不能为同一操作重复生成任务。
+
+### 人员重配流程（华哥）
+
+先说“列出全部人员（包括停用）”，确认目标账号 ID 后，再按以下顺序操作：
+
+1. 需要保留历史责任时，用 `engineering_pms_update_person` 修改姓名、用户名、邮箱、部门或角色；如员工忘记密码，可勾选 `reset_password`，把工具当次返回的临时密码通过私下渠道交给本人，并要求首次登录立即改密。
+2. 不再使用的账号先调用 `engineering_pms_disable_person`。停用会立即拒绝密码登录，但项目、任务、通知和审计历史保留。
+3. 只有明确确认“已停用且无任何业务引用”的账号，才调用 `engineering_pms_preview_delete_person`。展示引用检查和五分钟确认码，人工核对后再调用 `engineering_pms_confirm_action`。
+4. 新员工用 `engineering_pms_create_person` 创建，只填写用户名、姓名、邮箱、角色和部门。创建响应中的临时密码只显示一次，不要让 Agent 重复朗读或写入日报；员工首次登录后必须修改。
+
+Agent 不能删除有历史引用的账号，也不能创建/删除 admin。遇到“账号需要保留”时按第 1 步改名或停用，不要绕过服务端保护。每次写操作后都重新调用 `engineering_pms_list_people` 核对状态；同一意图重试必须复用原 `idempotency_key`。
 
 ## 四、项目负责人用法
 
@@ -132,7 +145,7 @@ get_management_summary、daily_briefing、list_people、list_projects、list_tas
 
 ## 八、安全边界
 
-- Agent 不管理账号、角色、AI Key、服务器或 PocketBase 后台。
+- Agent 不管理 admin 账号、AI Key、服务器或 PocketBase 后台。华哥的服务账号仅额外开放受控的 employee/manager 人员维护 scope。
 - 不把 Token、初始密码、SSH 私钥或管理员凭据写入提示词和输出。
 - 不直接操作 SQLite 或 PocketBase 集合；只调用 `engineering_pms_*` 工具。
 - 写操作后必须通过查询工具验证数据库结果。

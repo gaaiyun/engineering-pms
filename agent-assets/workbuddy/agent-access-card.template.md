@@ -29,6 +29,13 @@ WorkBuddy 使用者应优先把本说明同目录的 `workbuddy.mcp.json` 放到
 - 写入后重新查询项目、任务、交接和变化记录，以数据库结果确认完成。
 - 归档、删除、批量改派和交接审批必须 preview 后停止，只有人在看过影响范围并明确提供确认码时才能 confirm。
 
+## 人员重配（仅华哥的 admin 服务账号）
+
+- 先调用 `engineering_pms_list_people`（含停用账号）确认用户 ID。可创建、修改、重置密码、停用 employee/manager；不能创建或删除 admin。
+- 新建或重置密码时，临时密码只在当次响应返回一次，必须私下交给员工并要求首次登录改密，不要写入日报或聊天记录。
+- 删除人员前必须先停用并调用 `engineering_pms_preview_delete_person`。有项目、任务、交接、评论、通知或审计引用的账号只能改名或停用，不能永久删除。
+- 预览后展示影响并停止，只有人明确提供 operation ID 和确认码才调用 `engineering_pms_confirm_action`；写入后再次查询人员列表核对。
+
 ## 老板只读模式
 
 本会话只允许调用管理摘要、日报、人员/项目/任务/交接/变化查询工具。禁止调用任何 create、update、complete、block、unblock、comment、preview 或 confirm 工具。输出异常项目、逾期、卡点、待审批、人员负荷和近期变化，不猜测缺失数据。
